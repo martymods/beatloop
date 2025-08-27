@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>beatloop — Royalty‑Free Rap Beats, AI Tools & Creator Network</title>
-  <meta name="description" content="Royalty‑free rap, hip‑hop & trap instrumentals + AI stem splitter, AI mastering, and a free creator network. Drop a 30‑sec freestyle, climb the leaderboard, and collaborate." />
-  <meta property="og:title" content="beatloop — Royalty‑Free Rap Beats, AI Tools & Creator Network" />
-  <meta property="og:description" content="Download beats, master with AI, split stems, and join a zero‑cost creator network. Drop a 30‑sec freestyle and make the leaderboard." />
+  <!-- Updated title and meta for beatloop branding -->
+  <title>beatloop — Music Beats, AI Tools & Zero‑Cost Creator Network</title>
+  <meta name="description" content="beatloop delivers royalty‑free hip‑hop, rap, trap & R&B beats alongside AI stem splitting, AI mastering and a free creator network. Drop a 30‑second freestyle, climb the leaderboard and collaborate." />
+  <meta property="og:title" content="beatloop — Music Beats, AI Tools & Zero‑Cost Creator Network" />
+  <meta property="og:description" content="Download beats, master tracks with AI, split stems, and join a zero‑cost creator network. Drop a 30‑second freestyle and make the leaderboard on beatloop." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="/img/og-cover.jpg" />
   <meta name="theme-color" content="#7c3aed" />
@@ -33,7 +34,7 @@
     }
   </script>
 
-  <!-- Fonts -->
+  <!-- Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -53,17 +54,18 @@
   <header class="sticky top-0 z-50 border-b border-white/5 bg-[#0c0c12]/70 backdrop-blur">
     <div class="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
       <a href="#" class="flex items-center gap-2 font-extrabold tracking-tight text-white">
+        <!-- Updated brand: beatloop -->
         <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span>
         <span>beatloop</span>
       </a>
       <nav class="ml-auto hidden md:flex items-center gap-6 text-sm text-white/70">
         <a href="#beats" class="hover:text-white">Beats</a>
         <a href="#freestyle" class="hover:text-white">Freestyle</a>
-        <a href="#network" class="hover:text-white">Creators</a>
+        <a href="network.html" class="hover:text-white">Network</a>
         <a href="#tools" class="hover:text-white">AI Tools</a>
         <a href="#blog" class="hover:text-white">Blog</a>
       </nav>
-      <a href="#join" class="ml-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Join Free</a>
+      <a href="signup.html" class="ml-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Join Free</a>
     </div>
   </header>
 
@@ -107,12 +109,13 @@
         </div>
       </div>
       <div class="glass rounded-2xl p-4 md:p-6 shadow-xl ring-1 ring-white/10">
-        <!-- Big Player Card (master audio source) -->
+        <!-- Big Player Card -->
         <div class="flex items-center gap-4">
           <button id="heroPlay" class="size-12 shrink-0 rounded-full bg-primary text-white grid place-items-center shadow-glow" aria-label="Play/Pause">
             <svg id="heroPlayIcon" xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
           </button>
-          <img id="heroCover" src="/img/covers/reggae-trap.jpg" alt="Current cover" class="h-12 w-12 rounded-md object-cover ring-1 ring-white/10" />
+          <!-- Album art for the currently playing track -->
+          <img id="heroCover" src="" alt="Album art" class="hidden sm:block size-16 shrink-0 rounded-xl ring-1 ring-white/10 object-cover" />
           <div class="min-w-0">
             <p id="nowTitle" class="truncate text-sm text-white/70">—</p>
             <h3 id="nowArtist" class="truncate text-xl font-semibold">Select a track below</h3>
@@ -166,7 +169,7 @@
           <ol id="leaderboard" class="mt-3 space-y-2 text-white/80 text-sm">
             <li>1. 3AM — <span class="text-white">willemhengelmolen</span></li>
             <li>2. Amsterdam — <span class="text-white">willemhengelmolen</span></li>
-            <li>3. AMA‑BHOZA — <span class="text-white">realG</span></li>
+            <li>3. AMA‑BHOZA — <span class="text-white">realm</span></li>
             <li>4. Techno Revolution — <span class="text-white">willemhengelmolen</span></li>
             <li>5. Sometimes life is hard — <span class="text-white">yungflex0002</span></li>
           </ol>
@@ -206,27 +209,25 @@
           <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight">Beyond Beats: The Creator Network</h2>
           <p class="text-white/70 mt-2">Connect with artists, producers, DJs, bloggers, curators, mentors and superfans. Start collabs, build momentum, and get featured.</p>
           <div class="mt-5 flex gap-3">
-            <a id="join" href="#" class="rounded-xl bg-primary px-5 py-3 font-semibold shadow-glow">Enter the Network — Free</a>
+            <a id="join" href="network.html" class="rounded-xl bg-primary px-5 py-3 font-semibold shadow-glow">Enter the Network — Free</a>
             <a href="#" class="rounded-xl border border-white/15 bg-white/5 px-5 py-3 font-semibold hover:bg-white/10">How it works</a>
           </div>
         </div>
-<div class="md:w-1/3 mt-8 md:mt-0">
-  <!-- Community collage -->
-  <div class="grid grid-cols-3 gap-2 sm:gap-3">
-    <img src="/img/tcn_1.png" loading="lazy" alt="Artist in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
-    <img src="/img/tcn_2.png" loading="lazy" alt="Performer in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
-    <img src="/img/tcn_3.png" loading="lazy" alt="Producer in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
-  </div>
-
-  <!-- Benefits list (unchanged content) -->
-  <ul class="mt-4 grid gap-3 text-sm text-white/80">
-    <li class="rounded-xl bg-white/5 p-3">Zero cost to join—no paywalls</li>
-    <li class="rounded-xl bg-white/5 p-3">Profile + portfolio + feature slots</li>
-    <li class="rounded-xl bg-white/5 p-3">Collab boards & DM intros</li>
-    <li class="rounded-xl bg-white/5 p-3">Weekly spotlights & playlists</li>
-  </ul>
-</div>
-
+        <div class="md:w-1/3 mt-8 md:mt-0">
+          <!-- Community collage -->
+          <div class="grid grid-cols-3 gap-2 sm:gap-3">
+            <img src="/img/tcn_1.png" loading="lazy" alt="Artist in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
+            <img src="/img/tcn_2.png" loading="lazy" alt="Performer in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
+            <img src="/img/tcn_3.png" loading="lazy" alt="Producer in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
+          </div>
+          <!-- Benefits list -->
+          <ul class="mt-4 grid gap-3 text-sm text-white/80">
+            <li class="rounded-xl bg-white/5 p-3">Zero cost to join—no paywalls</li>
+            <li class="rounded-xl bg-white/5 p-3">Profile + portfolio + feature slots</li>
+            <li class="rounded-xl bg-white/5 p-3">Collab boards & DM intros</li>
+            <li class="rounded-xl bg-white/5 p-3">Weekly spotlights & playlists</li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
@@ -281,14 +282,15 @@
     <div class="border-t border-white/5 py-6 text-center text-xs text-white/60">© <span id="year"></span> beatloop. All Rights Reserved.</div>
   </footer>
 
-  <!-- Sticky Mini Player (mirrors master, muted) -->
+  <!-- Sticky Mini Player -->
   <div class="fixed inset-x-0 bottom-0 z-50">
     <div class="mx-auto max-w-3xl rounded-t-2xl border-x border-t border-white/10 bg-black/70 backdrop-blur px-4 py-3 shadow-2xl">
       <div class="flex items-center gap-3">
         <button id="miniPlay" class="size-9 rounded-full bg-primary text-white grid place-items-center" aria-label="Play/Pause">
           <svg id="miniPlayIcon" xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
         </button>
-        <img id="miniCover" src="/img/covers/reggae-trap.jpg" alt="Current cover" class="h-9 w-9 rounded-md object-cover ring-1 ring-white/10" />
+        <!-- Mini cover for currently playing track -->
+        <img id="miniCover" src="" alt="Album art" class="size-10 rounded-xl ring-1 ring-white/10 object-cover" />
         <div class="min-w-0">
           <p id="miniTitle" class="truncate text-xs text-white/60">—</p>
           <p id="miniArtist" class="truncate text-sm text-white">Select a track</p>
@@ -307,79 +309,96 @@
 
   <script>
     // ---------- Minimal Config
-    const API_FALLBACKS = []
+    const API_FALLBACKS = [
+      // Add your Render API origin here if you host APIs separately
+      // 'https://your-api.onrender.com'
+    ]
 
-    // ---------- Tracks (swap your assets in /audio & /img/covers)
+    // ---------- Demo Tracks (swap with your own /audio/*.mp3 and cover art)
     const TRACKS = [
-      { id: 'reggae-trap',   title: 'Reggae Trap',    artist: 'Slim Pattie', bpm: 92,  url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
-      { id: 'stack',         title: 'STACK',          artist: 'lilwoo', bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
-      { id: 'cleanup-woman', title: 'Da Cleanup Woman', artist: 't-dub', bpm: 95, url: '/audio/cleanup-woman.mp3', cover: '/img/covers/cleanup.jpg' },
-      { id: 'we-go-make-it', title: 'We Go Make It',  artist: 'spanel-035', bpm: 94, url: '/audio/we-go.mp3',       cover: '/img/covers/we-go.jpg' },
-      { id: 'the-one',       title: 'The one',        artist: 'kloverfreshproduction', bpm: 89, url: '/audio/the-one.mp3', cover: '/img/covers/the-one.jpg' },
-      { id: 'it-is-what',    title: 'It is what it is', artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',  cover: '/img/covers/it-is.jpg' }
+      // Updated track metadata with correct artist names and covers
+      { id: 'reggae-trap',   title: 'Reggae Trap',    artist: 'Slim Pattie',           bpm: 92, url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
+      { id: 'stack',         title: 'STACK',          artist: 'lilwoo',                bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
+      { id: 'cleanup-woman', title: 'Da Cleanup Woman',  artist: 't-dub',               bpm: 95, url: '/audio/cleanup-woman.mp3', cover: '/img/covers/cleanup.jpg' },
+      { id: 'we-go-make-it', title: 'We Go Make It',  artist: 'spanel-035',            bpm: 94, url: '/audio/we-go.mp3',         cover: '/img/covers/we-go.jpg' },
+      { id: 'the-one',       title: 'The one',        artist: 'kloverfreshproduction', bpm: 89, url: '/audio/the-one.mp3',       cover: '/img/covers/the-one.jpg' },
+      { id: 'it-is-what',    title: 'It is what it is',  artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',      cover: '/img/covers/it-is.jpg' }
     ]
 
     // ---------- Utilities
-    const $  = (sel) => document.querySelector(sel)
-    const $$ = (sel) => Array.from(document.querySelectorAll(sel))
-    const fmt = (s) => { s = Math.floor(s || 0); const m=Math.floor(s/60).toString(); const sec=(s%60).toString().padStart(2,'0'); return `${m}:${sec}` }
+    const $ = sel => document.querySelector(sel)
+    const $$ = sel => Array.from(document.querySelectorAll(sel))
+    const fmt = s => {
+      s = Math.floor(s || 0)
+      const m = Math.floor(s/60).toString()
+      const sec = (s%60).toString().padStart(2, '0')
+      return `${m}:${sec}`
+    }
 
     // ---------- State
     let current = 0
     let heroWS, miniWS
 
     function setButtonsPlaying(playing) {
-      const svg = playing
-        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6"/>'  // pause
-        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/>' // play
-      $('#heroPlayIcon').innerHTML = svg
-      $('#miniPlayIcon').innerHTML = svg
-    }
-
-    function updateMediaSession(t) {
-      if (!('mediaSession' in navigator)) return
-      try {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: t.title,
-          artist: t.artist,
-          album: 'beatloop',
-          artwork: [
-            { src: t.cover, sizes: '512x512', type: 'image/jpeg' },
-            { src: t.cover, sizes: '256x256', type: 'image/jpeg' },
-            { src: t.cover, sizes: '128x128', type: 'image/jpeg' }
-          ]
-        })
-        navigator.mediaSession.setActionHandler('play',  () => heroWS.play())
-        navigator.mediaSession.setActionHandler('pause', () => heroWS.pause())
-        navigator.mediaSession.setActionHandler('previoustrack', () => { setTrack(current - 1); heroWS.play() })
-        navigator.mediaSession.setActionHandler('nexttrack',     () => { setTrack(current + 1); heroWS.play() })
-        navigator.mediaSession.setActionHandler('seekto', (d) => {
-          if (typeof d.seekTime === 'number') { heroWS.setTime(d.seekTime); miniWS.setTime(d.seekTime) }
-        })
-        navigator.mediaSession.playbackState = heroWS.isPlaying() ? 'playing' : 'paused'
-        if (navigator.mediaSession.setPositionState) {
-          navigator.mediaSession.setPositionState({
-            duration: heroWS.getDuration() || 0,
-            playbackRate: 1,
-            position: heroWS.getCurrentTime() || 0
-          })
-        }
-      } catch (_) {}
+      const playPath = playing
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6"/>'
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/>'
+      $('#heroPlayIcon').innerHTML = playPath
+      $('#miniPlayIcon').innerHTML = playPath
     }
 
     function setTrack(i) {
       current = (i + TRACKS.length) % TRACKS.length
       const t = TRACKS[current]
-      $('#nowTitle').textContent  = t.title
+      $('#nowTitle').textContent = t.title
       $('#nowArtist').textContent = t.artist
       $('#miniTitle').textContent = t.title
-      $('#miniArtist').textContent= t.artist
-      $('#miniCover').src = t.cover
-      $('#heroCover').src = t.cover
+      $('#miniArtist').textContent = t.artist
+      // update album art on both players
+      const heroCoverEl = document.getElementById('heroCover')
+      const miniCoverEl = document.getElementById('miniCover')
+      if (heroCoverEl) {
+        heroCoverEl.src = t.cover
+        heroCoverEl.alt = t.title + ' cover'
+      }
+      if (miniCoverEl) {
+        miniCoverEl.src = t.cover
+        miniCoverEl.alt = t.title + ' cover'
+      }
+
+      // (Re)load audio sources
       heroWS.load(t.url)
       miniWS.load(t.url)
-      updateMediaSession(t)
-      // don't change icons here — only on real play/pause events
+
+      // Update Media Session metadata so album art appears on lock screen controls
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: t.title,
+            artist: t.artist,
+            artwork: [
+              { src: t.cover, sizes: '512x512', type: 'image/jpeg' },
+              { src: t.cover, sizes: '256x256', type: 'image/jpeg' },
+              { src: t.cover, sizes: '128x128', type: 'image/jpeg' }
+            ]
+          })
+          navigator.mediaSession.setActionHandler('play', () => {
+            heroWS.play(); miniWS.play()
+          })
+          navigator.mediaSession.setActionHandler('pause', () => {
+            heroWS.pause(); miniWS.pause()
+          })
+          navigator.mediaSession.setActionHandler('previoustrack', () => {
+            setTrack(current - 1); heroWS.play(); miniWS.play()
+          })
+          navigator.mediaSession.setActionHandler('nexttrack', () => {
+            setTrack(current + 1); heroWS.play(); miniWS.play()
+          })
+        } catch {}
+      }
+
+      // show the play button state initially
+      setButtonsPlaying(false)
     }
 
     function buildCards() {
@@ -389,8 +408,9 @@
         const card = document.createElement('article')
         card.className = 'group rounded-2xl border border-white/10 bg-white/5 p-4 ring-1 ring-white/10 hover:bg-white/10 transition'
         card.innerHTML = `
-          <div class="equal overflow-hidden rounded-xl bg-black/30 p-2">
-            <img src="${t.cover || 'https://picsum.photos/seed/'+t.id+'/600/600'}" alt="${t.title} cover" class="aspect-square w-full object-contain rounded-md group-hover:scale-[1.01] transition"/>
+          <div class="equal overflow-hidden rounded-xl">
+            <!-- Use square cover art and contain the full image so names aren’t cut off -->
+            <img src="${t.cover || 'https://picsum.photos/seed/'+t.id+'/600/600'}" alt="${t.title} cover" class="aspect-square object-contain group-hover:scale-[1.02] transition"/>
             <button data-i="${i}" class="playBtn absolute right-3 top-3 rounded-full bg-primary px-3 py-2 text-sm font-semibold shadow-glow">Play</button>
           </div>
           <div class="mt-3 flex items-center justify-between gap-3">
@@ -403,14 +423,16 @@
           <div class="mt-3 flex items-center gap-3">
             <a class="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[#0c0c12]" href="${t.url}" download>Download</a>
             <button class="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold hover:bg-white/10">License</button>
-          </div>`
+          </div>
+        `
         grid.appendChild(card)
       })
 
       $$('.playBtn').forEach(btn => btn.addEventListener('click', (e) => {
         const i = +e.currentTarget.getAttribute('data-i')
         setTrack(i)
-        heroWS.play() // mini stays muted & mirrors only
+        heroWS.play()
+        miniWS.play()
       }))
     }
 
@@ -434,42 +456,43 @@
         barWidth: 2,
         barGap: 1,
       })
-      // keep mini player silent
-      if (miniWS.setMuted) miniWS.setMuted(true); else if (miniWS.setVolume) miniWS.setVolume(0)
 
-      heroWS.on('audioprocess', () => {
-        $('#nowTime').textContent = fmt(heroWS.getCurrentTime())
-        // keep lock screen position fresh
-        updateMediaSession(TRACKS[current])
+      // Mute the mini player so the same track doesn’t play twice on mobile
+      try {
+        if (typeof miniWS.setVolume === 'function') miniWS.setVolume(0)
+      } catch {}
+
+      heroWS.on('audioprocess', () => { $('#nowTime').textContent = fmt(heroWS.getCurrentTime()) })
+      heroWS.on('ready', () => { $('#nowDur').textContent = fmt(heroWS.getDuration()) })
+      heroWS.on('play', () => setButtonsPlaying(true))
+      heroWS.on('pause', () => setButtonsPlaying(false))
+      // Loop the current track indefinitely until the user pauses or chooses next/prev
+      heroWS.on('finish', () => {
+        // reset time and continue playing
+        heroWS.setTime(0)
+        heroWS.play()
+        // ensure the mini waveform stays in sync
+        if (typeof miniWS.setTime === 'function') miniWS.setTime(0)
       })
-      heroWS.on('ready', () => { $('#nowDur').textContent = fmt(heroWS.getDuration()); setButtonsPlaying(false); updateMediaSession(TRACKS[current]) })
-      heroWS.on('play',  () => { setButtonsPlaying(true);  updateMediaSession(TRACKS[current]) })
-      heroWS.on('pause', () => { setButtonsPlaying(false); updateMediaSession(TRACKS[current]) })
-      // Repeat current track until you pause or choose Next/Prev
-heroWS.on('finish', () => {
-  // restart at 0s and continue playing
-  if (miniWS && miniWS.setTime) miniWS.setTime(0)
-  heroWS.setTime(0)
-  heroWS.play()
-})
 
+      miniWS.on('play', () => setButtonsPlaying(true))
+      miniWS.on('pause', () => setButtonsPlaying(false))
 
-      // Sync positions (mini mirrors hero)
+      // sync positions
       const sync = (src, dest) => src.on('audioprocess', () => {
         if (!dest.isPlaying()) dest.setTime(src.getCurrentTime())
       })
       sync(heroWS, miniWS)
-      sync(miniWS, heroWS) // keep bi‑directional seeking working
+      sync(miniWS, heroWS)
 
       setTrack(0)
-      setButtonsPlaying(false)
     }
 
     function setupControls() {
-      $('#heroPlay').onclick = () => heroWS.isPlaying() ? heroWS.pause() : heroWS.play()
+      $('#heroPlay').onclick = () => heroWS.isPlaying() ? (heroWS.pause(), miniWS.pause()) : (heroWS.play(), miniWS.play())
       $('#miniPlay').onclick = () => $('#heroPlay').click()
-      $('#btnPrev').onclick  = () => { setTrack(current - 1); heroWS.play() }
-      $('#btnNext').onclick  = () => { setTrack(current + 1); heroWS.play() }
+      $('#btnPrev').onclick = () => { setTrack(current - 1); heroWS.play(); miniWS.play() }
+      $('#btnNext').onclick = () => { setTrack(current + 1); heroWS.play(); miniWS.play() }
       $('#miniPrev').onclick = () => $('#btnPrev').click()
       $('#miniNext').onclick = () => $('#btnNext').click()
     }
@@ -516,6 +539,10 @@ heroWS.on('finish', () => {
         if (!url) return
         uploadBtn.textContent = 'Uploading…'
         try {
+          // Example upload flow — replace with your API endpoint
+          // const blob = await fetch(url).then(r => r.blob())
+          // const form = new FormData(); form.append('file', blob, 'freestyle.webm')
+          // await fetch('/api/freestyle', { method: 'POST', body: form })
           await new Promise(r => setTimeout(r, 1000))
           uploadBtn.textContent = 'Uploaded!'
         } catch (e) {
@@ -531,6 +558,8 @@ heroWS.on('finish', () => {
         $('#subBtn').disabled = true
         $('#subMsg').textContent = 'Submitting…'
         try {
+          // Swap with your handler or Render function
+          // await fetch('/api/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
           await new Promise(r => setTimeout(r, 600))
           $('#subMsg').textContent = 'Thanks! Check your inbox for a welcome email.'
         } catch (e) {
@@ -562,21 +591,24 @@ heroWS.on('finish', () => {
     async function discoverApiBase() {
       const candidates = [location.origin, ...API_FALLBACKS]
       for (const base of candidates) {
-        try { await fetch(base + '/api/health', { mode: 'no-cors' }); return base } catch {}
+        try {
+          await fetch(base + '/api/health', { mode: 'no-cors' })
+          return base
+        } catch {}
       }
       return null
     }
 
     // ---------- Init
     window.addEventListener('DOMContentLoaded', async () => {
-      $('#year').textContent = new Date().getFullYear()
+      document.getElementById('year').textContent = new Date().getFullYear()
       buildCards()
       setupPlayers()
       setupControls()
       setupFreestyleRecorder()
       setupSubscribe()
       writeStructuredData()
-      await discoverApiBase()
+      await discoverApiBase() // (optional) do something with it later
     })
   </script>
 </body>
