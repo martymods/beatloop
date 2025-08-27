@@ -13,6 +13,8 @@
   <style>
     html, body { font-family: Inter, ui-sans-serif, system-ui, -apple-system; }
     .glass { background: rgba(18, 18, 24, .55); backdrop-filter: blur(10px); }
+    /* add glow used by buttons */
+    .shadow-glow{box-shadow:0 0 0 2px rgba(124,58,237,.25),0 5px 25px rgba(124,58,237,.35)}
   </style>
 </head>
 <body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
@@ -30,11 +32,11 @@
         <a href="index.html#tools" class="hover:text-white">AI Tools</a>
         <a href="index.html#blog" class="hover:text-white">Blog</a>
       </nav>
-  <button id="logoutBtn" class="ml-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Log out</button>
+      <button id="logoutBtn" class="ml-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Log out</button>
     </div>
   </header>
 
-  <!-- Main content wrapper (3‑column layout) -->
+  <!-- Main content wrapper (3-column layout) -->
   <div class="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-6 flex-1">
     <!-- Left navigation -->
     <aside class="hidden lg:block col-span-3">
@@ -46,6 +48,7 @@
         <button id="btnLogout" class="mt-4 w-full rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Log out</button>
       </nav>
     </aside>
+
     <!-- Centre timeline -->
     <main class="col-span-12 lg:col-span-6 min-h-[60vh]">
       <!-- Composer -->
@@ -64,10 +67,32 @@
         <div class="mt-4 flex flex-wrap items-center gap-3 text-xs">
           <input id="uploadTrack" type="file" accept="audio/*" class="hidden" />
           <label for="uploadTrack" class="cursor-pointer rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Upload Track</label>
+
+          <!-- NEW: optional cover image -->
+          <input id="uploadCover" type="file" accept="image/*" class="hidden" />
+          <label for="uploadCover" class="cursor-pointer rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Add Cover</label>
+
           <button id="recordTrack" class="rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Record Track</button>
           <span id="recordingStatus" class="text-white/60 hidden">Recording…</span>
         </div>
       </article>
+
+      <!-- Mobile right-rail (stacked) -->
+      <div class="mt-4 grid gap-4 xl:hidden">
+        <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
+          <h3 class="font-semibold">Who to follow</h3>
+          <div id="whoToFollowM" class="mt-3 space-y-3"></div>
+        </div>
+        <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
+          <h3 class="font-semibold">Trends</h3>
+          <ul id="trendsM" class="mt-2 text-sm text-white/70 space-y-1"></ul>
+        </div>
+        <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
+          <h3 class="font-semibold">Leaderboard</h3>
+          <ol id="leaderboardM" class="mt-3 list-decimal list-inside space-y-1 text-sm text-white/80"></ol>
+        </div>
+      </div>
+
       <!-- Timeline feed -->
       <div id="feed" class="mt-4 space-y-4"></div>
       <!-- Loading indicator -->
@@ -75,6 +100,7 @@
         <span class="animate-pulse rounded-full bg-white/20 px-3 py-1 text-xs">Loading…</span>
       </div>
     </main>
+
     <!-- Right column -->
     <aside class="hidden xl:block col-span-3">
       <div class="sticky top-6 space-y-4">
@@ -88,13 +114,12 @@
         </div>
         <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
           <h3 class="font-semibold">Trends</h3>
-          <ul class="mt-2 text-sm text-white/70 space-y-1">
-            <li>#afrobeats</li><li>#trap</li><li>#freestylerap</li>
-          </ul>
+          <ul id="trends" class="mt-2 text-sm text-white/70 space-y-1"></ul>
         </div>
       </div>
     </aside>
   </div>
+
   <!-- Scroll to top button -->
   <button id="scrollTop" class="hidden fixed bottom-20 right-5 z-40 p-3 rounded-full bg-primary shadow-glow text-white transition hover:shadow-lg" aria-label="Scroll to top">↑ Top</button>
 
@@ -115,16 +140,19 @@
 
     // Predefined tracks used on the main page
     const TRACKS = [
-      { id: 'reggae-trap',   title: 'Reggae Trap',    artist: 'Slim Pattie',           bpm: 92, url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
-      { id: 'stack',         title: 'STACK',          artist: 'lilwoo',                bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
-      { id: 'cleanup-woman', title: 'Da Cleanup Woman',  artist: 't-dub',               bpm: 95, url: '/audio/cleanup-woman.mp3', cover: '/img/covers/cleanup.jpg' },
-      { id: 'we-go-make-it', title: 'We Go Make It',  artist: 'spanel-035',            bpm: 94, url: '/audio/we-go.mp3',         cover: '/img/covers/we-go.jpg' },
-      { id: 'the-one',       title: 'The one',        artist: 'kloverfreshproduction', bpm: 89, url: '/audio/the-one.mp3',       cover: '/img/covers/the-one.jpg' },
-      { id: 'it-is-what',    title: 'It is what it is',  artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',      cover: '/img/covers/it-is.jpg' }
+      { id: 'reggae-trap',   title: 'Reggae Trap',       artist: 'Slim Pattie',           bpm: 92, url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
+      { id: 'stack',         title: 'STACK',             artist: 'lilwoo',                bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
+      { id: 'cleanup-woman', title: 'Da Cleanup Woman',  artist: 't-dub',                 bpm: 95, url: '/audio/cleanup-woman.mp3',  cover: '/img/covers/cleanup.jpg' },
+      { id: 'we-go-make-it', title: 'We Go Make It',     artist: 'spanel-035',            bpm: 94, url: '/audio/we-go.mp3',          cover: '/img/covers/we-go.jpg' },
+      { id: 'the-one',       title: 'The one',           artist: 'kloverfreshproduction', bpm: 89, url: '/audio/the-one.mp3',        cover: '/img/covers/the-one.jpg' },
+      { id: 'it-is-what',    title: 'It is what it is',  artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',          cover: '/img/covers/it-is.jpg' }
     ]
 
-    // Default avatar fallback
+    // Default avatar fallback & default cover art
     const fallbackAvatar = '/img/avatar-default.svg'
+    const DEFAULT_TRACK_COVER =
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="128" height="128" rx="18" fill="url(#g)"/><g fill="#fff"><circle cx="46" cy="86" r="12"/><path d="M82 24v56.6a12 12 0 1 1-4-8.6V34l-26 6v36.6a12 12 0 1 1-4-8.6V36z"/></g></svg>`)
 
     // Retrieve custom tracks (uploaded or recorded)
     let customTracks = JSON.parse(localStorage.getItem('custom_tracks') || '[]')
@@ -201,13 +229,19 @@
     const composerTextEl = document.getElementById('composerText')
     const composerPostBtn = document.getElementById('composerPost')
     const uploadTrackInput = document.getElementById('uploadTrack')
+    const uploadCoverInput = document.getElementById('uploadCover')
     const recordBtn = document.getElementById('recordTrack')
     const recordingStatus = document.getElementById('recordingStatus')
     const whoToFollowEl = document.getElementById('whoToFollow')
+    const whoToFollowMEl = document.getElementById('whoToFollowM')
     const leaderboardEl = document.getElementById('leaderboard')
+    const leaderboardMEl = document.getElementById('leaderboardM')
+    const trendsEl = document.getElementById('trends')
+    const trendsMEl = document.getElementById('trendsM')
 
-    // Pending track selected via upload or record (for composer post)
+    // Pending items selected via upload (for composer/post)
     let pendingTrack = null
+    let pendingCover = null   // DataURL of chosen cover (optional)
 
     // Utility to render comment list and markers
     function renderComments(trackId, listContainer, pinsContainer, duration) {
@@ -293,8 +327,8 @@
       const trackRow = document.createElement('div')
       trackRow.className = 'flex items-center gap-3'
       const coverImg = document.createElement('img')
-      coverImg.src = track.cover
-      coverImg.onerror = () => { coverImg.src = track.cover }
+      coverImg.src = track.cover || DEFAULT_TRACK_COVER
+      coverImg.onerror = () => { coverImg.src = DEFAULT_TRACK_COVER }
       coverImg.alt = 'cover'
       coverImg.className = 'h-10 w-10 rounded-md ring-1 ring-white/10 object-cover'
       trackRow.appendChild(coverImg)
@@ -403,14 +437,12 @@
           title: track.title,
           artist: track.artist,
           artwork: [
-            { src: track.cover, sizes: '256x256', type: 'image/png' },
-            { src: track.cover, sizes: '512x512', type: 'image/png' }
+            { src: track.cover || DEFAULT_TRACK_COVER, sizes: '256x256', type: 'image/png' },
+            { src: track.cover || DEFAULT_TRACK_COVER, sizes: '512x512', type: 'image/png' }
           ]
         }
         if ('mediaSession' in navigator) {
-          try {
-            navigator.mediaSession.metadata = new MediaMetadata(meta)
-          } catch {}
+          try { navigator.mediaSession.metadata = new MediaMetadata(meta) } catch {}
         }
         // count play
         const s = getStats(track.id)
@@ -498,17 +530,15 @@
       })
     }
 
-    // Who to follow (simple suggestions)
-    function renderWhoToFollow() {
+    // Who to follow (from stored users)
+    function renderWhoToFollowInto(el) {
+      if (!el) return
       const users = JSON.parse(localStorage.getItem('users') || '{}')
       const suggestions = []
       Object.values(users).forEach(u => {
-        if (currentUser && u.email !== currentUser.email) {
-          suggestions.push(u)
-        }
+        if (currentUser && u.email !== currentUser.email) suggestions.push(u)
       })
-      // pick up to 3 suggestions
-      whoToFollowEl.innerHTML = ''
+      el.innerHTML = ''
       suggestions.slice(0,3).forEach(u => {
         const row = document.createElement('div')
         row.className = 'flex items-center gap-3'
@@ -516,7 +546,6 @@
         av.src = u.avatar || fallbackAvatar
         av.onerror = () => { av.src = fallbackAvatar }
         av.className = 'h-8 w-8 rounded-full ring-1 ring-white/10 object-cover'
-        row.appendChild(av)
         const info = document.createElement('div')
         info.className = 'min-w-0 flex-1'
         const name = document.createElement('p')
@@ -525,34 +554,44 @@
         const handle = document.createElement('p')
         handle.className = 'text-xs text-white/50 truncate'
         handle.textContent = '@' + (u.name || u.email).toLowerCase().replace(/[^a-z0-9_]/g,'')
-        info.appendChild(name)
-        info.appendChild(handle)
-        row.appendChild(info)
-        whoToFollowEl.appendChild(row)
+        info.appendChild(name); info.appendChild(handle)
+        row.appendChild(av); row.appendChild(info)
+        el.appendChild(row)
+      })
+    }
+
+    // Trends (simple demo list)
+    function renderTrendsInto(el){
+      if(!el) return
+      el.innerHTML = ''
+      ;['#afrobeats','#trap','#freestylerap','#boomBap'].forEach(tag=>{
+        const li=document.createElement('li'); li.textContent=tag; el.appendChild(li)
       })
     }
 
     // Leaderboard: top tracks by combined stats (likes + plays + comments)
     function updateLeaderboard() {
       const stats = JSON.parse(localStorage.getItem('track_stats') || '{}')
-      // gather all tracks (including custom)
       const allTracks = [...TRACKS, ...customTracks]
       const list = allTracks.map(t => {
         const s = stats[t.id] || {}
         const score = (s.likes || 0) + (s.plays || 0) + (s.comments || 0)
         return { track: t, score }
-      })
-      list.sort((a,b) => b.score - a.score)
-      leaderboardEl.innerHTML = ''
-      list.slice(0,5).forEach((item) => {
-        const li = document.createElement('li')
-        // <ol> already numbers list items, so don't prefix with idx
-        li.innerHTML = `${item.track.title} — <span class="text-white">${item.track.artist}</span> (${item.score})`
-        leaderboardEl.appendChild(li)
-      })
+      }).sort((a,b) => b.score - a.score).slice(0,5)
+
+      function paint(el){
+        if(!el) return
+        el.innerHTML = ''
+        list.forEach(item => {
+          const li = document.createElement('li')
+          li.innerHTML = `${item.track.title} — <span class="text-white">${item.track.artist}</span> (${item.score})`
+          el.appendChild(li)
+        })
+      }
+      paint(leaderboardEl); paint(leaderboardMEl)
     }
 
-    // Upload track handler
+    // Read file as DataURL
     function readFileAsDataUrl(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader()
@@ -561,6 +600,8 @@
         reader.readAsDataURL(file)
       })
     }
+
+    // Upload track handler
     uploadTrackInput.addEventListener('change', async (e) => {
       const file = e.target.files[0]
       if (!file) return
@@ -572,7 +613,7 @@
         artist: currentUser.name || currentUser.email,
         bpm: 0,
         url: dataUrl,
-        cover: '/img/covers/reggae-trap.jpg'
+        cover: pendingCover || DEFAULT_TRACK_COVER
       }
       customTracks.push(newTrack)
       localStorage.setItem('custom_tracks', JSON.stringify(customTracks))
@@ -581,6 +622,15 @@
       updateLeaderboard()
       // mark this track as pending for composer posts
       pendingTrack = newTrack
+    })
+
+    // Cover image handler (optional)
+    uploadCoverInput.addEventListener('change', async (e)=>{
+      const file = e.target.files[0]
+      if(!file) return
+      pendingCover = await readFileAsDataUrl(file)
+      // if there is a pending track object, attach cover to it
+      if(pendingTrack) { pendingTrack.cover = pendingCover }
     })
 
     // Record track handler (audio only)
@@ -609,7 +659,7 @@
                 artist: currentUser.name || currentUser.email,
                 bpm: 0,
                 url: dataUrl,
-                cover: '/img/covers/reggae-trap.jpg'
+                cover: pendingCover || DEFAULT_TRACK_COVER
               }
               customTracks.push(newTrack)
               localStorage.setItem('custom_tracks', JSON.stringify(customTracks))
@@ -621,6 +671,7 @@
             reader.readAsDataURL(blob)
             recordBtn.textContent = 'Record Track'
             recordingStatus.classList.add('hidden')
+            stream.getTracks().forEach(t=>t.stop())
           }
           mediaRecorder.start()
         } catch (err) {
@@ -635,18 +686,13 @@
     if (composerPostBtn) {
       composerPostBtn.addEventListener('click', () => {
         const textVal = composerTextEl ? composerTextEl.value.trim() : ''
-        // Only allow posting if a track has been uploaded or recorded
         if (!pendingTrack) {
           alert('Please upload or record a track before posting.')
           return
         }
-        // Append optional caption to the post (currently unused but stored for future)
-        if (textVal) {
-          pendingTrack.caption = textVal
-        }
+        if (textVal) pendingTrack.caption = textVal
         createPost(pendingTrack)
         updateLeaderboard()
-        // reset composer
         if (composerTextEl) composerTextEl.value = ''
         pendingTrack = null
       })
@@ -660,8 +706,11 @@
         composerAvatarEl.src = currentUser.avatar || fallbackAvatar
         composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar }
       }
-      // Render initial suggestions and leaderboard
-      renderWhoToFollow()
+      // Render suggestions / trends / leaderboard for both mobile & desktop blocks
+      renderWhoToFollowInto(whoToFollowEl)
+      renderWhoToFollowInto(whoToFollowMEl)
+      renderTrendsInto(trendsEl)
+      renderTrendsInto(trendsMEl)
       updateLeaderboard()
       // Load initial feed
       loadMore()
