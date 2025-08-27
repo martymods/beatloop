@@ -255,6 +255,18 @@ function fmt(s){
   return m + ':' + sec;
 }
 
+function timeAgo(ts){
+  var diff = Date.now() - ts;
+  var s = Math.floor(diff / 1000);
+  var m = Math.floor(s / 60);
+  var h = Math.floor(m / 60);
+  var d = Math.floor(h / 24);
+  if (d > 0) return d + 'd';
+  if (h > 0) return h + 'h';
+  if (m > 0) return m + 'm';
+  return s + 's';
+}
+
 
     // ---------- Current user
     let currentUser = null
