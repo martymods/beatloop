@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Beats To Rap On — Royalty‑Free Rap Beats, AI Tools & Creator Network</title>
-  <meta name="description" content="Royalty‑free rap beats, hip‑hop & trap instrumentals + AI stem splitter, AI mastering, and a free creator network. Drop a 30‑sec freestyle, climb the leaderboard, and collaborate." />
-  <meta property="og:title" content="Beats To Rap On — Royalty‑Free Rap Beats, AI Tools & Creator Network" />
+  <title>beatloop — Royalty‑Free Rap Beats, AI Tools & Creator Network</title>
+  <meta name="description" content="Royalty‑free rap, hip‑hop & trap instrumentals + AI stem splitter, AI mastering, and a free creator network. Drop a 30‑sec freestyle, climb the leaderboard, and collaborate." />
+  <meta property="og:title" content="beatloop — Royalty‑Free Rap Beats, AI Tools & Creator Network" />
   <meta property="og:description" content="Download beats, master with AI, split stems, and join a zero‑cost creator network. Drop a 30‑sec freestyle and make the leaderboard." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="/img/og-cover.jpg" />
@@ -33,7 +33,7 @@
     }
   </script>
 
-  <!-- Icons -->
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -53,8 +53,8 @@
   <header class="sticky top-0 z-50 border-b border-white/5 bg-[#0c0c12]/70 backdrop-blur">
     <div class="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
       <a href="#" class="flex items-center gap-2 font-extrabold tracking-tight text-white">
-        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BT</span>
-        <span>Beats To Rap On</span>
+        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span>
+        <span>beatloop</span>
       </a>
       <nav class="ml-auto hidden md:flex items-center gap-6 text-sm text-white/70">
         <a href="#beats" class="hover:text-white">Beats</a>
@@ -107,7 +107,7 @@
         </div>
       </div>
       <div class="glass rounded-2xl p-4 md:p-6 shadow-xl ring-1 ring-white/10">
-        <!-- Big Player Card -->
+        <!-- Big Player Card (master audio source) -->
         <div class="flex items-center gap-4">
           <button id="heroPlay" class="size-12 shrink-0 rounded-full bg-primary text-white grid place-items-center shadow-glow" aria-label="Play/Pause">
             <svg id="heroPlayIcon" xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
@@ -236,7 +236,7 @@
   <footer class="border-t border-white/5 bg-black/40">
     <div class="mx-auto max-w-7xl px-4 py-10 grid gap-6 md:grid-cols-4 text-sm text-white/70">
       <div>
-        <div class="flex items-center gap-2 font-extrabold text-white"><span class="inline-flex size-7 items-center justify-center rounded-xl bg-primary/20 text-primary">BT</span> Beats To Rap On</div>
+        <div class="flex items-center gap-2 font-extrabold text-white"><span class="inline-flex size-7 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span> beatloop</div>
         <p class="mt-3">We give every artist the power to create, share, and grow. Royalty‑free beats + AI toolkit + a creator network that lifts you up.</p>
       </div>
       <div>
@@ -266,10 +266,10 @@
         </ul>
       </div>
     </div>
-    <div class="border-t border-white/5 py-6 text-center text-xs text-white/60">© <span id="year"></span> Beats To Rap On. All Rights Reserved.</div>
+    <div class="border-t border-white/5 py-6 text-center text-xs text-white/60">© <span id="year"></span> beatloop. All Rights Reserved.</div>
   </footer>
 
-  <!-- Sticky Mini Player -->
+  <!-- Sticky Mini Player (mirrors master, muted) -->
   <div class="fixed inset-x-0 bottom-0 z-50">
     <div class="mx-auto max-w-3xl rounded-t-2xl border-x border-t border-white/10 bg-black/70 backdrop-blur px-4 py-3 shadow-2xl">
       <div class="flex items-center gap-3">
@@ -294,12 +294,9 @@
 
   <script>
     // ---------- Minimal Config
-    const API_FALLBACKS = [
-      // Add your Render API origin here if you host APIs separately
-      // 'https://your-api.onrender.com'
-    ]
+    const API_FALLBACKS = []
 
-    // ---------- Demo Tracks (swap with your own /audio/*.mp3 and cover art)
+    // ---------- Tracks (swap your assets in /audio & /img/covers)
     const TRACKS = [
       { id: 'reggae-trap',   title: 'Reggae Trap',    artist: 'Slim Pattie', bpm: 92,  url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
       { id: 'stack',         title: 'STACK',          artist: 'lilwoo', bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
@@ -310,38 +307,32 @@
     ]
 
     // ---------- Utilities
-    const $ = sel => document.querySelector(sel)
-    const $$ = sel => Array.from(document.querySelectorAll(sel))
-    const fmt = s => {
-      s = Math.floor(s || 0)
-      const m = Math.floor(s/60).toString()
-      const sec = (s%60).toString().padStart(2, '0')
-      return `${m}:${sec}`
-    }
+    const $  = (sel) => document.querySelector(sel)
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel))
+    const fmt = (s) => { s = Math.floor(s || 0); const m=Math.floor(s/60).toString(); const sec=(s%60).toString().padStart(2,'0'); return `${m}:${sec}` }
 
     // ---------- State
     let current = 0
     let heroWS, miniWS
 
     function setButtonsPlaying(playing) {
-      const playPath = playing
-        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6"/>'
-        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/>'
-      $('#heroPlayIcon').innerHTML = playPath
-      $('#miniPlayIcon').innerHTML = playPath
+      const svg = playing
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6"/>'  // pause
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/>' // play
+      $('#heroPlayIcon').innerHTML = svg
+      $('#miniPlayIcon').innerHTML = svg
     }
 
     function setTrack(i) {
       current = (i + TRACKS.length) % TRACKS.length
       const t = TRACKS[current]
-      $('#nowTitle').textContent = t.title
+      $('#nowTitle').textContent  = t.title
       $('#nowArtist').textContent = t.artist
       $('#miniTitle').textContent = t.title
-      $('#miniArtist').textContent = t.artist
-
+      $('#miniArtist').textContent= t.artist
       heroWS.load(t.url)
       miniWS.load(t.url)
-      setButtonsPlaying(true)
+      // don't change icons here — only when real play/pause happens
     }
 
     function buildCards() {
@@ -365,16 +356,14 @@
           <div class="mt-3 flex items-center gap-3">
             <a class="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[#0c0c12]" href="${t.url}" download>Download</a>
             <button class="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold hover:bg-white/10">License</button>
-          </div>
-        `
+          </div>`
         grid.appendChild(card)
       })
 
       $$('.playBtn').forEach(btn => btn.addEventListener('click', (e) => {
         const i = +e.currentTarget.getAttribute('data-i')
         setTrack(i)
-        heroWS.play()
-        miniWS.play()
+        heroWS.play() // mini stays muted & mirrors only
       }))
     }
 
@@ -398,31 +387,31 @@
         barWidth: 2,
         barGap: 1,
       })
+      // keep mini player silent
+      if (miniWS.setMuted) miniWS.setMuted(true); else if (miniWS.setVolume) miniWS.setVolume(0)
 
       heroWS.on('audioprocess', () => { $('#nowTime').textContent = fmt(heroWS.getCurrentTime()) })
-      heroWS.on('ready', () => { $('#nowDur').textContent = fmt(heroWS.getDuration()) })
-      heroWS.on('play', () => setButtonsPlaying(true))
+      heroWS.on('ready', () => { $('#nowDur').textContent = fmt(heroWS.getDuration()); setButtonsPlaying(false) })
+      heroWS.on('play',  () => setButtonsPlaying(true))
       heroWS.on('pause', () => setButtonsPlaying(false))
-      heroWS.on('finish', () => setTrack(current + 1))
+      heroWS.on('finish', () => { setTrack(current + 1); heroWS.play() })
 
-      miniWS.on('play', () => setButtonsPlaying(true))
-      miniWS.on('pause', () => setButtonsPlaying(false))
-
-      // sync positions
+      // Sync positions (mini mirrors hero)
       const sync = (src, dest) => src.on('audioprocess', () => {
         if (!dest.isPlaying()) dest.setTime(src.getCurrentTime())
       })
       sync(heroWS, miniWS)
-      sync(miniWS, heroWS)
+      sync(miniWS, heroWS) // keep bi‑directional seeking working
 
       setTrack(0)
+      setButtonsPlaying(false)
     }
 
     function setupControls() {
-      $('#heroPlay').onclick = () => heroWS.isPlaying() ? (heroWS.pause(), miniWS.pause()) : (heroWS.play(), miniWS.play())
+      $('#heroPlay').onclick = () => heroWS.isPlaying() ? heroWS.pause() : heroWS.play()
       $('#miniPlay').onclick = () => $('#heroPlay').click()
-      $('#btnPrev').onclick = () => { setTrack(current - 1); heroWS.play(); miniWS.play() }
-      $('#btnNext').onclick = () => { setTrack(current + 1); heroWS.play(); miniWS.play() }
+      $('#btnPrev').onclick  = () => { setTrack(current - 1); heroWS.play() }
+      $('#btnNext').onclick  = () => { setTrack(current + 1); heroWS.play() }
       $('#miniPrev').onclick = () => $('#btnPrev').click()
       $('#miniNext').onclick = () => $('#btnNext').click()
     }
@@ -469,10 +458,6 @@
         if (!url) return
         uploadBtn.textContent = 'Uploading…'
         try {
-          // Example upload flow — replace with your API endpoint
-          // const blob = await fetch(url).then(r => r.blob())
-          // const form = new FormData(); form.append('file', blob, 'freestyle.webm')
-          // await fetch('/api/freestyle', { method: 'POST', body: form })
           await new Promise(r => setTimeout(r, 1000))
           uploadBtn.textContent = 'Uploaded!'
         } catch (e) {
@@ -488,8 +473,6 @@
         $('#subBtn').disabled = true
         $('#subMsg').textContent = 'Submitting…'
         try {
-          // Swap with your handler or Render function
-          // await fetch('/api/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
           await new Promise(r => setTimeout(r, 600))
           $('#subMsg').textContent = 'Thanks! Check your inbox for a welcome email.'
         } catch (e) {
@@ -510,7 +493,7 @@
       const json = {
         '@context': 'https://schema.org',
         '@type': 'Organization',
-        name: 'Beats To Rap On',
+        name: 'beatloop',
         url: location.origin,
         sameAs: [],
         makesOffer: recordings
@@ -521,24 +504,21 @@
     async function discoverApiBase() {
       const candidates = [location.origin, ...API_FALLBACKS]
       for (const base of candidates) {
-        try {
-          await fetch(base + '/api/health', { mode: 'no-cors' })
-          return base
-        } catch {}
+        try { await fetch(base + '/api/health', { mode: 'no-cors' }); return base } catch {}
       }
       return null
     }
 
     // ---------- Init
     window.addEventListener('DOMContentLoaded', async () => {
-      document.getElementById('year').textContent = new Date().getFullYear()
+      $('#year').textContent = new Date().getFullYear()
       buildCards()
       setupPlayers()
       setupControls()
       setupFreestyleRecorder()
       setupSubscribe()
       writeStructuredData()
-      await discoverApiBase() // (optional) do something with it later
+      await discoverApiBase()
     })
   </script>
 </body>
