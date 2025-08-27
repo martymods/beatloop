@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>beatloop — Creator Network</title>
+  <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html, body { font-family: Inter, ui-sans-serif, system-ui, -apple-system; }
+    .glass { background: rgba(18, 18, 24, .55); backdrop-filter: blur(10px); }
+  </style>
+</head>
+<body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="sticky top-0 z-50 border-b border-white/5 bg-[#0c0c12]/70 backdrop-blur">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
+      <a href="index.html" class="flex items-center gap-2 font-extrabold tracking-tight text-white">
+        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span>
+        <span>beatloop</span>
+      </a>
+      <nav class="ml-auto hidden md:flex items-center gap-6 text-sm text-white/70">
+        <a href="index.html#beats" class="hover:text-white">Beats</a>
+        <a href="index.html#freestyle" class="hover:text-white">Freestyle</a>
+        <a href="network.html" class="hover:text-white font-semibold text-white">Network</a>
+        <a href="index.html#tools" class="hover:text-white">AI Tools</a>
+        <a href="index.html#blog" class="hover:text-white">Blog</a>
+      </nav>
+  <button id="logoutBtn" class="ml-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Log out</button>
+    </div>
+  </header>
+
+  <!-- Main content wrapper (3‑column layout) -->
+  <div class="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-6 flex-1">
+    <!-- Left navigation -->
+    <aside class="hidden lg:block col-span-3">
+      <nav class="sticky top-6 space-y-2 text-white/80">
+        <a href="index.html" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🏠</span> Home</a>
+        <a href="#explore" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🔍</span> Explore</a>
+        <a href="#notifications" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🔔</span> Notifications</a>
+        <a href="#profile" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>👤</span> Profile</a>
+        <button id="btnLogout" class="mt-4 w-full rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Log out</button>
+      </nav>
+    </aside>
+    <!-- Centre timeline -->
+    <main class="col-span-12 lg:col-span-6 min-h-[60vh]">
+      <!-- Composer -->
+      <article class="glass rounded-2xl p-4 ring-1 ring-white/10">
+        <div class="flex gap-3">
+          <img id="composerAvatar" src="/img/avatar-default.svg" onerror="this.src='/img/avatar-default.svg'" class="h-10 w-10 rounded-full ring-1 ring-white/10 object-cover" alt="">
+          <div class="flex-1">
+            <textarea id="composerText" rows="2" placeholder="What’s happening?" class="w-full resize-none rounded-xl border border-white/10 bg-white/5 p-3 text-white placeholder:text-white/50 focus:outline-none focus:ring-[var(--ring)]"></textarea>
+            <div class="mt-2 flex items-center justify-between">
+              <div class="text-xs text-white/50">Tip: attach or record a track below</div>
+              <button id="composerPost" class="rounded-xl bg-primary px-4 py-2 font-semibold shadow-glow">Post</button>
+            </div>
+          </div>
+        </div>
+        <!-- Attach / record controls -->
+        <div class="mt-4 flex flex-wrap items-center gap-3 text-xs">
+          <input id="uploadTrack" type="file" accept="audio/*" class="hidden" />
+          <label for="uploadTrack" class="cursor-pointer rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Upload Track</label>
+          <button id="recordTrack" class="rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Record Track</button>
+          <span id="recordingStatus" class="text-white/60 hidden">Recording…</span>
+        </div>
+      </article>
+      <!-- Timeline feed -->
+      <div id="feed" class="mt-4 space-y-4"></div>
+      <!-- Loading indicator -->
+      <div id="loading" class="mt-6 flex items-center justify-center text-white/60 hidden">
+        <span class="animate-pulse rounded-full bg-white/20 px-3 py-1 text-xs">Loading…</span>
+      </div>
+    </main>
+    <!-- Right column -->
+    <aside class="hidden xl:block col-span-3">
+      <div class="sticky top-6 space-y-4">
+        <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
+          <h3 class="font-semibold">Who to follow</h3>
+          <div id="whoToFollow" class="mt-3 space-y-3"></div>
+        </div>
+        <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
+          <h3 class="font-semibold">Leaderboard</h3>
+          <ol id="leaderboard" class="mt-3 list-decimal list-inside space-y-1 text-sm text-white/80"></ol>
+        </div>
+        <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
+          <h3 class="font-semibold">Trends</h3>
+          <ul class="mt-2 text-sm text-white/70 space-y-1">
+            <li>#afrobeats</li><li>#trap</li><li>#freestylerap</li>
+          </ul>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <!-- Scroll to top button -->
+  <button id="scrollTop" class="hidden fixed bottom-20 right-5 z-40 p-3 rounded-full bg-primary shadow-glow text-white transition hover:shadow-lg" aria-label="Scroll to top">↑ Top</button>
+
+  <script>
+    // Tailwind primary colour configuration to match main site
+    tailwind.config = { theme: { extend: { colors: { primary: { DEFAULT: '#7c3aed' } } } } }
+  </script>
+  <script>
+    /*
+      Enhanced feed implementation for the beatloop creator network.
+      Uses localStorage to store users, sessions, custom uploaded/recorded tracks and comments.
+      Implements a Twitter-style layout with left navigation, centre timeline with composer and feed,
+      and right sidebar for who-to-follow, leaderboard and trends.
+      Each feed item displays a track with cover art, looping audio, progress bar with comment markers,
+      and actions for comments, reposts and likes. Comments display avatars (with fallback) at their timestamps.
+      Media Session API is used to show album art on the lock screen / control centre.
+    */
+
+    // Predefined tracks used on the main page
+    const TRACKS = [
+      { id: 'reggae-trap',   title: 'Reggae Trap',    artist: 'Slim Pattie',           bpm: 92, url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
+      { id: 'stack',         title: 'STACK',          artist: 'lilwoo',                bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
+      { id: 'cleanup-woman', title: 'Da Cleanup Woman',  artist: 't-dub',               bpm: 95, url: '/audio/cleanup-woman.mp3', cover: '/img/covers/cleanup.jpg' },
+      { id: 'we-go-make-it', title: 'We Go Make It',  artist: 'spanel-035',            bpm: 94, url: '/audio/we-go.mp3',         cover: '/img/covers/we-go.jpg' },
+      { id: 'the-one',       title: 'The one',        artist: 'kloverfreshproduction', bpm: 89, url: '/audio/the-one.mp3',       cover: '/img/covers/the-one.jpg' },
+      { id: 'it-is-what',    title: 'It is what it is',  artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',      cover: '/img/covers/it-is.jpg' }
+    ]
+
+    // Default avatar fallback
+    const fallbackAvatar = '/img/avatar-default.svg'
+
+    // Retrieve custom tracks (uploaded or recorded)
+    let customTracks = JSON.parse(localStorage.getItem('custom_tracks') || '[]')
+
+    // Retrieve or initialise track statistics (plays, likes, comments)
+    function getStats(id) {
+      const stats = JSON.parse(localStorage.getItem('track_stats') || '{}')
+      return stats[id] || { plays: 0, likes: 0, comments: 0 }
+    }
+    function setStats(id, data) {
+      const stats = JSON.parse(localStorage.getItem('track_stats') || '{}')
+      stats[id] = data
+      localStorage.setItem('track_stats', JSON.stringify(stats))
+    }
+
+    // Format time (seconds to M:SS)
+    const fmt = (s) => {
+      s = Math.floor(s || 0)
+      const m = Math.floor(s / 60).toString()
+      const sec = (s % 60).toString().padStart(2, '0')
+      return `${m}:${sec}`
+    }
+
+    // Relative time formatting for posts
+    function timeAgo(ts) {
+      const diff = Date.now() - ts
+      const s = Math.floor(diff / 1000)
+      const m = Math.floor(s / 60)
+      const h = Math.floor(m / 60)
+      const d = Math.floor(h / 24)
+      if (d > 0) return d + 'd'
+      if (h > 0) return h + 'h'
+      if (m > 0) return m + 'm'
+      return s + 's'
+    }
+
+    // Current user state
+    let currentUser = null
+    function loadCurrentUser() {
+      const email = localStorage.getItem('current_user')
+      if (!email) return null
+      const users = JSON.parse(localStorage.getItem('users') || '{}')
+      const user = users[email] || null
+      if (user && !user.avatar) user.avatar = fallbackAvatar
+      return user
+    }
+    function ensureLoggedIn() {
+      currentUser = loadCurrentUser()
+      if (!currentUser) {
+        window.location.href = 'login.html'
+      }
+    }
+
+    // Comments storage
+    function getComments(key) {
+      return JSON.parse(localStorage.getItem('comments_' + key) || '[]')
+    }
+    function saveComment(key, comment) {
+      const arr = getComments(key)
+      arr.push(comment)
+      localStorage.setItem('comments_' + key, JSON.stringify(arr))
+      // increment comment count in stats
+      const s = getStats(key)
+      s.comments = (s.comments || 0) + 1
+      setStats(key, s)
+      updateLeaderboard()
+    }
+
+    // Elements
+    const feedEl = document.getElementById('feed')
+    const loadingEl = document.getElementById('loading')
+    const scrollTopBtn = document.getElementById('scrollTop')
+    const composerAvatarEl = document.getElementById('composerAvatar')
+    const composerTextEl = document.getElementById('composerText')
+    const composerPostBtn = document.getElementById('composerPost')
+    const uploadTrackInput = document.getElementById('uploadTrack')
+    const recordBtn = document.getElementById('recordTrack')
+    const recordingStatus = document.getElementById('recordingStatus')
+    const whoToFollowEl = document.getElementById('whoToFollow')
+    const leaderboardEl = document.getElementById('leaderboard')
+
+    // Pending track selected via upload or record (for composer post)
+    let pendingTrack = null
+
+    // Utility to render comment list and markers
+    function renderComments(trackId, listContainer, pinsContainer, duration) {
+      const comments = getComments(trackId)
+      // Clear list and pins
+      listContainer.innerHTML = ''
+      pinsContainer.innerHTML = ''
+      comments.forEach(c => {
+        // comment row
+        const row = document.createElement('div')
+        row.className = 'flex items-start gap-2 mb-2'
+        const avatar = document.createElement('img')
+        avatar.src = c.avatar || fallbackAvatar
+        avatar.onerror = () => { avatar.src = fallbackAvatar }
+        avatar.alt = 'avatar'
+        avatar.className = 'h-6 w-6 rounded-full ring-1 ring-white/10 object-cover'
+        row.appendChild(avatar)
+        const txtWrapper = document.createElement('div')
+        const meta = document.createElement('p')
+        meta.className = 'text-xs text-white/60'
+        meta.textContent = fmt(c.time)
+        const text = document.createElement('p')
+        text.className = 'text-sm'
+        text.textContent = c.text
+        txtWrapper.appendChild(meta)
+        txtWrapper.appendChild(text)
+        row.appendChild(txtWrapper)
+        listContainer.appendChild(row)
+        // pin marker (avatar icon)
+        if (duration) {
+          const pin = document.createElement('img')
+          pin.src = c.avatar || fallbackAvatar
+          pin.onerror = () => { pin.src = fallbackAvatar }
+          pin.alt = 'marker'
+          pin.className = 'absolute -translate-x-1/2 top-0 h-6 w-6 rounded-full ring-1 ring-white/10 object-cover pointer-events-none'
+          const pct = (c.time / duration) * 100
+          pin.style.left = pct + '%'
+          pinsContainer.appendChild(pin)
+        }
+      })
+    }
+
+    // Build a feed card for a given track
+    function createPost(track) {
+      const stats = getStats(track.id)
+      // Main container
+      const card = document.createElement('article')
+      card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
+      // Header: avatar/name/handle/time
+      const header = document.createElement('div')
+      header.className = 'flex gap-3'
+      const avatar = document.createElement('img')
+      avatar.src = currentUser.avatar || fallbackAvatar
+      avatar.onerror = () => { avatar.src = fallbackAvatar }
+      avatar.alt = 'avatar'
+      avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
+      header.appendChild(avatar)
+      const info = document.createElement('div')
+      info.className = 'min-w-0 flex-1'
+      const topRow = document.createElement('div')
+      topRow.className = 'flex items-center gap-2 text-sm'
+      const nameEl = document.createElement('span')
+      nameEl.className = 'font-semibold truncate'
+      nameEl.textContent = currentUser.name || currentUser.email
+      const handleEl = document.createElement('span')
+      handleEl.className = 'text-white/50 truncate'
+      const handle = (currentUser.name || currentUser.email).toLowerCase().replace(/[^a-z0-9_]/g, '')
+      handleEl.textContent = '@' + handle
+      const timeEl = document.createElement('span')
+      timeEl.className = 'text-white/40'
+      timeEl.textContent = '· ' + timeAgo(Date.now())
+      topRow.appendChild(nameEl)
+      topRow.appendChild(handleEl)
+      topRow.appendChild(timeEl)
+      info.appendChild(topRow)
+      // optional text message (none currently)
+      info.appendChild(document.createElement('p'))
+      header.appendChild(info)
+      card.appendChild(header)
+      // Track display: cover + title + artist
+      const trackWrapper = document.createElement('div')
+      trackWrapper.className = 'mt-3 rounded-xl bg-black/30 p-3 ring-1 ring-white/10'
+      const trackRow = document.createElement('div')
+      trackRow.className = 'flex items-center gap-3'
+      const coverImg = document.createElement('img')
+      coverImg.src = track.cover
+      coverImg.onerror = () => { coverImg.src = track.cover }
+      coverImg.alt = 'cover'
+      coverImg.className = 'h-10 w-10 rounded-md ring-1 ring-white/10 object-cover'
+      trackRow.appendChild(coverImg)
+      const metaDiv = document.createElement('div')
+      metaDiv.className = 'min-w-0'
+      const artistEl = document.createElement('div')
+      artistEl.className = 'text-sm text-white/70 truncate'
+      artistEl.textContent = track.artist
+      const titleEl = document.createElement('div')
+      titleEl.className = 'truncate font-semibold'
+      titleEl.textContent = track.title
+      metaDiv.appendChild(artistEl)
+      metaDiv.appendChild(titleEl)
+      trackRow.appendChild(metaDiv)
+      trackWrapper.appendChild(trackRow)
+      // Waveform container (progress bar)
+      const waveContainer = document.createElement('div')
+      waveContainer.id = 'wave-' + track.id + '-' + Math.random().toString(36).substring(2,8)
+      waveContainer.className = 'mt-2 h-14 w-full relative'
+      // Bar for progress
+      const barWrapper = document.createElement('div')
+      barWrapper.className = 'absolute inset-0 h-2 w-full bg-white/10 rounded overflow-hidden'
+      const barProgress = document.createElement('div')
+      barProgress.style.width = '0%'
+      barProgress.className = 'absolute top-0 left-0 h-2 bg-primary rounded'
+      barWrapper.appendChild(barProgress)
+      waveContainer.appendChild(barWrapper)
+      // Pins container
+      const pinsContainer = document.createElement('div')
+      pinsContainer.className = 'absolute top-0 left-0 h-2 w-full pointer-events-none'
+      waveContainer.appendChild(pinsContainer)
+      trackWrapper.appendChild(waveContainer)
+      // Audio element
+      const audio = document.createElement('audio')
+      audio.src = track.url
+      audio.preload = 'metadata'
+      audio.controls = true
+      audio.className = 'w-full mt-2'
+      trackWrapper.appendChild(audio)
+      // Stats and actions row
+      const actions = document.createElement('div')
+      actions.className = 'mt-2 flex items-center gap-4 text-white/60 text-sm'
+      const commentBtn = document.createElement('button')
+      commentBtn.className = 'hover:text-white'
+      commentBtn.dataset.act = 'comment'
+      commentBtn.dataset.id = track.id
+      commentBtn.textContent = '💬 ' + (stats.comments || 0)
+      const repostBtn = document.createElement('button')
+      repostBtn.className = 'hover:text-white'
+      repostBtn.dataset.act = 'repost'
+      repostBtn.dataset.id = track.id
+      repostBtn.textContent = '🔁 ' + (stats.reposts || 0)
+      const likeBtn = document.createElement('button')
+      likeBtn.className = 'hover:text-white'
+      likeBtn.dataset.act = 'like'
+      likeBtn.dataset.id = track.id
+      likeBtn.textContent = '❤️ ' + (stats.likes || 0)
+      actions.appendChild(commentBtn)
+      actions.appendChild(repostBtn)
+      actions.appendChild(likeBtn)
+      trackWrapper.appendChild(actions)
+      // Comments list container
+      const commentsList = document.createElement('div')
+      commentsList.className = 'mt-3'
+      trackWrapper.appendChild(commentsList)
+      // Comment form
+      const formWrapper = document.createElement('div')
+      formWrapper.className = 'flex items-center gap-2 mt-2'
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.placeholder = 'Add a comment…'
+      input.className = 'flex-grow rounded-lg bg-white/10 border border-white/15 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary'
+      const btn = document.createElement('button')
+      btn.textContent = 'Send'
+      btn.className = 'rounded-lg bg-primary px-4 py-2 text-sm font-semibold'
+      formWrapper.appendChild(input)
+      formWrapper.appendChild(btn)
+      trackWrapper.appendChild(formWrapper)
+      card.appendChild(trackWrapper)
+      // Insert into feed
+      feedEl.appendChild(card)
+      // Render comments and pins initially
+      function renderAll() {
+        renderComments(track.id, commentsList, pinsContainer, audio.duration || 0)
+        // update comment and like counts
+        const stat = getStats(track.id)
+        commentBtn.textContent = '💬 ' + (stat.comments || 0)
+        likeBtn.textContent    = '❤️ ' + (stat.likes || 0)
+      }
+      renderAll()
+      // Track progress update
+      audio.addEventListener('timeupdate', () => {
+        if (audio.duration) {
+          const pct = (audio.currentTime / audio.duration) * 100
+          barProgress.style.width = pct + '%'
+        }
+      })
+      // Loop on finish
+      audio.addEventListener('ended', () => {
+        audio.currentTime = 0
+        audio.play()
+      })
+      // Update Media Session metadata on play
+      audio.addEventListener('play', () => {
+        const meta = {
+          title: track.title,
+          artist: track.artist,
+          artwork: [
+            { src: track.cover, sizes: '256x256', type: 'image/png' },
+            { src: track.cover, sizes: '512x512', type: 'image/png' }
+          ]
+        }
+        if ('mediaSession' in navigator) {
+          try {
+            navigator.mediaSession.metadata = new MediaMetadata(meta)
+          } catch {}
+        }
+        // count play
+        const s = getStats(track.id)
+        s.plays = (s.plays || 0) + 1
+        setStats(track.id, s)
+        updateLeaderboard()
+      })
+      // Comment submission
+      btn.addEventListener('click', () => {
+        const text = input.value.trim()
+        if (!text) return
+        const time = audio.currentTime || 0
+        saveComment(track.id, {
+          text,
+          time,
+          user: currentUser.email,
+          avatar: currentUser.avatar || fallbackAvatar
+        })
+        input.value = ''
+        renderAll()
+      })
+      // Like button
+      likeBtn.addEventListener('click', () => {
+        const s = getStats(track.id)
+        s.likes = (s.likes || 0) + 1
+        setStats(track.id, s)
+        likeBtn.textContent = '❤️ ' + s.likes
+        updateLeaderboard()
+      })
+      // Placeholder for repost (not implemented)
+      repostBtn.addEventListener('click', () => {
+        alert('Repost functionality coming soon!')
+      })
+      return card
+    }
+
+    // Compose a feed by loading tracks in batches (infinite scroll)
+    let feedIndex = 0
+    const BATCH_SIZE = 3
+    function loadMore() {
+      const allTracks = [...TRACKS, ...customTracks]
+      if (feedIndex >= allTracks.length) return
+      loadingEl.classList.remove('hidden')
+      setTimeout(() => {
+        for (let i = 0; i < BATCH_SIZE && feedIndex < allTracks.length; i++) {
+          const track = allTracks[feedIndex++]
+          createPost(track)
+        }
+        loadingEl.classList.add('hidden')
+      }, 400)
+    }
+
+    // Scroll handling for infinite loading and scroll-to-top button
+    window.addEventListener('scroll', () => {
+      const nearBottom = window.innerHeight + window.pageYOffset >= document.body.offsetHeight - 200
+      if (nearBottom) loadMore()
+      if (window.pageYOffset > 300) {
+        scrollTopBtn.classList.remove('hidden')
+      } else {
+        scrollTopBtn.classList.add('hidden')
+      }
+    })
+    scrollTopBtn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      // Reset feed
+      feedIndex = 0
+      feedEl.innerHTML = ''
+      loadingEl.classList.add('hidden')
+      loadMore()
+    })
+
+    // Logout from both header button and nav
+    const logoutBtnHeader = document.getElementById('logoutBtn')
+    if (logoutBtnHeader) {
+      logoutBtnHeader.addEventListener('click', () => {
+        localStorage.removeItem('current_user')
+        window.location.href = 'login.html'
+      })
+    }
+    const navLogout = document.getElementById('btnLogout')
+    if (navLogout) {
+      navLogout.addEventListener('click', () => {
+        localStorage.removeItem('current_user')
+        window.location.href = 'login.html'
+      })
+    }
+
+    // Who to follow (simple suggestions)
+    function renderWhoToFollow() {
+      const users = JSON.parse(localStorage.getItem('users') || '{}')
+      const suggestions = []
+      Object.values(users).forEach(u => {
+        if (currentUser && u.email !== currentUser.email) {
+          suggestions.push(u)
+        }
+      })
+      // pick up to 3 suggestions
+      whoToFollowEl.innerHTML = ''
+      suggestions.slice(0,3).forEach(u => {
+        const row = document.createElement('div')
+        row.className = 'flex items-center gap-3'
+        const av = document.createElement('img')
+        av.src = u.avatar || fallbackAvatar
+        av.onerror = () => { av.src = fallbackAvatar }
+        av.className = 'h-8 w-8 rounded-full ring-1 ring-white/10 object-cover'
+        row.appendChild(av)
+        const info = document.createElement('div')
+        info.className = 'min-w-0 flex-1'
+        const name = document.createElement('p')
+        name.className = 'font-semibold truncate'
+        name.textContent = u.name || u.email
+        const handle = document.createElement('p')
+        handle.className = 'text-xs text-white/50 truncate'
+        handle.textContent = '@' + (u.name || u.email).toLowerCase().replace(/[^a-z0-9_]/g,'')
+        info.appendChild(name)
+        info.appendChild(handle)
+        row.appendChild(info)
+        whoToFollowEl.appendChild(row)
+      })
+    }
+
+    // Leaderboard: top tracks by combined stats (likes + plays + comments)
+    function updateLeaderboard() {
+      const stats = JSON.parse(localStorage.getItem('track_stats') || '{}')
+      // gather all tracks (including custom)
+      const allTracks = [...TRACKS, ...customTracks]
+      const list = allTracks.map(t => {
+        const s = stats[t.id] || {}
+        const score = (s.likes || 0) + (s.plays || 0) + (s.comments || 0)
+        return { track: t, score }
+      })
+      list.sort((a,b) => b.score - a.score)
+      leaderboardEl.innerHTML = ''
+      list.slice(0,5).forEach((item) => {
+        const li = document.createElement('li')
+        // <ol> already numbers list items, so don't prefix with idx
+        li.innerHTML = `${item.track.title} — <span class="text-white">${item.track.artist}</span> (${item.score})`
+        leaderboardEl.appendChild(li)
+      })
+    }
+
+    // Upload track handler
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = () => reject(reader.error)
+        reader.readAsDataURL(file)
+      })
+    }
+    uploadTrackInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0]
+      if (!file) return
+      const dataUrl = await readFileAsDataUrl(file)
+      const id = 'custom-' + Date.now()
+      const newTrack = {
+        id,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        artist: currentUser.name || currentUser.email,
+        bpm: 0,
+        url: dataUrl,
+        cover: '/img/covers/reggae-trap.jpg'
+      }
+      customTracks.push(newTrack)
+      localStorage.setItem('custom_tracks', JSON.stringify(customTracks))
+      // Immediately show at top
+      createPost(newTrack)
+      updateLeaderboard()
+      // mark this track as pending for composer posts
+      pendingTrack = newTrack
+    })
+
+    // Record track handler (audio only)
+    let mediaRecorder = null
+    let recordedChunks = []
+    recordBtn.addEventListener('click', async () => {
+      if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          recordedChunks = []
+          mediaRecorder = new MediaRecorder(stream)
+          recordBtn.textContent = 'Stop Recording'
+          recordingStatus.classList.remove('hidden')
+          mediaRecorder.ondataavailable = (ev) => {
+            if (ev.data.size > 0) recordedChunks.push(ev.data)
+          }
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'audio/webm' })
+            const reader = new FileReader()
+            reader.onloadend = () => {
+              const dataUrl = reader.result
+              const id = 'rec-' + Date.now()
+              const newTrack = {
+                id,
+                title: 'Recording ' + new Date().toLocaleTimeString(),
+                artist: currentUser.name || currentUser.email,
+                bpm: 0,
+                url: dataUrl,
+                cover: '/img/covers/reggae-trap.jpg'
+              }
+              customTracks.push(newTrack)
+              localStorage.setItem('custom_tracks', JSON.stringify(customTracks))
+              createPost(newTrack)
+              updateLeaderboard()
+              // set as pending track for composer
+              pendingTrack = newTrack
+            }
+            reader.readAsDataURL(blob)
+            recordBtn.textContent = 'Record Track'
+            recordingStatus.classList.add('hidden')
+          }
+          mediaRecorder.start()
+        } catch (err) {
+          alert('Unable to access microphone: ' + err)
+        }
+      } else {
+        mediaRecorder.stop()
+      }
+    })
+
+    // Handle composer post
+    if (composerPostBtn) {
+      composerPostBtn.addEventListener('click', () => {
+        const textVal = composerTextEl ? composerTextEl.value.trim() : ''
+        // Only allow posting if a track has been uploaded or recorded
+        if (!pendingTrack) {
+          alert('Please upload or record a track before posting.')
+          return
+        }
+        // Append optional caption to the post (currently unused but stored for future)
+        if (textVal) {
+          pendingTrack.caption = textVal
+        }
+        createPost(pendingTrack)
+        updateLeaderboard()
+        // reset composer
+        if (composerTextEl) composerTextEl.value = ''
+        pendingTrack = null
+      })
+    }
+
+    // Initialise feed and UI on DOM ready
+    document.addEventListener('DOMContentLoaded', () => {
+      ensureLoggedIn()
+      // Set composer avatar
+      if (composerAvatarEl) {
+        composerAvatarEl.src = currentUser.avatar || fallbackAvatar
+        composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar }
+      }
+      // Render initial suggestions and leaderboard
+      renderWhoToFollow()
+      updateLeaderboard()
+      // Load initial feed
+      loadMore()
+    })
+  </script>
+</body>
+</html>
