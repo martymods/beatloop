@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>beatloop — Royalty‑Free Music Beats, AI Tools & Creator Network</title>
+  <title>beatloop — Royalty‑Free Rap Beats, AI Tools & Creator Network</title>
   <meta name="description" content="Royalty‑free rap, hip‑hop & trap instrumentals + AI stem splitter, AI mastering, and a free creator network. Drop a 30‑sec freestyle, climb the leaderboard, and collaborate." />
   <meta property="og:title" content="beatloop — Royalty‑Free Rap Beats, AI Tools & Creator Network" />
   <meta property="og:description" content="Download beats, master with AI, split stems, and join a zero‑cost creator network. Drop a 30‑sec freestyle and make the leaderboard." />
@@ -90,9 +90,9 @@
           <span class="size-2 rounded-full bg-emerald-400"></span> Royalty‑Free • Instant Download • Creator‑Friendly License
         </p>
         <h1 class="text-3xl md:text-5xl font-extrabold leading-tight tracking-tight">
-          Music Beats, AI Tools & a Zero‑Cost <span class="text-primary">Creator Network</span>
+          Rap Beats, AI Tools & a Zero‑Cost <span class="text-primary">Creator Network</span>
         </h1>
-        <p class="mt-4 text-white/80 max-w-prose">Grab high‑quality music instrumentals, split stems with AI, master with our autonomous engine, then drop a 30‑second freestyle and climb the leaderboard. Create, share, and get discovered.</p>
+        <p class="mt-4 text-white/80 max-w-prose">Grab high‑quality hip‑hop & trap instrumentals, split stems with AI, master with our autonomous engine, then drop a 30‑second freestyle and climb the leaderboard. Create, share, and get discovered.</p>
         <div class="mt-6 flex flex-wrap items-center gap-3">
           <a href="#beats" class="inline-flex items-center gap-2 rounded-xl bg-white text-[#0c0c12] px-5 py-3 font-semibold hover:opacity-90 active:scale-[.99]">Explore Beats</a>
           <a href="#network" class="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 font-semibold text-white hover:bg-white/10 active:scale-[.99]">Join the Network</a>
@@ -101,7 +101,7 @@
           <span class="text-white/70">As featured in</span>
           <div class="flex items-center gap-4">
             <span class="rounded bg-white/5 px-2 py-1">Billboard</span>
-            <span class="rounded bg-white/5 px-2 py-1">Saycheese</span>
+            <span class="rounded bg-white/5 px-2 py-1">MusicRadar</span>
             <span class="rounded bg-white/5 px-2 py-1">Rolling Stone</span>
           </div>
         </div>
@@ -112,6 +112,7 @@
           <button id="heroPlay" class="size-12 shrink-0 rounded-full bg-primary text-white grid place-items-center shadow-glow" aria-label="Play/Pause">
             <svg id="heroPlayIcon" xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
           </button>
+          <img id="heroCover" src="/img/covers/reggae-trap.jpg" alt="Current cover" class="h-12 w-12 rounded-md object-cover ring-1 ring-white/10" />
           <div class="min-w-0">
             <p id="nowTitle" class="truncate text-sm text-white/70">—</p>
             <h3 id="nowArtist" class="truncate text-xl font-semibold">Select a track below</h3>
@@ -165,7 +166,7 @@
           <ol id="leaderboard" class="mt-3 space-y-2 text-white/80 text-sm">
             <li>1. 3AM — <span class="text-white">willemhengelmolen</span></li>
             <li>2. Amsterdam — <span class="text-white">willemhengelmolen</span></li>
-            <li>3. AMA‑BHOZA — <span class="text-white">realB</span></li>
+            <li>3. AMA‑BHOZA — <span class="text-white">realm</span></li>
             <li>4. Techno Revolution — <span class="text-white">willemhengelmolen</span></li>
             <li>5. Sometimes life is hard — <span class="text-white">yungflex0002</span></li>
           </ol>
@@ -276,6 +277,7 @@
         <button id="miniPlay" class="size-9 rounded-full bg-primary text-white grid place-items-center" aria-label="Play/Pause">
           <svg id="miniPlayIcon" xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
         </button>
+        <img id="miniCover" src="/img/covers/reggae-trap.jpg" alt="Current cover" class="h-9 w-9 rounded-md object-cover ring-1 ring-white/10" />
         <div class="min-w-0">
           <p id="miniTitle" class="truncate text-xs text-white/60">—</p>
           <p id="miniArtist" class="truncate text-sm text-white">Select a track</p>
@@ -323,6 +325,37 @@
       $('#miniPlayIcon').innerHTML = svg
     }
 
+    function updateMediaSession(t) {
+      if (!('mediaSession' in navigator)) return
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: t.title,
+          artist: t.artist,
+          album: 'beatloop',
+          artwork: [
+            { src: t.cover, sizes: '512x512', type: 'image/jpeg' },
+            { src: t.cover, sizes: '256x256', type: 'image/jpeg' },
+            { src: t.cover, sizes: '128x128', type: 'image/jpeg' }
+          ]
+        })
+        navigator.mediaSession.setActionHandler('play',  () => heroWS.play())
+        navigator.mediaSession.setActionHandler('pause', () => heroWS.pause())
+        navigator.mediaSession.setActionHandler('previoustrack', () => { setTrack(current - 1); heroWS.play() })
+        navigator.mediaSession.setActionHandler('nexttrack',     () => { setTrack(current + 1); heroWS.play() })
+        navigator.mediaSession.setActionHandler('seekto', (d) => {
+          if (typeof d.seekTime === 'number') { heroWS.setTime(d.seekTime); miniWS.setTime(d.seekTime) }
+        })
+        navigator.mediaSession.playbackState = heroWS.isPlaying() ? 'playing' : 'paused'
+        if (navigator.mediaSession.setPositionState) {
+          navigator.mediaSession.setPositionState({
+            duration: heroWS.getDuration() || 0,
+            playbackRate: 1,
+            position: heroWS.getCurrentTime() || 0
+          })
+        }
+      } catch (_) {}
+    }
+
     function setTrack(i) {
       current = (i + TRACKS.length) % TRACKS.length
       const t = TRACKS[current]
@@ -330,9 +363,12 @@
       $('#nowArtist').textContent = t.artist
       $('#miniTitle').textContent = t.title
       $('#miniArtist').textContent= t.artist
+      $('#miniCover').src = t.cover
+      $('#heroCover').src = t.cover
       heroWS.load(t.url)
       miniWS.load(t.url)
-      // don't change icons here — only when real play/pause happens
+      updateMediaSession(t)
+      // don't change icons here — only on real play/pause events
     }
 
     function buildCards() {
@@ -342,8 +378,8 @@
         const card = document.createElement('article')
         card.className = 'group rounded-2xl border border-white/10 bg-white/5 p-4 ring-1 ring-white/10 hover:bg-white/10 transition'
         card.innerHTML = `
-          <div class="equal overflow-hidden rounded-xl">
-            <img src="${t.cover || 'https://picsum.photos/seed/'+t.id+'/600/400'}" alt="${t.title} cover" class="aspect-video object-cover group-hover:scale-[1.02] transition"/>
+          <div class="equal overflow-hidden rounded-xl bg-black/30 p-2">
+            <img src="${t.cover || 'https://picsum.photos/seed/'+t.id+'/600/600'}" alt="${t.title} cover" class="aspect-square w-full object-contain rounded-md group-hover:scale-[1.01] transition"/>
             <button data-i="${i}" class="playBtn absolute right-3 top-3 rounded-full bg-primary px-3 py-2 text-sm font-semibold shadow-glow">Play</button>
           </div>
           <div class="mt-3 flex items-center justify-between gap-3">
@@ -390,10 +426,14 @@
       // keep mini player silent
       if (miniWS.setMuted) miniWS.setMuted(true); else if (miniWS.setVolume) miniWS.setVolume(0)
 
-      heroWS.on('audioprocess', () => { $('#nowTime').textContent = fmt(heroWS.getCurrentTime()) })
-      heroWS.on('ready', () => { $('#nowDur').textContent = fmt(heroWS.getDuration()); setButtonsPlaying(false) })
-      heroWS.on('play',  () => setButtonsPlaying(true))
-      heroWS.on('pause', () => setButtonsPlaying(false))
+      heroWS.on('audioprocess', () => {
+        $('#nowTime').textContent = fmt(heroWS.getCurrentTime())
+        // keep lock screen position fresh
+        updateMediaSession(TRACKS[current])
+      })
+      heroWS.on('ready', () => { $('#nowDur').textContent = fmt(heroWS.getDuration()); setButtonsPlaying(false); updateMediaSession(TRACKS[current]) })
+      heroWS.on('play',  () => { setButtonsPlaying(true);  updateMediaSession(TRACKS[current]) })
+      heroWS.on('pause', () => { setButtonsPlaying(false); updateMediaSession(TRACKS[current]) })
       heroWS.on('finish', () => { setTrack(current + 1); heroWS.play() })
 
       // Sync positions (mini mirrors hero)
