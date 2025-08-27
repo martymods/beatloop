@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>beatloop — Creator Network</title>
   <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
+
+  <!-- Silence Tailwind CDN production warning in dev/preview consoles -->
+  <script>
+    (function () {
+      const _warn = console.warn;
+      console.warn = function (...args) {
+        if (typeof args[0] === 'string' &&
+            args[0].includes('cdn.tailwindcss.com should not be used in production')) return;
+        return _warn.apply(console, args);
+      };
+    })();
+  </script>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -130,15 +143,14 @@
   <script>
     /*
       Enhanced feed implementation for the beatloop creator network.
-      Uses localStorage to store users, sessions, custom uploaded/recorded tracks and comments.
-      Implements a Twitter-style layout with left navigation, centre timeline with composer and feed,
-      and right sidebar for who-to-follow, leaderboard and trends.
-      Each feed item displays a track with cover art, looping audio, progress bar with comment markers,
-      and actions for comments, reposts and likes. Comments display avatars (with fallback) at their timestamps.
-      Media Session API is used to show album art on the lock screen / control centre.
+      Fixes:
+        - Silences Tailwind CDN production warning (dev-only).
+        - Avoids localStorage QuotaExceededError by storing audio/cover BLOBS in IndexedDB,
+          and keeping only small metadata in localStorage under 'custom_tracks'.
+      Your UI/logic remains intact (comments with avatar pins, leaderboard, trends, etc.).
     */
 
-    // Predefined tracks used on the main page
+    // ---------- Predefined tracks
     const TRACKS = [
       { id: 'reggae-trap',   title: 'Reggae Trap',       artist: 'Slim Pattie',           bpm: 92, url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
       { id: 'stack',         title: 'STACK',             artist: 'lilwoo',                bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
@@ -148,53 +160,108 @@
       { id: 'it-is-what',    title: 'It is what it is',  artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',          cover: '/img/covers/it-is.jpg' }
     ]
 
-    // Default avatar fallback & default cover art
-    const fallbackAvatar = '/img/avatar-default.svg'
-    const DEFAULT_TRACK_COVER =
-      'data:image/svg+xml;utf8,' +
-      encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="128" height="128" rx="18" fill="url(#g)"/><g fill="#fff"><circle cx="46" cy="86" r="12"/><path d="M82 24v56.6a12 12 0 1 1-4-8.6V34l-26 6v36.6a12 12 0 1 1-4-8.6V36z"/></g></svg>`)
+// Defaults (leave fallbackAvatar as-is)
+const fallbackAvatar = '/img/avatar-default.svg';
 
-    // Retrieve custom tracks (uploaded or recorded)
-    let customTracks = JSON.parse(localStorage.getItem('custom_tracks') || '[]')
+// REPLACE your DEFAULT_TRACK_COVER with this:
+const DEFAULT_TRACK_COVER = (function () {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="128" height="128" rx="18" fill="url(#g)"/><g fill="#fff"><circle cx="46" cy="86" r="12"/><path d="M82 24v56.6a12 12 0 1 1-4-8.6V34l-26 6v36.6a12 12 0 1 1-4-8.6V36z"/></g></svg>';
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+})();
 
-    // Retrieve or initialise track statistics (plays, likes, comments)
+    // ---------- IndexedDB (for blobs)
+    const DB_NAME = 'beatloop'
+    function openDB() {
+      return new Promise((res, rej) => {
+        const req = indexedDB.open(DB_NAME, 1)
+        req.onupgradeneeded = e => {
+          const db = e.target.result
+          if (!db.objectStoreNames.contains('tracks')) db.createObjectStore('tracks')
+          if (!db.objectStoreNames.contains('covers')) db.createObjectStore('covers')
+        }
+        req.onsuccess = () => res(req.result)
+        req.onerror = () => rej(req.error)
+      })
+    }
+    async function putBlob(store, key, blob) {
+      const db = await openDB()
+      await new Promise((res, rej) => {
+        const tx = db.transaction(store, 'readwrite')
+        tx.objectStore(store).put(blob, key)
+        tx.oncomplete = () => res()
+        tx.onerror = () => rej(tx.error)
+      })
+    }
+    async function getBlobUrl(store, key) {
+      if (!key) return null
+      const db = await openDB()
+      return await new Promise((res, rej) => {
+        const tx = db.transaction(store, 'readonly')
+        const rq = tx.objectStore(store).get(key)
+        rq.onsuccess = () => {
+          const blob = rq.result
+          res(blob ? URL.createObjectURL(blob) : null)
+        }
+        rq.onerror = () => rej(rq.error)
+      })
+    }
+
+    // ---------- Small JSON helpers
+    const getJSON = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || d) } catch { return JSON.parse(d) } }
+    const setJSON = (k, v) => localStorage.setItem(k, JSON.stringify(v))
+
+    // ---------- Load / migrate custom tracks metadata (no big data URLs)
+    let customMeta = [] // [{id,title,artist,bpm,db:true,coverKey?:string}]
+
+    async function migrateLegacyIfNeeded() {
+      const raw = getJSON('custom_tracks', '[]')
+      if (!Array.isArray(raw) || raw.length === 0) return
+      let changed = false
+      const metas = []
+      for (const t of raw) {
+        if (t && typeof t.url === 'string' && t.url.startsWith('data:')) {
+          // migrate data URL -> IDB blob, store tiny meta
+          try {
+            const blob = await fetch(t.url).then(r => r.blob())
+            const id = t.id || ('custom-' + Date.now() + Math.random().toString(36).slice(2,8))
+            await putBlob('tracks', id, blob)
+            metas.push({ id, title: t.title || 'Untitled', artist: t.artist || 'me', bpm: t.bpm || 0, db: true, coverKey: null })
+            changed = true
+          } catch {}
+        } else if (t && typeof t.url === 'string') {
+          // keep light http/file references as-is (not blobs)
+          metas.push({ id: t.id, title: t.title, artist: t.artist, bpm: t.bpm || 0, db: false, url: t.url, cover: t.cover || DEFAULT_TRACK_COVER })
+        }
+      }
+      if (changed) setJSON('custom_tracks', metas)
+    }
+
+    // ---------- Stats
     function getStats(id) {
-      const stats = JSON.parse(localStorage.getItem('track_stats') || '{}')
+      const stats = getJSON('track_stats', '{}')
       return stats[id] || { plays: 0, likes: 0, comments: 0 }
     }
     function setStats(id, data) {
-      const stats = JSON.parse(localStorage.getItem('track_stats') || '{}')
+      const stats = getJSON('track_stats', '{}')
       stats[id] = data
-      localStorage.setItem('track_stats', JSON.stringify(stats))
+      setJSON('track_stats', stats)
     }
 
-    // Format time (seconds to M:SS)
-    const fmt = (s) => {
-      s = Math.floor(s || 0)
-      const m = Math.floor(s / 60).toString()
-      const sec = (s % 60).toString().padStart(2, '0')
-      return `${m}:${sec}`
-    }
+// ---------- Time helpers
+function fmt(s){
+  s = Math.floor(s || 0);
+  var m = Math.floor(s / 60).toString();
+  var sec = (s % 60).toString().padStart(2, '0');
+  return m + ':' + sec;
+}
 
-    // Relative time formatting for posts
-    function timeAgo(ts) {
-      const diff = Date.now() - ts
-      const s = Math.floor(diff / 1000)
-      const m = Math.floor(s / 60)
-      const h = Math.floor(m / 60)
-      const d = Math.floor(h / 24)
-      if (d > 0) return d + 'd'
-      if (h > 0) return h + 'h'
-      if (m > 0) return m + 'm'
-      return s + 's'
-    }
 
-    // Current user state
+    // ---------- Current user
     let currentUser = null
     function loadCurrentUser() {
       const email = localStorage.getItem('current_user')
       if (!email) return null
-      const users = JSON.parse(localStorage.getItem('users') || '{}')
+      const users = getJSON('users', '{}')
       const user = users[email] || null
       if (user && !user.avatar) user.avatar = fallbackAvatar
       return user
@@ -206,22 +273,17 @@
       }
     }
 
-    // Comments storage
-    function getComments(key) {
-      return JSON.parse(localStorage.getItem('comments_' + key) || '[]')
-    }
+    // ---------- Comments storage
+    function getComments(key) { return getJSON('comments_' + key, '[]') }
     function saveComment(key, comment) {
       const arr = getComments(key)
       arr.push(comment)
-      localStorage.setItem('comments_' + key, JSON.stringify(arr))
-      // increment comment count in stats
-      const s = getStats(key)
-      s.comments = (s.comments || 0) + 1
-      setStats(key, s)
+      setJSON('comments_' + key, arr)
+      const s = getStats(key); s.comments = (s.comments || 0) + 1; setStats(key, s)
       updateLeaderboard()
     }
 
-    // Elements
+    // ---------- Elements
     const feedEl = document.getElementById('feed')
     const loadingEl = document.getElementById('loading')
     const scrollTopBtn = document.getElementById('scrollTop')
@@ -239,18 +301,16 @@
     const trendsEl = document.getElementById('trends')
     const trendsMEl = document.getElementById('trendsM')
 
-    // Pending items selected via upload (for composer/post)
-    let pendingTrack = null
-    let pendingCover = null   // DataURL of chosen cover (optional)
+    // ---------- Pending selections
+    let pendingMeta = null          // lightweight meta for last uploaded/recorded track
+    let pendingCoverKey = null      // IDB key for optional cover
 
-    // Utility to render comment list and markers
+    // ---------- Render comments & pins
     function renderComments(trackId, listContainer, pinsContainer, duration) {
       const comments = getComments(trackId)
-      // Clear list and pins
       listContainer.innerHTML = ''
       pinsContainer.innerHTML = ''
       comments.forEach(c => {
-        // comment row
         const row = document.createElement('div')
         row.className = 'flex items-start gap-2 mb-2'
         const avatar = document.createElement('img')
@@ -270,7 +330,6 @@
         txtWrapper.appendChild(text)
         row.appendChild(txtWrapper)
         listContainer.appendChild(row)
-        // pin marker (avatar icon)
         if (duration) {
           const pin = document.createElement('img')
           pin.src = c.avatar || fallbackAvatar
@@ -284,13 +343,12 @@
       })
     }
 
-    // Build a feed card for a given track
+    // ---------- Build a feed card
     function createPost(track) {
       const stats = getStats(track.id)
-      // Main container
       const card = document.createElement('article')
       card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
-      // Header: avatar/name/handle/time
+
       const header = document.createElement('div')
       header.className = 'flex gap-3'
       const avatar = document.createElement('img')
@@ -299,6 +357,7 @@
       avatar.alt = 'avatar'
       avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
       header.appendChild(avatar)
+
       const info = document.createElement('div')
       info.className = 'min-w-0 flex-1'
       const topRow = document.createElement('div')
@@ -317,11 +376,10 @@
       topRow.appendChild(handleEl)
       topRow.appendChild(timeEl)
       info.appendChild(topRow)
-      // optional text message (none currently)
       info.appendChild(document.createElement('p'))
       header.appendChild(info)
       card.appendChild(header)
-      // Track display: cover + title + artist
+
       const trackWrapper = document.createElement('div')
       trackWrapper.className = 'mt-3 rounded-xl bg-black/30 p-3 ring-1 ring-white/10'
       const trackRow = document.createElement('div')
@@ -344,11 +402,9 @@
       metaDiv.appendChild(titleEl)
       trackRow.appendChild(metaDiv)
       trackWrapper.appendChild(trackRow)
-      // Waveform container (progress bar)
+
       const waveContainer = document.createElement('div')
-      waveContainer.id = 'wave-' + track.id + '-' + Math.random().toString(36).substring(2,8)
       waveContainer.className = 'mt-2 h-14 w-full relative'
-      // Bar for progress
       const barWrapper = document.createElement('div')
       barWrapper.className = 'absolute inset-0 h-2 w-full bg-white/10 rounded overflow-hidden'
       const barProgress = document.createElement('div')
@@ -356,19 +412,18 @@
       barProgress.className = 'absolute top-0 left-0 h-2 bg-primary rounded'
       barWrapper.appendChild(barProgress)
       waveContainer.appendChild(barWrapper)
-      // Pins container
       const pinsContainer = document.createElement('div')
       pinsContainer.className = 'absolute top-0 left-0 h-2 w-full pointer-events-none'
       waveContainer.appendChild(pinsContainer)
       trackWrapper.appendChild(waveContainer)
-      // Audio element
+
       const audio = document.createElement('audio')
       audio.src = track.url
       audio.preload = 'metadata'
       audio.controls = true
       audio.className = 'w-full mt-2'
       trackWrapper.appendChild(audio)
-      // Stats and actions row
+
       const actions = document.createElement('div')
       actions.className = 'mt-2 flex items-center gap-4 text-white/60 text-sm'
       const commentBtn = document.createElement('button')
@@ -390,11 +445,11 @@
       actions.appendChild(repostBtn)
       actions.appendChild(likeBtn)
       trackWrapper.appendChild(actions)
-      // Comments list container
+
       const commentsList = document.createElement('div')
       commentsList.className = 'mt-3'
       trackWrapper.appendChild(commentsList)
-      // Comment form
+
       const formWrapper = document.createElement('div')
       formWrapper.className = 'flex items-center gap-2 mt-2'
       const input = document.createElement('input')
@@ -408,30 +463,27 @@
       formWrapper.appendChild(btn)
       trackWrapper.appendChild(formWrapper)
       card.appendChild(trackWrapper)
-      // Insert into feed
+
       feedEl.appendChild(card)
-      // Render comments and pins initially
+
       function renderAll() {
         renderComments(track.id, commentsList, pinsContainer, audio.duration || 0)
-        // update comment and like counts
         const stat = getStats(track.id)
         commentBtn.textContent = '💬 ' + (stat.comments || 0)
         likeBtn.textContent    = '❤️ ' + (stat.likes || 0)
       }
       renderAll()
-      // Track progress update
+
       audio.addEventListener('timeupdate', () => {
         if (audio.duration) {
           const pct = (audio.currentTime / audio.duration) * 100
           barProgress.style.width = pct + '%'
         }
       })
-      // Loop on finish
       audio.addEventListener('ended', () => {
         audio.currentTime = 0
         audio.play()
       })
-      // Update Media Session metadata on play
       audio.addEventListener('play', () => {
         const meta = {
           title: track.title,
@@ -444,13 +496,11 @@
         if ('mediaSession' in navigator) {
           try { navigator.mediaSession.metadata = new MediaMetadata(meta) } catch {}
         }
-        // count play
         const s = getStats(track.id)
         s.plays = (s.plays || 0) + 1
         setStats(track.id, s)
         updateLeaderboard()
       })
-      // Comment submission
       btn.addEventListener('click', () => {
         const text = input.value.trim()
         if (!text) return
@@ -464,7 +514,6 @@
         input.value = ''
         renderAll()
       })
-      // Like button
       likeBtn.addEventListener('click', () => {
         const s = getStats(track.id)
         s.likes = (s.likes || 0) + 1
@@ -472,30 +521,44 @@
         likeBtn.textContent = '❤️ ' + s.likes
         updateLeaderboard()
       })
-      // Placeholder for repost (not implemented)
       repostBtn.addEventListener('click', () => {
         alert('Repost functionality coming soon!')
       })
       return card
     }
 
-    // Compose a feed by loading tracks in batches (infinite scroll)
-    let feedIndex = 0
-    const BATCH_SIZE = 3
-    function loadMore() {
-      const allTracks = [...TRACKS, ...customTracks]
-      if (feedIndex >= allTracks.length) return
-      loadingEl.classList.remove('hidden')
-      setTimeout(() => {
-        for (let i = 0; i < BATCH_SIZE && feedIndex < allTracks.length; i++) {
-          const track = allTracks[feedIndex++]
-          createPost(track)
-        }
-        loadingEl.classList.add('hidden')
-      }, 400)
+    // ---------- Materialize meta -> playable track (resolve IDB blob URLs)
+    async function materialize(meta) {
+      if (!meta) return null
+      if (meta.db) {
+        const url = await getBlobUrl('tracks', meta.id)
+        const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
+        return { ...meta, url, cover: coverUrl }
+      } else {
+        // built-in or legacy lightweight entry
+        return { ...meta, cover: meta.cover || DEFAULT_TRACK_COVER }
+      }
     }
 
-    // Scroll handling for infinite loading and scroll-to-top button
+    // ---------- Infinite feed
+    let feedIndex = 0
+    const BATCH_SIZE = 3
+    async function loadMore() {
+      const all = [...TRACKS, ...customMeta]
+      if (feedIndex >= all.length) return
+      loadingEl.classList.remove('hidden')
+      const slice = []
+      for (let i = 0; i < BATCH_SIZE && feedIndex < all.length; i++) {
+        slice.push(all[feedIndex++])
+      }
+      for (const item of slice) {
+        const t = await materialize(item)
+        if (t && t.url) createPost(t)
+      }
+      loadingEl.classList.add('hidden')
+    }
+
+    // ---------- Scroll / top button
     window.addEventListener('scroll', () => {
       const nearBottom = window.innerHeight + window.pageYOffset >= document.body.offsetHeight - 200
       if (nearBottom) loadMore()
@@ -507,14 +570,13 @@
     })
     scrollTopBtn.addEventListener('click', () => {
       window.scrollTo({ top: 0, behavior: 'smooth' })
-      // Reset feed
       feedIndex = 0
       feedEl.innerHTML = ''
       loadingEl.classList.add('hidden')
       loadMore()
     })
 
-    // Logout from both header button and nav
+    // ---------- Logout
     const logoutBtnHeader = document.getElementById('logoutBtn')
     if (logoutBtnHeader) {
       logoutBtnHeader.addEventListener('click', () => {
@@ -530,10 +592,10 @@
       })
     }
 
-    // Who to follow (from stored users)
+    // ---------- Who to follow / Trends
     function renderWhoToFollowInto(el) {
       if (!el) return
-      const users = JSON.parse(localStorage.getItem('users') || '{}')
+      const users = getJSON('users', '{}')
       const suggestions = []
       Object.values(users).forEach(u => {
         if (currentUser && u.email !== currentUser.email) suggestions.push(u)
@@ -559,8 +621,6 @@
         el.appendChild(row)
       })
     }
-
-    // Trends (simple demo list)
     function renderTrendsInto(el){
       if(!el) return
       el.innerHTML = ''
@@ -569,12 +629,13 @@
       })
     }
 
-    // Leaderboard: top tracks by combined stats (likes + plays + comments)
+    // ---------- Leaderboard (uses meta titles/artists)
     function updateLeaderboard() {
-      const stats = JSON.parse(localStorage.getItem('track_stats') || '{}')
-      const allTracks = [...TRACKS, ...customTracks]
-      const list = allTracks.map(t => {
-        const s = stats[t.id] || {}
+      const stats = getJSON('track_stats', '{}')
+
+      const all = [...TRACKS, ...customMeta]
+      const list = all.map(t => {
+        const s = stats?.[t.id] || {}
         const score = (s.likes || 0) + (s.plays || 0) + (s.comments || 0)
         return { track: t, score }
       }).sort((a,b) => b.score - a.score).slice(0,5)
@@ -584,56 +645,61 @@
         el.innerHTML = ''
         list.forEach(item => {
           const li = document.createElement('li')
-          li.innerHTML = `${item.track.title} — <span class="text-white">${item.track.artist}</span> (${item.score})`
+          li.innerHTML = item.track.title + ' — <span class="text-white">' + item.track.artist + '</span> (' + item.score + ')';
+
           el.appendChild(li)
         })
       }
       paint(leaderboardEl); paint(leaderboardMEl)
     }
 
-    // Read file as DataURL
-    function readFileAsDataUrl(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = () => reject(reader.error)
-        reader.readAsDataURL(file)
-      })
-    }
-
-    // Upload track handler
+    // ---------- Upload track -> IDB blob + meta in localStorage
     uploadTrackInput.addEventListener('change', async (e) => {
       const file = e.target.files[0]
       if (!file) return
-      const dataUrl = await readFileAsDataUrl(file)
       const id = 'custom-' + Date.now()
-      const newTrack = {
-        id,
-        title: file.name.replace(/\.[^/.]+$/, ''),
-        artist: currentUser.name || currentUser.email,
-        bpm: 0,
-        url: dataUrl,
-        cover: pendingCover || DEFAULT_TRACK_COVER
+      try {
+        await putBlob('tracks', id, file)
+        const meta = {
+          id,
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          artist: (currentUser?.name || currentUser?.email || 'me'),
+          bpm: 0, db: true, coverKey: pendingCoverKey || null
+        }
+        // keep meta small & cap list to avoid growth
+        customMeta.push(meta)
+        if (customMeta.length > 30) customMeta.shift()
+        setJSON('custom_tracks', customMeta)
+
+        // immediate preview with blob URL
+        const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
+        const url = URL.createObjectURL(file)
+        createPost({ ...meta, url, cover: coverUrl })
+        updateLeaderboard()
+        pendingMeta = meta
+      } catch (err) {
+        alert('Save failed: ' + err.message)
+      } finally {
+        e.target.value = ''
       }
-      customTracks.push(newTrack)
-      localStorage.setItem('custom_tracks', JSON.stringify(customTracks))
-      // Immediately show at top
-      createPost(newTrack)
-      updateLeaderboard()
-      // mark this track as pending for composer posts
-      pendingTrack = newTrack
     })
 
-    // Cover image handler (optional)
+    // ---------- Optional cover upload -> IDB
     uploadCoverInput.addEventListener('change', async (e)=>{
       const file = e.target.files[0]
       if(!file) return
-      pendingCover = await readFileAsDataUrl(file)
-      // if there is a pending track object, attach cover to it
-      if(pendingTrack) { pendingTrack.cover = pendingCover }
+      const key = 'cover-' + Date.now()
+      try {
+        await putBlob('covers', key, file)
+        pendingCoverKey = key
+      } catch (err) {
+        alert('Cover save failed: ' + err.message)
+      } finally {
+        e.target.value = ''
+      }
     })
 
-    // Record track handler (audio only)
+    // ---------- Record track -> IDB
     let mediaRecorder = null
     let recordedChunks = []
     recordBtn.addEventListener('click', async () => {
@@ -644,63 +710,67 @@
           mediaRecorder = new MediaRecorder(stream)
           recordBtn.textContent = 'Stop Recording'
           recordingStatus.classList.remove('hidden')
-          mediaRecorder.ondataavailable = (ev) => {
-            if (ev.data.size > 0) recordedChunks.push(ev.data)
-          }
-          mediaRecorder.onstop = () => {
+          mediaRecorder.ondataavailable = (ev) => { if (ev.data.size > 0) recordedChunks.push(ev.data) }
+          mediaRecorder.onstop = async () => {
             const blob = new Blob(recordedChunks, { type: 'audio/webm' })
-            const reader = new FileReader()
-            reader.onloadend = () => {
-              const dataUrl = reader.result
-              const id = 'rec-' + Date.now()
-              const newTrack = {
+            const id = 'rec-' + Date.now()
+            try {
+              await putBlob('tracks', id, blob)
+              const meta = {
                 id,
                 title: 'Recording ' + new Date().toLocaleTimeString(),
-                artist: currentUser.name || currentUser.email,
-                bpm: 0,
-                url: dataUrl,
-                cover: pendingCover || DEFAULT_TRACK_COVER
+                artist: (currentUser?.name || currentUser?.email || 'me'),
+                bpm: 0, db: true, coverKey: pendingCoverKey || null
               }
-              customTracks.push(newTrack)
-              localStorage.setItem('custom_tracks', JSON.stringify(customTracks))
-              createPost(newTrack)
+              customMeta.push(meta); if (customMeta.length > 30) customMeta.shift()
+              setJSON('custom_tracks', customMeta)
+              const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
+              const url = URL.createObjectURL(blob)
+              createPost({ ...meta, url, cover: coverUrl })
               updateLeaderboard()
-              // set as pending track for composer
-              pendingTrack = newTrack
+              pendingMeta = meta
+            } catch (err) {
+              alert('Recording save failed: ' + err.message)
+            } finally {
+              recordBtn.textContent = 'Record Track'
+              recordingStatus.classList.add('hidden')
+              stream.getTracks().forEach(t=>t.stop())
             }
-            reader.readAsDataURL(blob)
-            recordBtn.textContent = 'Record Track'
-            recordingStatus.classList.add('hidden')
-            stream.getTracks().forEach(t=>t.stop())
           }
           mediaRecorder.start()
         } catch (err) {
-          alert('Unable to access microphone: ' + err)
+          alert('Unable to access microphone: ' + err.message)
         }
       } else {
         mediaRecorder.stop()
       }
     })
 
-    // Handle composer post
+    // ---------- Composer post (attaches the last uploaded/recorded track)
     if (composerPostBtn) {
-      composerPostBtn.addEventListener('click', () => {
+      composerPostBtn.addEventListener('click', async () => {
         const textVal = composerTextEl ? composerTextEl.value.trim() : ''
-        if (!pendingTrack) {
+        if (!pendingMeta) {
           alert('Please upload or record a track before posting.')
           return
         }
-        if (textVal) pendingTrack.caption = textVal
-        createPost(pendingTrack)
+        const playable = await materialize(pendingMeta)
+        if (textVal) playable.caption = textVal
+        createPost(playable)
         updateLeaderboard()
         if (composerTextEl) composerTextEl.value = ''
-        pendingTrack = null
+        pendingMeta = null
       })
     }
 
-    // Initialise feed and UI on DOM ready
-    document.addEventListener('DOMContentLoaded', () => {
+    // ---------- Init
+    document.addEventListener('DOMContentLoaded', async () => {
       ensureLoggedIn()
+
+      // migrate any legacy data: URLs out of localStorage
+      await migrateLegacyIfNeeded()
+      customMeta = getJSON('custom_tracks', '[]')
+
       // Set composer avatar
       if (composerAvatarEl) {
         composerAvatarEl.src = currentUser.avatar || fallbackAvatar
