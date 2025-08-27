@@ -166,7 +166,7 @@
           <ol id="leaderboard" class="mt-3 space-y-2 text-white/80 text-sm">
             <li>1. 3AM — <span class="text-white">willemhengelmolen</span></li>
             <li>2. Amsterdam — <span class="text-white">willemhengelmolen</span></li>
-            <li>3. AMA‑BHOZA — <span class="text-white">realm</span></li>
+            <li>3. AMA‑BHOZA — <span class="text-white">realG</span></li>
             <li>4. Techno Revolution — <span class="text-white">willemhengelmolen</span></li>
             <li>5. Sometimes life is hard — <span class="text-white">yungflex0002</span></li>
           </ol>
@@ -434,7 +434,14 @@
       heroWS.on('ready', () => { $('#nowDur').textContent = fmt(heroWS.getDuration()); setButtonsPlaying(false); updateMediaSession(TRACKS[current]) })
       heroWS.on('play',  () => { setButtonsPlaying(true);  updateMediaSession(TRACKS[current]) })
       heroWS.on('pause', () => { setButtonsPlaying(false); updateMediaSession(TRACKS[current]) })
-      heroWS.on('finish', () => { setTrack(current + 1); heroWS.play() })
+      // Repeat current track until you pause or choose Next/Prev
+heroWS.on('finish', () => {
+  // restart at 0s and continue playing
+  if (miniWS && miniWS.setTime) miniWS.setTime(0)
+  heroWS.setTime(0)
+  heroWS.play()
+})
+
 
       // Sync positions (mini mirrors hero)
       const sync = (src, dest) => src.on('audioprocess', () => {
