@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Beats To Rap On — Royalty‑Free Rap Beats, AI Tools & Creator Network</title>
+  <meta name="description" content="Royalty‑free rap beats, hip‑hop & trap instrumentals + AI stem splitter, AI mastering, and a free creator network. Drop a 30‑sec freestyle, climb the leaderboard, and collaborate." />
+  <meta property="og:title" content="Beats To Rap On — Royalty‑Free Rap Beats, AI Tools & Creator Network" />
+  <meta property="og:description" content="Download beats, master with AI, split stems, and join a zero‑cost creator network. Drop a 30‑sec freestyle and make the leaderboard." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/img/og-cover.jpg" />
+  <meta name="theme-color" content="#7c3aed" />
+
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              DEFAULT: '#7c3aed',
+              50: '#f4f0ff', 100: '#ebe4ff', 200: '#d6c7ff', 300: '#b59bff',
+              400: '#9a76ff', 500: '#7c3aed', 600: '#6d28d9', 700: '#5b21b6',
+              800: '#4c1d95', 900: '#3b0d7b'
+            }
+          },
+          boxShadow: {
+            glow: '0 0 0 2px rgba(124,58,237,.25), 0 5px 25px rgba(124,58,237,.35)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root { --ring: 0 0 0 3px rgba(124,58,237,.25) }
+    html, body { font-family: Inter, ui-sans-serif, system-ui, -apple-system; }
+    .glass { background: rgba(18, 18, 24, .55); backdrop-filter: blur(10px); }
+    .equal { align-self: stretch; display: grid }
+    .equal > * { grid-area: 1/1 }
+  </style>
+
+  <!-- WaveSurfer waveform -->
+  <script src="https://unpkg.com/wavesurfer.js@7"></script>
+</head>
+<body class="bg-[#0c0c12] text-white selection:bg-primary/30 selection:text-white">
+  <!-- Top Bar -->
+  <header class="sticky top-0 z-50 border-b border-white/5 bg-[#0c0c12]/70 backdrop-blur">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
+      <a href="#" class="flex items-center gap-2 font-extrabold tracking-tight text-white">
+        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BT</span>
+        <span>Beats To Rap On</span>
+      </a>
+      <nav class="ml-auto hidden md:flex items-center gap-6 text-sm text-white/70">
+        <a href="#beats" class="hover:text-white">Beats</a>
+        <a href="#freestyle" class="hover:text-white">Freestyle</a>
+        <a href="#network" class="hover:text-white">Creators</a>
+        <a href="#tools" class="hover:text-white">AI Tools</a>
+        <a href="#blog" class="hover:text-white">Blog</a>
+      </nav>
+      <a href="#join" class="ml-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Join Free</a>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="relative overflow-hidden">
+    <div class="absolute inset-0 -z-10 opacity-40" aria-hidden>
+      <svg class="size-full" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 1200 600">
+        <defs>
+          <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0.25"/>
+          </linearGradient>
+        </defs>
+        <rect width="1200" height="600" fill="url(#g)"/>
+        <g fill="none" stroke="rgba(255,255,255,.08)">
+          <path d="M0,500 C200,450 250,350 450,320 C650,290 700,400 900,380 C1100,360 1200,270 1200,270"/>
+          <path d="M0,540 C200,520 250,420 450,390 C650,360 700,470 900,450 C1100,430 1200,340 1200,340"/>
+        </g>
+      </svg>
+    </div>
+    <div class="mx-auto max-w-7xl px-4 py-16 md:py-24 grid md:grid-cols-2 items-center gap-10">
+      <div>
+        <p class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80">
+          <span class="size-2 rounded-full bg-emerald-400"></span> Royalty‑Free • Instant Download • Creator‑Friendly License
+        </p>
+        <h1 class="text-3xl md:text-5xl font-extrabold leading-tight tracking-tight">
+          Rap Beats, AI Tools & a Zero‑Cost <span class="text-primary">Creator Network</span>
+        </h1>
+        <p class="mt-4 text-white/80 max-w-prose">Grab high‑quality hip‑hop & trap instrumentals, split stems with AI, master with our autonomous engine, then drop a 30‑second freestyle and climb the leaderboard. Create, share, and get discovered.</p>
+        <div class="mt-6 flex flex-wrap items-center gap-3">
+          <a href="#beats" class="inline-flex items-center gap-2 rounded-xl bg-white text-[#0c0c12] px-5 py-3 font-semibold hover:opacity-90 active:scale-[.99]">Explore Beats</a>
+          <a href="#network" class="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 font-semibold text-white hover:bg-white/10 active:scale-[.99]">Join the Network</a>
+        </div>
+        <div class="mt-6 flex items-center gap-4 opacity-80 text-xs">
+          <span class="text-white/70">As featured in</span>
+          <div class="flex items-center gap-4">
+            <span class="rounded bg-white/5 px-2 py-1">Billboard</span>
+            <span class="rounded bg-white/5 px-2 py-1">MusicRadar</span>
+            <span class="rounded bg-white/5 px-2 py-1">Rolling Stone</span>
+          </div>
+        </div>
+      </div>
+      <div class="glass rounded-2xl p-4 md:p-6 shadow-xl ring-1 ring-white/10">
+        <!-- Big Player Card -->
+        <div class="flex items-center gap-4">
+          <button id="heroPlay" class="size-12 shrink-0 rounded-full bg-primary text-white grid place-items-center shadow-glow" aria-label="Play/Pause">
+            <svg id="heroPlayIcon" xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
+          </button>
+          <div class="min-w-0">
+            <p id="nowTitle" class="truncate text-sm text-white/70">—</p>
+            <h3 id="nowArtist" class="truncate text-xl font-semibold">Select a track below</h3>
+          </div>
+        </div>
+        <div id="heroWave" class="mt-4 h-28 w-full"></div>
+        <div class="mt-2 flex items-center justify-between text-xs text-white/60">
+          <span id="nowTime">0:00</span>
+          <div class="flex items-center gap-3">
+            <button id="btnPrev" class="hover:text-white">Prev</button>
+            <button id="btnNext" class="hover:text-white">Next</button>
+          </div>
+          <span id="nowDur">0:00</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hot Right Now / Beats -->
+  <section id="beats" class="mx-auto max-w-7xl px-4 py-14">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight">Hot Right Now</h2>
+        <p class="text-white/70 mt-1">The most played tracks this week. Tap to preview, click to download.</p>
+      </div>
+      <a href="#" class="text-primary hover:underline">View All</a>
+    </div>
+
+    <div id="gridBeats" class="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <!-- Cards injected by JS -->
+    </div>
+  </section>
+
+  <!-- Freestyle CTA -->
+  <section id="freestyle" class="mx-auto max-w-7xl px-4 py-14">
+    <div class="glass rounded-2xl p-6 md:p-8 ring-1 ring-white/10">
+      <div class="md:flex items-start gap-8">
+        <div class="md:w-2/3">
+          <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight">Drop a 30‑Second Freestyle</h2>
+          <p class="text-white/70 mt-2">Hit record, spit your best 16, and submit. Your video joins the Freestyle Leaderboard for upvotes, shares, and discovery.</p>
+          <div class="mt-4 flex flex-wrap gap-3">
+            <button id="recBtn" class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 font-semibold hover:bg-white/10">Record</button>
+            <button id="stopBtn" disabled class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 font-semibold opacity-50">Stop</button>
+            <button id="uploadBtn" disabled class="rounded-xl bg-primary px-4 py-2 font-semibold shadow-glow">Upload</button>
+          </div>
+          <video id="preview" class="mt-4 w-full max-h-64 rounded-lg bg-black/30" controls></video>
+          <p class="mt-2 text-xs text-white/50">By submitting you agree to our <a href="#" class="underline">Terms</a> & <a href="#" class="underline">License</a>.</p>
+        </div>
+        <div class="md:w-1/3 mt-8 md:mt-0">
+          <h3 class="font-semibold">Current Top 5</h3>
+          <ol id="leaderboard" class="mt-3 space-y-2 text-white/80 text-sm">
+            <li>1. 3AM — <span class="text-white">willemhengelmolen</span></li>
+            <li>2. Amsterdam — <span class="text-white">willemhengelmolen</span></li>
+            <li>3. AMA‑BHOZA — <span class="text-white">realm</span></li>
+            <li>4. Techno Revolution — <span class="text-white">willemhengelmolen</span></li>
+            <li>5. Sometimes life is hard — <span class="text-white">yungflex0002</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI Tools -->
+  <section id="tools" class="mx-auto max-w-7xl px-4 py-14">
+    <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight">AI Tools Built In</h2>
+    <p class="text-white/70 mt-1">Split stems, master tracks, and spin reels—fast.</p>
+    <div class="mt-6 grid gap-6 md:grid-cols-3">
+      <div class="glass rounded-2xl p-6 ring-1 ring-white/10">
+        <h3 class="font-semibold text-lg">AI Stem Splitter</h3>
+        <p class="text-white/70 mt-2">Isolate vocals, drums, bass, and instruments instantly. Your first Pro split is free every 24 hours.</p>
+        <button class="mt-4 rounded-xl bg-white text-[#0c0c12] px-4 py-2 font-semibold">Try Free Split</button>
+      </div>
+      <div class="glass rounded-2xl p-6 ring-1 ring-white/10">
+        <h3 class="font-semibold text-lg">Valkyrie AI Mastering</h3>
+        <p class="text-white/70 mt-2">Autonomous, streaming‑ready masters (24‑bit WAV) with visual Mel‑spectrogram feedback.</p>
+        <button class="mt-4 rounded-xl bg-white text-[#0c0c12] px-4 py-2 font-semibold">Master a Track</button>
+      </div>
+      <div class="glass rounded-2xl p-6 ring-1 ring-white/10">
+        <h3 class="font-semibold text-lg">AI Reel Maker</h3>
+        <p class="text-white/70 mt-2">Auto‑cut reels from your song or freestyle with captions and beat‑matched clips—export for TikTok in seconds.</p>
+        <button class="mt-4 rounded-xl bg-white text-[#0c0c12] px-4 py-2 font-semibold">Make a Reel</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Creators Network -->
+  <section id="network" class="mx-auto max-w-7xl px-4 py-14">
+    <div class="glass rounded-2xl p-6 md:p-8 ring-1 ring-white/10">
+      <div class="md:flex items-center gap-8">
+        <div class="md:w-2/3">
+          <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight">Beyond Beats: The Creator Network</h2>
+          <p class="text-white/70 mt-2">Connect with artists, producers, DJs, bloggers, curators, mentors and superfans. Start collabs, build momentum, and get featured.</p>
+          <div class="mt-5 flex gap-3">
+            <a id="join" href="#" class="rounded-xl bg-primary px-5 py-3 font-semibold shadow-glow">Enter the Network — Free</a>
+            <a href="#" class="rounded-xl border border-white/15 bg-white/5 px-5 py-3 font-semibold hover:bg-white/10">How it works</a>
+          </div>
+        </div>
+        <ul class="md:w-1/3 mt-8 md:mt-0 grid gap-3 text-sm text-white/80">
+          <li class="rounded-xl bg-white/5 p-3">Zero cost to join—no paywalls</li>
+          <li class="rounded-xl bg-white/5 p-3">Profile + portfolio + feature slots</li>
+          <li class="rounded-xl bg-white/5 p-3">Collab boards & DM intros</li>
+          <li class="rounded-xl bg-white/5 p-3">Weekly spotlights & playlists</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Newsletter -->
+  <section class="mx-auto max-w-7xl px-4 py-14" id="blog">
+    <div class="rounded-2xl bg-gradient-to-br from-primary/20 to-cyan-500/10 p-8 ring-1 ring-white/10">
+      <h3 class="text-xl font-bold">Stay in the loop</h3>
+      <p class="text-white/70 mt-1">Tips, tools, and featured opportunities—straight to your inbox.</p>
+      <form id="subForm" class="mt-4 flex flex-col sm:flex-row gap-3" onsubmit="return false;">
+        <input id="subEmail" type="email" required placeholder="Enter your email" class="w-full rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-white placeholder:text-white/50 outline-none focus:ring-[var(--ring)]" />
+        <button id="subBtn" class="rounded-xl bg-white px-5 py-3 font-semibold text-[#0c0c12]">Subscribe</button>
+      </form>
+      <p id="subMsg" class="mt-2 text-sm text-white/70"></p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-white/5 bg-black/40">
+    <div class="mx-auto max-w-7xl px-4 py-10 grid gap-6 md:grid-cols-4 text-sm text-white/70">
+      <div>
+        <div class="flex items-center gap-2 font-extrabold text-white"><span class="inline-flex size-7 items-center justify-center rounded-xl bg-primary/20 text-primary">BT</span> Beats To Rap On</div>
+        <p class="mt-3">We give every artist the power to create, share, and grow. Royalty‑free beats + AI toolkit + a creator network that lifts you up.</p>
+      </div>
+      <div>
+        <h4 class="font-semibold text-white">What’s Hot</h4>
+        <ul class="mt-2 space-y-1">
+          <li><a class="hover:text-white" href="#beats">Top 10 Leaderboard</a></li>
+          <li><a class="hover:text-white" href="#tools">AI Stem Splitter</a></li>
+          <li><a class="hover:text-white" href="#tools">AI Mastering</a></li>
+          <li><a class="hover:text-white" href="#freestyle">Freestyle</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="font-semibold text-white">Company</h4>
+        <ul class="mt-2 space-y-1">
+          <li><a class="hover:text-white" href="#">About</a></li>
+          <li><a class="hover:text-white" href="#">Contact</a></li>
+          <li><a class="hover:text-white" href="#">License Summary</a></li>
+          <li><a class="hover:text-white" href="#">Developer APIs</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="font-semibold text-white">Legal</h4>
+        <ul class="mt-2 space-y-1">
+          <li><a class="hover:text-white" href="#">Terms of Service</a></li>
+          <li><a class="hover:text-white" href="#">Privacy Policy</a></li>
+          <li><a class="hover:text-white" href="#">DMCA</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="border-t border-white/5 py-6 text-center text-xs text-white/60">© <span id="year"></span> Beats To Rap On. All Rights Reserved.</div>
+  </footer>
+
+  <!-- Sticky Mini Player -->
+  <div class="fixed inset-x-0 bottom-0 z-50">
+    <div class="mx-auto max-w-3xl rounded-t-2xl border-x border-t border-white/10 bg-black/70 backdrop-blur px-4 py-3 shadow-2xl">
+      <div class="flex items-center gap-3">
+        <button id="miniPlay" class="size-9 rounded-full bg-primary text-white grid place-items-center" aria-label="Play/Pause">
+          <svg id="miniPlayIcon" xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
+        </button>
+        <div class="min-w-0">
+          <p id="miniTitle" class="truncate text-xs text-white/60">—</p>
+          <p id="miniArtist" class="truncate text-sm text-white">Select a track</p>
+        </div>
+        <div class="ml-auto flex items-center gap-3 text-xs text-white/60">
+          <button id="miniPrev" class="hover:text-white">Prev</button>
+          <button id="miniNext" class="hover:text-white">Next</button>
+        </div>
+      </div>
+      <div id="miniWave" class="mt-2 h-12 w-full"></div>
+    </div>
+  </div>
+
+  <!-- Structured Data (Organization + MusicRecording) -->
+  <script type="application/ld+json" id="jsonLd"></script>
+
+  <script>
+    // ---------- Minimal Config
+    const API_FALLBACKS = [
+      // Add your Render API origin here if you host APIs separately
+      // 'https://your-api.onrender.com'
+    ]
+
+    // ---------- Demo Tracks (swap with your own /audio/*.mp3 and cover art)
+    const TRACKS = [
+      { id: 'reggae-trap',   title: 'Reggae Trap',    artist: 'dior', bpm: 92,  url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
+      { id: 'stack',         title: 'STACK',          artist: 'lilwoo', bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
+      { id: 'cleanup-woman', title: 'Da Cleanup Woman', artist: 't-dub', bpm: 95, url: '/audio/cleanup-woman.mp3', cover: '/img/covers/cleanup.jpg' },
+      { id: 'we-go-make-it', title: 'We Go Make It',  artist: 'spanel-035', bpm: 94, url: '/audio/we-go.mp3',       cover: '/img/covers/we-go.jpg' },
+      { id: 'the-one',       title: 'The one',        artist: 'kloverfreshproduction', bpm: 89, url: '/audio/the-one.mp3', cover: '/img/covers/the-one.jpg' },
+      { id: 'it-is-what',    title: 'It is what it is', artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',  cover: '/img/covers/it-is.jpg' }
+    ]
+
+    // ---------- Utilities
+    const $ = sel => document.querySelector(sel)
+    const $$ = sel => Array.from(document.querySelectorAll(sel))
+    const fmt = s => {
+      s = Math.floor(s || 0)
+      const m = Math.floor(s/60).toString()
+      const sec = (s%60).toString().padStart(2, '0')
+      return `${m}:${sec}`
+    }
+
+    // ---------- State
+    let current = 0
+    let heroWS, miniWS
+
+    function setButtonsPlaying(playing) {
+      const playPath = playing
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6"/>'
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/>'
+      $('#heroPlayIcon').innerHTML = playPath
+      $('#miniPlayIcon').innerHTML = playPath
+    }
+
+    function setTrack(i) {
+      current = (i + TRACKS.length) % TRACKS.length
+      const t = TRACKS[current]
+      $('#nowTitle').textContent = t.title
+      $('#nowArtist').textContent = t.artist
+      $('#miniTitle').textContent = t.title
+      $('#miniArtist').textContent = t.artist
+
+      heroWS.load(t.url)
+      miniWS.load(t.url)
+      setButtonsPlaying(true)
+    }
+
+    function buildCards() {
+      const grid = $('#gridBeats')
+      grid.innerHTML = ''
+      TRACKS.forEach((t, i) => {
+        const card = document.createElement('article')
+        card.className = 'group rounded-2xl border border-white/10 bg-white/5 p-4 ring-1 ring-white/10 hover:bg-white/10 transition'
+        card.innerHTML = `
+          <div class="equal overflow-hidden rounded-xl">
+            <img src="${t.cover || 'https://picsum.photos/seed/'+t.id+'/600/400'}" alt="${t.title} cover" class="aspect-video object-cover group-hover:scale-[1.02] transition"/>
+            <button data-i="${i}" class="playBtn absolute right-3 top-3 rounded-full bg-primary px-3 py-2 text-sm font-semibold shadow-glow">Play</button>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <p class="truncate text-sm text-white/60">${t.artist}</p>
+              <h3 class="truncate font-semibold">${t.title}</h3>
+            </div>
+            <div class="text-right text-xs text-white/60">${t.bpm} BPM</div>
+          </div>
+          <div class="mt-3 flex items-center gap-3">
+            <a class="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[#0c0c12]" href="${t.url}" download>Download</a>
+            <button class="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold hover:bg-white/10">License</button>
+          </div>
+        `
+        grid.appendChild(card)
+      })
+
+      $$('.playBtn').forEach(btn => btn.addEventListener('click', (e) => {
+        const i = +e.currentTarget.getAttribute('data-i')
+        setTrack(i)
+        heroWS.play()
+        miniWS.play()
+      }))
+    }
+
+    function setupPlayers() {
+      heroWS = WaveSurfer.create({
+        container: '#heroWave',
+        waveColor: ['#ffffff33', '#7c3aed'],
+        height: 90,
+        progressColor: ['#7c3aed', '#22d3ee'],
+        cursorWidth: 1,
+        barWidth: 2,
+        barGap: 1,
+      })
+
+      miniWS = WaveSurfer.create({
+        container: '#miniWave',
+        waveColor: ['#ffffff22', '#7c3aed'],
+        height: 48,
+        progressColor: ['#7c3aed', '#22d3ee'],
+        cursorWidth: 0,
+        barWidth: 2,
+        barGap: 1,
+      })
+
+      heroWS.on('audioprocess', () => { $('#nowTime').textContent = fmt(heroWS.getCurrentTime()) })
+      heroWS.on('ready', () => { $('#nowDur').textContent = fmt(heroWS.getDuration()) })
+      heroWS.on('play', () => setButtonsPlaying(true))
+      heroWS.on('pause', () => setButtonsPlaying(false))
+      heroWS.on('finish', () => setTrack(current + 1))
+
+      miniWS.on('play', () => setButtonsPlaying(true))
+      miniWS.on('pause', () => setButtonsPlaying(false))
+
+      // sync positions
+      const sync = (src, dest) => src.on('audioprocess', () => {
+        if (!dest.isPlaying()) dest.setTime(src.getCurrentTime())
+      })
+      sync(heroWS, miniWS)
+      sync(miniWS, heroWS)
+
+      setTrack(0)
+    }
+
+    function setupControls() {
+      $('#heroPlay').onclick = () => heroWS.isPlaying() ? (heroWS.pause(), miniWS.pause()) : (heroWS.play(), miniWS.play())
+      $('#miniPlay').onclick = () => $('#heroPlay').click()
+      $('#btnPrev').onclick = () => { setTrack(current - 1); heroWS.play(); miniWS.play() }
+      $('#btnNext').onclick = () => { setTrack(current + 1); heroWS.play(); miniWS.play() }
+      $('#miniPrev').onclick = () => $('#btnPrev').click()
+      $('#miniNext').onclick = () => $('#btnNext').click()
+    }
+
+    function setupFreestyleRecorder() {
+      const recBtn = $('#recBtn'), stopBtn = $('#stopBtn'), uploadBtn = $('#uploadBtn'), preview = $('#preview')
+      let media, chunks = [], recorder
+
+      recBtn.onclick = async () => {
+        try {
+          media = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+          preview.srcObject = media
+          preview.muted = true
+          preview.play()
+          recorder = new MediaRecorder(media)
+          chunks = []
+          recorder.ondataavailable = (e) => chunks.push(e.data)
+          recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' })
+            preview.srcObject = null
+            preview.src = URL.createObjectURL(blob)
+            preview.muted = false
+            preview.controls = true
+            uploadBtn.disabled = false
+            uploadBtn.dataset.blobUrl = preview.src
+          }
+          recorder.start()
+          recBtn.disabled = true
+          stopBtn.disabled = false
+        } catch (e) {
+          alert('Recorder error: ' + e.message)
+        }
+      }
+
+      stopBtn.onclick = () => {
+        stopBtn.disabled = true
+        recBtn.disabled = false
+        if (recorder && recorder.state !== 'inactive') recorder.stop()
+        if (media) media.getTracks().forEach(t => t.stop())
+      }
+
+      uploadBtn.onclick = async () => {
+        const url = uploadBtn.dataset.blobUrl
+        if (!url) return
+        uploadBtn.textContent = 'Uploading…'
+        try {
+          // Example upload flow — replace with your API endpoint
+          // const blob = await fetch(url).then(r => r.blob())
+          // const form = new FormData(); form.append('file', blob, 'freestyle.webm')
+          // await fetch('/api/freestyle', { method: 'POST', body: form })
+          await new Promise(r => setTimeout(r, 1000))
+          uploadBtn.textContent = 'Uploaded!'
+        } catch (e) {
+          uploadBtn.textContent = 'Upload failed'
+        }
+      }
+    }
+
+    function setupSubscribe() {
+      $('#subForm').addEventListener('submit', async () => {
+        const email = $('#subEmail').value.trim()
+        if (!email) return
+        $('#subBtn').disabled = true
+        $('#subMsg').textContent = 'Submitting…'
+        try {
+          // Swap with your handler or Render function
+          // await fetch('/api/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
+          await new Promise(r => setTimeout(r, 600))
+          $('#subMsg').textContent = 'Thanks! Check your inbox for a welcome email.'
+        } catch (e) {
+          $('#subMsg').textContent = 'Something went wrong. Please try again.'
+        } finally {
+          $('#subBtn').disabled = false
+        }
+      })
+    }
+
+    function writeStructuredData() {
+      const recordings = TRACKS.slice(0, 3).map(t => ({
+        '@type': 'MusicRecording',
+        name: t.title,
+        byArtist: { '@type': 'MusicGroup', name: t.artist },
+        audio: { '@type': 'AudioObject', contentUrl: t.url }
+      }))
+      const json = {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: 'Beats To Rap On',
+        url: location.origin,
+        sameAs: [],
+        makesOffer: recordings
+      }
+      $('#jsonLd').textContent = JSON.stringify(json)
+    }
+
+    async function discoverApiBase() {
+      const candidates = [location.origin, ...API_FALLBACKS]
+      for (const base of candidates) {
+        try {
+          await fetch(base + '/api/health', { mode: 'no-cors' })
+          return base
+        } catch {}
+      }
+      return null
+    }
+
+    // ---------- Init
+    window.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('year').textContent = new Date().getFullYear()
+      buildCards()
+      setupPlayers()
+      setupControls()
+      setupFreestyleRecorder()
+      setupSubscribe()
+      writeStructuredData()
+      await discoverApiBase() // (optional) do something with it later
+    })
+  </script>
+</body>
+</html>
