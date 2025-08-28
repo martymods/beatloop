@@ -371,31 +371,23 @@
       miniWS.load(t.url)
 
       // Update Media Session metadata so album art appears on lock screen controls
-      if ('mediaSession' in navigator) {
-        try {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: t.title,
-            artist: t.artist,
-            artwork: [
-              { src: t.cover, sizes: '512x512', type: 'image/jpeg' },
-              { src: t.cover, sizes: '256x256', type: 'image/jpeg' },
-              { src: t.cover, sizes: '128x128', type: 'image/jpeg' }
-            ]
-          })
-          navigator.mediaSession.setActionHandler('play', () => {
-            heroWS.play(); miniWS.play()
-          })
-          navigator.mediaSession.setActionHandler('pause', () => {
-            heroWS.pause(); miniWS.pause()
-          })
-          navigator.mediaSession.setActionHandler('previoustrack', () => {
-            setTrack(current - 1); heroWS.play(); miniWS.play()
-          })
-          navigator.mediaSession.setActionHandler('nexttrack', () => {
-            setTrack(current + 1); heroWS.play(); miniWS.play()
-          })
-        } catch {}
-      }
+if ('mediaSession' in navigator) {
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: t.title,
+      artist: t.artist,
+      artwork: [
+        { src: t.cover, sizes: '512x512', type: 'image/jpeg' },
+        { src: t.cover, sizes: '256x256', type: 'image/jpeg' }
+      ]
+    })
+    navigator.mediaSession.setActionHandler('play', () => heroWS.play())
+    navigator.mediaSession.setActionHandler('pause', () => heroWS.pause())
+    navigator.mediaSession.setActionHandler('previoustrack', () => { setTrack(current - 1); heroWS.play() })
+    navigator.mediaSession.setActionHandler('nexttrack', () => { setTrack(current + 1); heroWS.play() })
+  } catch {}
+}
+
 
       // show the play button state initially
       setButtonsPlaying(false)
@@ -432,7 +424,6 @@
         const i = +e.currentTarget.getAttribute('data-i')
         setTrack(i)
         heroWS.play()
-        miniWS.play()
       }))
     }
 
@@ -456,6 +447,10 @@
         barWidth: 2,
         barGap: 1,
       })
+
+      // Make the mini player visual-only (no audio)
+try { if (typeof miniWS.setVolume === 'function') miniWS.setVolume(0) } catch {}
+
 
       // Mute the mini player so the same track doesn’t play twice on mobile
       try {
@@ -489,12 +484,16 @@
     }
 
     function setupControls() {
-      $('#heroPlay').onclick = () => heroWS.isPlaying() ? (heroWS.pause(), miniWS.pause()) : (heroWS.play(), miniWS.play())
-      $('#miniPlay').onclick = () => $('#heroPlay').click()
-      $('#btnPrev').onclick = () => { setTrack(current - 1); heroWS.play(); miniWS.play() }
-      $('#btnNext').onclick = () => { setTrack(current + 1); heroWS.play(); miniWS.play() }
-      $('#miniPrev').onclick = () => $('#btnPrev').click()
-      $('#miniNext').onclick = () => $('#btnNext').click()
+$('#heroPlay').onclick = () =>
+  heroWS.isPlaying() ? heroWS.pause() : heroWS.play()
+
+$('#miniPlay').onclick = () => $('#heroPlay').click()
+
+$('#btnPrev').onclick  = () => { setTrack(current - 1); heroWS.play() }
+$('#btnNext').onclick  = () => { setTrack(current + 1); heroWS.play() }
+$('#miniPrev').onclick = () => $('#btnPrev').click()
+$('#miniNext').onclick = () => $('#btnNext').click()
+
     }
 
     function setupFreestyleRecorder() {
