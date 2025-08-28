@@ -366,18 +366,16 @@
       miniWS.load(t.url)
 
       // If we should autoplay the new track, wait until it's ready
-      if (autoplay) {
-        const playNew = () => {
-          heroWS.play()
-          try { miniWS.play() } catch {}
-        }
-        if (typeof heroWS.once === 'function') {
-          heroWS.once('ready', playNew)
-        } else {
-          const h = () => { playNew(); heroWS.un('ready', h) }
-          heroWS.on('ready', h)
-        }
-      }
+if (autoplay) {
+  const playNew = () => heroWS.play()
+  if (typeof heroWS.once === 'function') {
+    heroWS.once('ready', playNew)
+  } else {
+    const h = () => { playNew(); heroWS.un('ready', h) }
+    heroWS.on('ready', h)
+  }
+}
+
 
       // Media Session metadata & actions
 if ('mediaSession' in navigator) {
@@ -446,15 +444,17 @@ if ('mediaSession' in navigator) {
         barGap: 1,
       })
 
-      miniWS = WaveSurfer.create({
-        container: '#miniWave',
-        waveColor: ['#ffffff22', '#7c3aed'],
-        height: 48,
-        progressColor: ['#7c3aed', '#22d3ee'],
-        cursorWidth: 0,
-        barWidth: 2,
-        barGap: 1,
-      })
+miniWS = WaveSurfer.create({
+  container: '#miniWave',
+  waveColor: ['#ffffff22', '#7c3aed'],
+  height: 48,
+  progressColor: ['#7c3aed', '#22d3ee'],
+  cursorWidth: 0,
+  barWidth: 2,
+  barGap: 1,
+  dragToSeek: false   // <- add this
+})
+
 
 // Make the mini player visual-only (no audio)
 try { if (typeof miniWS.setVolume === 'function') miniWS.setVolume(0) } catch {}
@@ -478,11 +478,11 @@ try { if (typeof miniWS.setVolume === 'function') miniWS.setVolume(0) } catch {}
       miniWS.on('pause', () => setButtonsPlaying(false))
 
       // Keep mini waveform in sync visually
-      const sync = (src, dest) => src.on('audioprocess', () => {
-        if (!dest.isPlaying()) dest.setTime(src.getCurrentTime())
-      })
-      sync(heroWS, miniWS)
-      sync(miniWS, heroWS)
+const sync = (src, dest) => src.on('audioprocess', () => {
+  if (!dest.isPlaying()) dest.setTime(src.getCurrentTime())
+})
+sync(heroWS, miniWS)
+
 
       setTrack(0, false)
     }
@@ -493,12 +493,11 @@ $('#heroPlay').onclick = () =>
 
 $('#miniPlay').onclick = () => $('#heroPlay').click()
 
-$('#btnPrev').onclick  = () => { setTrack(current - 1); heroWS.play() }
-$('#btnNext').onclick  = () => { setTrack(current + 1); heroWS.play() }
+$('#btnPrev').onclick  = () => setTrack(current - 1, true)
+$('#btnNext').onclick  = () => setTrack(current + 1, true)
 $('#miniPrev').onclick = () => $('#btnPrev').click()
 $('#miniNext').onclick = () => $('#btnNext').click()
-
-    }
+  }
 
     function setupFreestyleRecorder() {
       const recBtn = $('#recBtn'), stopBtn = $('#stopBtn'), uploadBtn = $('#uploadBtn'), preview = $('#preview')
