@@ -380,23 +380,23 @@
       }
 
       // Media Session metadata & actions
-      if ('mediaSession' in navigator) {
-        try {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: t.title,
-            artist: t.artist,
-            artwork: [
-              { src: t.cover, sizes: '512x512', type: 'image/jpeg' },
-              { src: t.cover, sizes: '256x256', type: 'image/jpeg' },
-              { src: t.cover, sizes: '128x128', type: 'image/jpeg' }
-            ]
-          })
-          navigator.mediaSession.setActionHandler('play',  () => heroWS.play())
-          navigator.mediaSession.setActionHandler('pause', () => heroWS.pause())
-          navigator.mediaSession.setActionHandler('previoustrack', () => setTrack(current - 1, true))
-          navigator.mediaSession.setActionHandler('nexttrack',     () => setTrack(current + 1, true))
-        } catch {}
-      }
+if ('mediaSession' in navigator) {
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: t.title,
+      artist: t.artist,
+      artwork: [
+        { src: t.cover, sizes: '512x512', type: 'image/jpeg' },
+        { src: t.cover, sizes: '256x256', type: 'image/jpeg' }
+      ]
+    })
+    navigator.mediaSession.setActionHandler('play', () => heroWS.play())
+    navigator.mediaSession.setActionHandler('pause', () => heroWS.pause())
+    navigator.mediaSession.setActionHandler('previoustrack', () => { setTrack(current - 1); heroWS.play() })
+    navigator.mediaSession.setActionHandler('nexttrack', () => { setTrack(current + 1); heroWS.play() })
+  } catch {}
+}
+
 
       setButtonsPlaying(false)
     }
@@ -456,6 +456,10 @@
         barGap: 1,
       })
 
+// Make the mini player visual-only (no audio)
+try { if (typeof miniWS.setVolume === 'function') miniWS.setVolume(0) } catch {}
+
+
       // Keep the mini player silent so you don't get double audio
       try { if (typeof miniWS.setVolume === 'function') miniWS.setVolume(0) } catch {}
 
@@ -484,14 +488,16 @@
     }
 
     function setupControls() {
-      $('#heroPlay').onclick = () => heroWS.isPlaying() ? (heroWS.pause(), miniWS.pause()) : (heroWS.play(), miniWS.play())
-      $('#miniPlay').onclick = () => $('#heroPlay').click()
+$('#heroPlay').onclick = () =>
+  heroWS.isPlaying() ? heroWS.pause() : heroWS.play()
 
-      // If user was playing, Next/Prev should autoplay the new track
-      $('#btnPrev').onclick  = () => { const was = heroWS.isPlaying(); setTrack(current - 1, was) }
-      $('#btnNext').onclick  = () => { const was = heroWS.isPlaying(); setTrack(current + 1, was) }
-      $('#miniPrev').onclick = () => $('#btnPrev').click()
-      $('#miniNext').onclick = () => $('#btnNext').click()
+$('#miniPlay').onclick = () => $('#heroPlay').click()
+
+$('#btnPrev').onclick  = () => { setTrack(current - 1); heroWS.play() }
+$('#btnNext').onclick  = () => { setTrack(current + 1); heroWS.play() }
+$('#miniPrev').onclick = () => $('#btnPrev').click()
+$('#miniNext').onclick = () => $('#btnNext').click()
+
     }
 
     function setupFreestyleRecorder() {
