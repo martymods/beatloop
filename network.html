@@ -58,6 +58,13 @@
 
   #blLoops{ -webkit-overflow-scrolling: touch; }
 
+
+/* Better visibility for inactive steps */
+.step{ background: rgba(56,189,248,.12) !important; }           /* cyan-400 @ ~12% */
+.step:hover{ background: rgba(56,189,248,.18) !important; }
+.step.alt{ background: rgba(56,189,248,.20) !important; }       /* alt stripe */
+.step.on{ background: rgba(124,58,237,.7) !important; }         /* keep purple for ON */
+
 </style>
 
 
@@ -993,32 +1000,41 @@ const LOOPS = {
   const kitSel    = document.getElementById('blKit');
   const loopsWrap = document.getElementById('blLoops');
   const saveBtn   = document.getElementById('blSaveWav');
-  // --- Piano Roll UI refs
-  const prOverlay = document.getElementById('prOverlay');
-  const prGridEl  = document.getElementById('prGrid');
-  const prClose   = document.getElementById('prClose');
-  const prTitle   = document.getElementById('prTitle');
-  const prSubdiv  = document.getElementById('prSubdiv');
-  const prVol     = document.getElementById('prVol');
-  const prPan     = document.getElementById('prPan');
+  // --- Piano Roll UI refs (lazy) ---
+  let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan;
+  let _prInit = false;
+  function _ensurePRRefs(){
+    if (_prInit) return;
+    prOverlay = document.getElementById('prOverlay');
+    prGridEl  = document.getElementById('prGrid');
+    prClose   = document.getElementById('prClose');
+    prTitle   = document.getElementById('prTitle');
+    prSubdiv  = document.getElementById('prSubdiv');
+    prVol     = document.getElementById('prVol');
+    prPan     = document.getElementById('prPan');
+    if (prClose) prClose.addEventListener('click', closePianoRoll);
+    if (prSubdiv) prSubdiv.addEventListener('change', ()=>{
+      SUBDIV = +prSubdiv.value || 4;
+      drawPianoRoll();
+    });
+    _prInit = true;
+  }
   // --- Piano Roll logic ---
   let prRow = null; // which row we're editing
   function openPianoRoll(row, label){
+    _ensurePRRefs();
     prRow = row;
     if (prTitle) prTitle.textContent = `Piano Roll — ${label}`;
     if (prSubdiv) prSubdiv.value = String(SUBDIV);
     drawPianoRoll();
     if (prOverlay) prOverlay.style.display = 'block';
   }
-  function closePianoRoll(){ if (prOverlay) prOverlay.style.display = 'none'; prRow = null; }
-  if (prClose) prClose.addEventListener('click', closePianoRoll);
-  if (prSubdiv) prSubdiv.addEventListener('change', ()=>{
-    SUBDIV = +prSubdiv.value || 4;
-    drawPianoRoll();
-  });
-
-  function drawPianoRoll(){
-    if (prRow == null || !prGridEl) return;
+  function closePianoRoll(){
+    _ensurePRRefs();
+    if (prOverlay) prOverlay.style.display = 'none';
+    prRow = null;
+  }
+  function drawPianoRoll(){ _ensurePRRefs(); if (prRow == null || !prGridEl) return;
     const cols = STEPS * SUBDIV;
     prGridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(16px, 1fr))`;
     prGridEl.style.gridTemplateRows    = `repeat(${PITCH_ROWS}, 22px)`;
@@ -1047,8 +1063,7 @@ const LOOPS = {
       }
     }
   }
-  function togglePR(p, i, erase){
-    const roll = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow).notes;
+  function togglePR(p, i, erase){ _ensurePRRefs(); const roll = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow).notes;
     if (erase) roll[p][i] = null;
     else roll[p][i] = { vol:+(prVol?.value||0), pan:+(prPan?.value||0) };
     const idx = (PITCH_ROWS-1 - p) * (STEPS*SUBDIV) + i;
@@ -1157,18 +1172,20 @@ let lastBar = -1;             // arranger playhead column
     for (let r=0; r<rows; r++){
       // left label + one dial w/ V/P/T switch
       const lab = document.createElement('div');
-      lab.className='flex items-center justify-between px-2 text-sm text-white/90';
-      lab.innerHTML = `<div class="flex items-center gap-2 min-w-0">
-  <span class="truncate mr-1 font-medium">${labels[r]}</span>
-  <button class="rounded bg-white/10 px-2 py-0.5 text-xs hover:bg-white/15 shrink-0" data-pr="${r}" title="Open Piano Roll">🎹</button>
-</div>
-<div class="flex items-center gap-2 shrink-0">
-  <div class="ctrl-switch" role="tablist" data-row="${r}">
-    <button type="button" class="on" data-kind="vol">V</button>
-    <button type="button" data-kind="pan">P</button>
-    <button type="button" data-kind="pit">T</button>
+      lab.className='flex items-start justify-between px-2 text-sm text-white/90';
+      lab.innerHTML = `<div class="flex flex-col gap-1 min-w-0">
+  <div class="flex items-center gap-2">
+    <button class="rounded bg-white/10 px-2 py-0.5 text-xs hover:bg-white/15 shrink-0" data-pr="${r}" title="Open Piano Roll">🎹</button>
+    <div class="flex items-center gap-2 shrink-0 ml-auto">
+      <div class="ctrl-switch" role="tablist" data-row="${r}">
+        <button type="button" class="on" data-kind="vol">V</button>
+        <button type="button" data-kind="pan">P</button>
+        <button type="button" data-kind="pit">T</button>
+      </div>
+      <label class="dial"><input class="dial-range" type="range" min="-10" max="10" step="1" value="0" data-row="${r}" data-kind="vol"></label>
+    </div>
   </div>
-  <label class="dial"><input class="dial-range" type="range" min="-10" max="10" step="1" value="0" data-row="${r}" data-kind="vol"></label>
+  <span class="truncate text-white/80 leading-tight">${labels[r]}</span>
 </div>`;
       const sw = lab.querySelector('.ctrl-switch');
       const dial = lab.querySelector('.dial-range');
