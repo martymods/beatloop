@@ -869,7 +869,9 @@
 <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
 <script>
 (() => {
-  // --- assets (swap/extend as you like) ---
+  // ---------------------------------------------
+  // Assets
+  // ---------------------------------------------
   const KITS = {
     trap: {
       names: ['Kick','Snare','ClosedHat','OpenHat','Clap'],
@@ -892,7 +894,26 @@
     }
   };
 
-  // --- UI refs ---
+  // Loops: drop your melodic files in /audio/loops/.
+  // Use any filenames; labels are auto-derived from the filename (no extension).
+  const LOOPS = {
+    melody: [
+      '/audio/loops/arp_cosmic.wav',
+      '/audio/loops/pad_mist.wav',
+      '/audio/loops/keys_lofi.wav',
+      '/audio/loops/guitar_mood.wav'
+    ],
+    extras: [
+      '/audio/loops/choir_airy.wav',
+      '/audio/loops/bell_glass.wav'
+    ]
+  };
+
+  const STEPS = 16;
+
+  // ---------------------------------------------
+  // UI refs
+  // ---------------------------------------------
   const openBtn   = document.getElementById('beatloopBtn');
   const studio    = document.getElementById('beatloopStudio');
   const closeBtn  = document.getElementById('blClose');
@@ -903,49 +924,65 @@
   const stopBtn   = document.getElementById('blStop');
   const clearBtn  = document.getElementById('blClear');
   const kitSel    = document.getElementById('blKit');
+  const loopsWrap = document.getElementById('blLoops');
   const saveBtn   = document.getElementById('blSaveWav');
 
   function showStudio(){ studio.classList.remove('hidden'); }
   function hideStudio(){ studio.classList.add('hidden'); }
+
   openBtn?.addEventListener('click', async () => {
     showStudio();
-    await Tone.start();              // unlock audio from a real click
-    await loadKit(kitSel.value);     // lazy-load kit after unlock
+    await Tone.start();           // unlock audio
+    currentKit = kitSel.value;
+    await rebuildGraph();         // build kit + any loops
+    renderLoopPicker();           // draw loop list
   });
   closeBtn?.addEventListener('click', hideStudio);
 
-  // --- Sequencer state ---
-  const STEPS = 16;
-  let rows = 4;
-  let pattern = Array.from({length: rows}, () => Array(STEPS).fill(false));
+  // ---------------------------------------------
+  // State
+  // ---------------------------------------------
+  let currentKit = 'trap';
 
-  let samplers = [];
-  let volumes  = [];  // Tone.Volume (dB)
-  let panners  = [];  // Tone.Panner (-1..1)
-  let pitches  = [];  // semitone offsets (-10..+10)
+  // rows are: [ kit rows..., loop rows... ]
+  let kitRowCount = 0;
+
+  // playback pattern per row
+  let pattern = [];
+
+  // per-row nodes/params aligned to total rows
+  let volumes  = [];  // Tone.Volume
+  let panners  = [];  // Tone.Panner
+  let pitches  = [];  // -10..+10 (semitones)
+  let rowLabels = []; // visible names
+  let kitSamplers = [];   // samplers for kit rows
+  let loopPlayers = [];   // players for loop rows
+  const selectedLoops = new Set(); // file paths
 
   // transport/loop + recorder
   let loop = null, currentStep = 0, lastStep = -1;
   let recorder = null;
 
-  bpmRange.addEventListener('input', () => {
-    bpmVal.textContent = bpmRange.value;
-    Tone.Transport.bpm.value = +bpmRange.value; // live tempo change
-  });
-
-  // --- helpers ---
+  // ---------------------------------------------
+  // Helpers
+  // ---------------------------------------------
+  function filenameLabel(p){
+    return (p.split('/').pop()||'').replace(/\.[^/.]+$/,'');
+  }
   function noteFromC3(semi){
     const N = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
     let idx = ((semi % 12) + 12) % 12;
     let oct = 3 + Math.floor(semi/12);
-    return N[idx] + oct; // e.g., "D#4"
+    return N[idx] + oct; // "D#4"
+  }
+  function rateFromSemi(semi){
+    return Math.pow(2, (semi||0)/12); // playbackRate for Players
   }
   function paintPlayhead(step){
     if (lastStep >= 0) gridWrap.querySelectorAll(`[data-c="${lastStep}"]`).forEach(el => el.classList.remove('playhead'));
     gridWrap.querySelectorAll(`[data-c="${step}"]`).forEach(el => el.classList.add('playhead'));
     lastStep = step;
   }
-
   function getRowParamValue(row, kind){
     if (kind === 'vol') return Math.round(((volumes[row]?.volume.value ?? 0) / 1.2));
     if (kind === 'pan') return Math.round(((panners[row]?.pan.value ?? 0) * 10));
@@ -956,22 +993,31 @@
     else if (kind === 'pan' && panners[row]) panners[row].pan.value = val / 10; // -1..+1
     else if (kind === 'pit') pitches[row] = val; // semitones
   }
+  function ensurePatternSize(rows){
+    const next = Array.from({length: rows}, (_,r)=> pattern?.[r]?.slice(0,STEPS) || Array(STEPS).fill(false));
+    pattern = next;
+  }
 
-  // Build grid (with per-row Volume, Pan, Pitch mini dials)
+  // ---------------------------------------------
+  // Grid (names visible; bigger label column)
+  // ---------------------------------------------
   function drawGrid(labels){
+    rowLabels = labels.slice();
     gridWrap.innerHTML = '';
+    const rows = labels.length;
+
     const table = document.createElement('div');
     table.className = 'grid gap-2';
     table.style.position = 'relative';
     table.style.gridTemplateRows = `repeat(${rows}, 40px)`;
-    table.style.gridTemplateColumns = `140px repeat(${STEPS}, minmax(24px, 1fr))`;
+    table.style.gridTemplateColumns = `200px repeat(${STEPS}, minmax(24px, 1fr))`;
 
     for (let r=0; r<rows; r++){
       // label + compact controls (V/P/T switch + ONE dial)
       const lab = document.createElement('div');
-      lab.className = 'flex items-center justify-between px-2 text-sm text-white/80 overflow-hidden';
+      lab.className = 'flex items-center justify-between px-2 text-sm text-white/90 overflow-hidden';
       lab.innerHTML =
-        `<span class="truncate mr-2">${labels[r]}</span>
+        `<span class="truncate mr-2 font-medium">${labels[r]}</span>
          <div class="flex items-center gap-2 shrink-0">
            <div class="ctrl-switch" role="tablist" data-row="${r}">
              <button type="button" class="on"  data-kind="vol">V</button>
@@ -982,46 +1028,37 @@
              <input class="dial-range" type="range" min="-10" max="10" step="1" value="0" data-row="${r}" data-kind="vol">
            </label>
          </div>`;
-
-      // wire the tiny switch
       const sw = lab.querySelector('.ctrl-switch');
       const dial = lab.querySelector('.dial-range');
-      // initialize dial to current VOL value
       dial.value = getRowParamValue(r, 'vol');
-
       sw.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-kind]');
         if (!btn) return;
-        // highlight current
         sw.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
         btn.classList.add('on');
-        // swap the meaning of the dial
         const kind = btn.dataset.kind;
         dial.dataset.kind = kind;
         dial.value = getRowParamValue(r, kind);
       });
-
-      // dial changes the active parameter (vol/pan/pit)
       dial.addEventListener('input', (e) => {
         const row = +e.target.dataset.row;
         const kind = e.target.dataset.kind || 'vol';
         const val  = +e.target.value;
         setRowParamValue(row, kind, val);
       });
-
       table.appendChild(lab);
 
-      // steps (no overlap anymore)
+      // steps
       for (let c=0; c<STEPS; c++){
         const cell = document.createElement('button');
         cell.className = 'step h-10 rounded-md bg-white/10 hover:bg-white/15';
         cell.dataset.r = r; cell.dataset.c = c;
-        if (pattern[r][c]) cell.classList.add('on');
+        if (pattern[r]?.[c]) cell.classList.add('on');
         cell.addEventListener('click', e => {
           const rr = +e.currentTarget.dataset.r;
           const cc = +e.currentTarget.dataset.c;
           pattern[rr][cc] = !pattern[rr][cc];
-          e.currentTarget.classList.toggle('on', pattern[rr][cc]); // takes effect next tick
+          e.currentTarget.classList.toggle('on', pattern[rr][cc]); // live next tick
         });
         table.appendChild(cell);
       }
@@ -1029,51 +1066,124 @@
     gridWrap.appendChild(table);
   }
 
-
-  // Load kit into Sampler chains (Sampler -> Panner -> Volume -> Destination)
-  async function loadKit(key='trap'){
-    const kit = KITS[key];
-    rows = kit.names.length;
-    pattern = Array.from({length: rows}, () => Array(STEPS).fill(false));
-    pitches = Array.from({length: rows}, () => 0);
-    drawGrid(kit.names);
-
+  // ---------------------------------------------
+  // Build audio graph from current kit + selected loops
+  // ---------------------------------------------
+  async function rebuildGraph(){
     await Tone.start();
-    // clean up old graph
-    samplers.forEach(s => s.dispose());
+
+    // dispose old
+    kitSamplers.forEach(s => s.dispose());
+    loopPlayers.forEach(p => p.dispose());
     volumes.forEach(v => v.dispose && v.dispose());
     panners.forEach(p => p.dispose && p.dispose());
-    samplers = []; volumes = []; panners = [];
 
-    // build chains
-    for (let i=0; i<kit.files.length; i++){
+    kitSamplers = []; loopPlayers = [];
+    volumes = []; panners = []; pitches = [];
+
+    const kit = KITS[currentKit];
+    const files = kit.files;
+    kitRowCount = files.length;
+
+    // compute labels: kit names + loop names
+    const loopFiles = Array.from(selectedLoops);
+    const labels = [...kit.names, ...loopFiles.map(filenameLabel)];
+
+    // ensure pattern rows
+    ensurePatternSize(labels.length);
+
+    // Build kit chains (Sampler -> Panner -> Volume -> Dest)
+    for (let i=0; i<files.length; i++){
       await new Promise(resolve => {
-        const vol = new Tone.Volume(0).toDestination();     // per-row volume (dB)
-        const pan = new Tone.Panner(0).connect(vol);        // per-row pan   (-1..1)
-        const s   = new Tone.Sampler({ C3: kit.files[i] },  // single-zone, retunes by pitch
-                     () => resolve()).connect(pan);
-        samplers[i] = s; volumes[i] = vol; panners[i] = pan;
+        const vol = new Tone.Volume(0).toDestination();
+        const pan = new Tone.Panner(0).connect(vol);
+        const s   = new Tone.Sampler({ C3: files[i] }, () => resolve()).connect(pan);
+        kitSamplers[i] = s; volumes[i] = vol; panners[i] = pan; pitches[i] = 0;
       });
     }
-    paintPlayhead(0); // reset glow
+
+    // Build loop chains (Player -> Panner -> Volume -> Dest)
+    for (let j=0; j<loopFiles.length; j++){
+      const vol = new Tone.Volume(0).toDestination();
+      const pan = new Tone.Panner(0).connect(vol);
+      const p   = new Tone.Player({ url: loopFiles[j], autostart: false, loop: false }).connect(pan);
+      loopPlayers[j] = p;
+      const row = kitRowCount + j;
+      volumes[row] = vol; panners[row] = pan; pitches[row] = 0;
+    }
+
+    drawGrid(labels);
+    paintPlayhead(0);
   }
 
-  // Repeating loop that reads the pattern live (no rebuild needed)
+  // ---------------------------------------------
+  // Loops picker UI
+  // ---------------------------------------------
+  function renderLoopPicker(){
+    if (!loopsWrap) return;
+    loopsWrap.innerHTML = '';
+    Object.entries(LOOPS).forEach(([pack, files]) => {
+      const head = document.createElement('p');
+      head.className = 'text-xs text-white/60 mt-2 mb-1';
+      head.textContent = pack[0].toUpperCase() + pack.slice(1);
+      loopsWrap.appendChild(head);
+
+      files.forEach(fp => {
+        const row = document.createElement('label');
+        row.className = 'flex items-center justify-between rounded-md bg-white/5 px-2 py-1 text-sm hover:bg-white/10';
+        row.innerHTML =
+          `<span class="truncate mr-2">${filenameLabel(fp)}</span>
+           <input type="checkbox" data-file="${fp}" ${selectedLoops.has(fp) ? 'checked' : ''}>`;
+        row.querySelector('input').addEventListener('change', async (e) => {
+          const f = e.target.dataset.file;
+          if (e.target.checked) selectedLoops.add(f);
+          else selectedLoops.delete(f);
+          await rebuildGraph();  // update rows instantly
+        });
+        loopsWrap.appendChild(row);
+      });
+    });
+  }
+
+  // ---------------------------------------------
+  // Transport + live loop reading
+  // ---------------------------------------------
   function ensureLoop(){
     if (loop) return;
     loop = new Tone.Loop((time) => {
-      paintPlayhead(currentStep); // playhead glow
+      paintPlayhead(currentStep);
+      const totalRows = (kitRowCount + loopPlayers.length);
+      const rows = rowLabels.length || totalRows;
+
       for (let r=0; r<rows; r++){
-        if (pattern[r][currentStep]){
-          const note = noteFromC3(pitches[r] || 0);
-          samplers[r] && samplers[r].triggerAttack(note, time, 1);
+        if (!pattern[r]?.[currentStep]) continue;
+        if (r < kitRowCount){
+          const semi = pitches[r] || 0;
+          const note = noteFromC3(semi);
+          kitSamplers[r]?.triggerAttack(note, time, 1);
+        } else {
+          const idx = r - kitRowCount;
+          const player = loopPlayers[idx];
+          if (player){
+            player.playbackRate = rateFromSemi(pitches[r] || 0);
+            // restart cleanly if already playing (no pile-up)
+            if (player.state === 'started') player.stop(time);
+            player.start(time);
+          }
         }
       }
       currentStep = (currentStep + 1) % STEPS;
     }, '16n');
   }
 
+  // ---------------------------------------------
   // Controls
+  // ---------------------------------------------
+  bpmRange.addEventListener('input', () => {
+    bpmVal.textContent = bpmRange.value;
+    Tone.Transport.bpm.value = +bpmRange.value; // live
+  });
+
   playBtn.addEventListener('click', async () => {
     await Tone.start();
     ensureLoop();
@@ -1096,11 +1206,12 @@
 
   clearBtn.addEventListener('click', () => {
     pattern.forEach(row => row.fill(false));
-    drawGrid(KITS[kitSel.value].names);
+    drawGrid(rowLabels);
   });
 
   kitSel.addEventListener('change', async () => {
-    await loadKit(kitSel.value);
+    currentKit = kitSel.value;
+    await rebuildGraph();
   });
 
   // Export WAV
@@ -1116,6 +1227,7 @@
 
 })();
 </script>
+
 
 </body>
 </html>
