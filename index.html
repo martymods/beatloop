@@ -232,18 +232,119 @@
     </div>
   </section>
 
-  <!-- Newsletter -->
-  <section class="mx-auto max-w-7xl px-4 py-14" id="blog">
-    <div class="rounded-2xl bg-gradient-to-br from-primary/20 to-cyan-500/10 p-8 ring-1 ring-white/10">
-      <h3 class="text-xl font-bold">Stay in the loop</h3>
-      <p class="text-white/70 mt-1">Tips, tools, and featured opportunities—straight to your inbox.</p>
-      <form id="subForm" class="mt-4 flex flex-col sm:flex-row gap-3" onsubmit="return false;">
-        <input id="subEmail" type="email" required placeholder="Enter your email" class="w-full rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-white placeholder:text-white/50 outline-none focus:ring-[var(--ring)]" />
-        <button id="subBtn" class="rounded-xl bg-white px-5 py-3 font-semibold text-[#0c0c12]">Subscribe</button>
-      </form>
-      <p id="subMsg" class="mt-2 text-sm text-white/70"></p>
+<!-- Pricing / Tiers -->
+<section class="mx-auto max-w-7xl px-4 py-14" id="blog">
+  <div class="rounded-2xl bg-gradient-to-br from-primary/20 to-cyan-500/10 p-8 ring-1 ring-white/10">
+    <div class="md:flex items-end justify-between gap-6">
+      <div>
+        <h3 class="text-2xl md:text-3xl font-extrabold tracking-tight">Memberships & Passes</h3>
+        <p class="text-white/70 mt-1">Unlock rewards as a <span class="text-white">creator</span> and an <span class="text-white">investor</span>. Choose a subscription or a one-time boost.</p>
+      </div>
+      <p class="text-xs text-white/60 mt-4 md:mt-0">You’ll see the full catalog at checkout.</p>
     </div>
-  </section>
+
+    <!-- Subscriptions -->
+    <h4 class="mt-6 mb-2 text-sm font-semibold uppercase tracking-wider text-white/70">Subscriptions</h4>
+    <div class="grid gap-4 md:grid-cols-3">
+      <!-- Starter (monthly) -->
+      <article class="rounded-2xl border border-white/10 bg-white/5 p-5 ring-1 ring-white/10">
+        <div class="flex items-baseline justify-between">
+          <h5 class="font-semibold text-lg">Starter</h5>
+          <div class="text-right"><span class="text-2xl font-extrabold">$9</span><span class="text-white/60">/mo</span></div>
+        </div>
+        <ul class="mt-3 space-y-2 text-sm text-white/80">
+          <li>Creator: 10 beat downloads / mo, 2 AI tools / day</li>
+          <li>Investor: 1 revenue slot + early drops</li>
+          <li>Network: profile boost + DM intros</li>
+        </ul>
+        <button class="mt-4 w-full rounded-xl bg-white px-4 py-2 font-semibold text-[#0c0c12]"
+                data-mode="subscription" data-price="price_STARTER_MONTHLY">Subscribe</button>
+      </article>
+
+      <!-- Pro (monthly) -->
+      <article class="rounded-2xl border border-white/10 bg-white/5 p-5 ring-1 ring-white/10">
+        <div class="flex items-baseline justify-between">
+          <h5 class="font-semibold text-lg">Pro</h5>
+          <div class="text-right"><span class="text-2xl font-extrabold">$49</span><span class="text-white/60">/mo</span></div>
+        </div>
+        <ul class="mt-3 space-y-2 text-sm text-white/80">
+          <li>Creator: Unlimited previews, 30 downloads / mo</li>
+          <li>Investor: 5 revenue slots + whitelist access</li>
+          <li>Network: spotlight eligibility + collab board</li>
+        </ul>
+        <button class="mt-4 w-full rounded-xl bg-white px-4 py-2 font-semibold text-[#0c0c12]"
+                data-mode="subscription" data-price="price_PRO_MONTHLY">Subscribe</button>
+      </article>
+
+      <!-- Legend Daily (max) -->
+      <article class="rounded-2xl border border-white/10 bg-white/5 p-5 ring-1 ring-white/10">
+        <div class="flex items-baseline justify-between">
+          <h5 class="font-semibold text-lg">Legend (Daily)</h5>
+          <div class="text-right"><span class="text-2xl font-extrabold">$500</span><span class="text-white/60">/day</span></div>
+        </div>
+        <ul class="mt-3 space-y-2 text-sm text-white/80">
+          <li>Creator: Unlimited downloads + AI tools unlocked</li>
+          <li>Investor: 20 revenue slots + priority allocation</li>
+          <li>Network: homepage feature + promo credits</li>
+        </ul>
+        <button class="mt-4 w-full rounded-xl bg-white px-4 py-2 font-semibold text-[#0c0c12]"
+                data-mode="subscription" data-price="price_LEGEND_DAILY">Subscribe</button>
+      </article>
+    </div>
+
+    <!-- One-Time Purchases -->
+    <h4 class="mt-8 mb-2 text-sm font-semibold uppercase tracking-wider text-white/70">One-Time Purchases</h4>
+    <div class="grid gap-4 md:grid-cols-3">
+      <!-- Micro Buy-In -->
+      <article class="rounded-2xl border border-white/10 bg-white/5 p-5 ring-1 ring-white/10">
+        <div class="flex items-baseline justify-between">
+          <h5 class="font-semibold text-lg">Micro Buy-In</h5>
+          <div class="text-right"><span class="text-2xl font-extrabold">$4.99</span></div>
+        </div>
+        <ul class="mt-3 space-y-2 text-sm text-white/80">
+          <li>Creator: 1 premium download</li>
+          <li>Investor: micro-stake on 1 track</li>
+          <li>Network: temporary profile boost</li>
+        </ul>
+        <button class="mt-4 w-full rounded-xl bg-white px-4 py-2 font-semibold text-[#0c0c12]"
+                data-mode="payment" data-price="price_MICRO_ONETIME">Buy Now</button>
+      </article>
+
+      <!-- Spotlight Pass -->
+      <article class="rounded-2xl border border-white/10 bg-white/5 p-5 ring-1 ring-white/10">
+        <div class="flex items-baseline justify-between">
+          <h5 class="font-semibold text-lg">Spotlight Pass</h5>
+          <div class="text-right"><span class="text-2xl font-extrabold">$49</span></div>
+        </div>
+        <ul class="mt-3 space-y-2 text-sm text-white/80">
+          <li>Creator: 1 week homepage spotlight</li>
+          <li>Investor: boosted revenue share</li>
+          <li>Network: promo banner & DM intro</li>
+        </ul>
+        <button class="mt-4 w-full rounded-xl bg-white px-4 py-2 font-semibold text-[#0c0c12]"
+                data-mode="payment" data-price="price_SPOTLIGHT_ONETIME">Buy Now</button>
+      </article>
+
+      <!-- Campaign Pack -->
+      <article class="rounded-2xl border border-white/10 bg-white/5 p-5 ring-1 ring-white/10">
+        <div class="flex items-baseline justify-between">
+          <h5 class="font-semibold text-lg">Campaign Pack</h5>
+          <div class="text-right"><span class="text-2xl font-extrabold">$299</span></div>
+        </div>
+        <ul class="mt-3 space-y-2 text-sm text-white/80">
+          <li>Creator: 4 weeks of promo tools</li>
+          <li>Investor: priority allocation on drops</li>
+          <li>Network: featured playlist placement</li>
+        </ul>
+        <button class="mt-4 w-full rounded-xl bg-white px-4 py-2 font-semibold text-[#0c0c12]"
+                data-mode="payment" data-price="price_CAMPAIGN_ONETIME">Buy Now</button>
+      </article>
+    </div>
+
+    <p class="mt-4 text-xs text-white/60">* Rewards examples shown. Final benefits and pricing may vary by catalog item.</p>
+  </div>
+</section>
+
 
   <!-- Footer -->
   <footer class="border-t border-white/5 bg-black/40">
@@ -549,22 +650,25 @@ $('#miniNext').onclick = () => $('#btnNext').click()
       }
     }
 
-    function setupSubscribe() {
-      $('#subForm').addEventListener('submit', async () => {
-        const email = $('#subEmail').value.trim()
-        if (!email) return
-        $('#subBtn').disabled = true
-        $('#subMsg').textContent = 'Submitting…'
-        try {
-          await new Promise(r => setTimeout(r, 600))
-          $('#subMsg').textContent = 'Thanks! Check your inbox for a welcome email.'
-        } catch (e) {
-          $('#subMsg').textContent = 'Something went wrong. Please try again.'
-        } finally {
-          $('#subBtn').disabled = false
-        }
-      })
+function setupSubscribe() {
+  const form = $('#subForm');
+  if (!form) return; // section replaced with pricing; nothing to wire up
+  form.addEventListener('submit', async () => {
+    const email = $('#subEmail').value.trim();
+    if (!email) return;
+    $('#subBtn').disabled = true;
+    $('#subMsg').textContent = 'Submitting…';
+    try {
+      await new Promise(r => setTimeout(r, 600));
+      $('#subMsg').textContent = 'Thanks! Check your inbox for a welcome email.';
+    } catch (e) {
+      $('#subMsg').textContent = 'Something went wrong. Please try again.';
+    } finally {
+      $('#subBtn').disabled = false;
     }
+  });
+}
+
 
     function writeStructuredData() {
       const recordings = TRACKS.slice(0, 3).map(t => ({
