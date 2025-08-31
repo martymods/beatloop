@@ -28,7 +28,20 @@
     .glass { background: rgba(18, 18, 24, .55); backdrop-filter: blur(10px); }
     /* add glow used by buttons */
     .shadow-glow{box-shadow:0 0 0 2px rgba(124,58,237,.25),0 5px 25px rgba(124,58,237,.35)}
-  </style>
+
+  /* Piano roll modal */
+  .pr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:80;display:none}
+  .pr-card{position:relative;margin:4rem auto;max-width:min(1000px,92vw);max-height:82vh;overflow:auto;
+           background:#0f0f15;border:1px solid rgba(255,255,255,.08);border-radius:1rem;padding:1rem}
+  .pr-grid{display:grid;gap:2px;background:rgba(255,255,255,.06);padding:6px;border-radius:.75rem}
+  .pr-cell{height:22px;border-radius:.25rem;background:rgba(255,255,255,.06)}
+  .pr-cell.alt{background:rgba(255,255,255,.1)}
+  .pr-cell.on{background:rgba(124,58,237,.8);box-shadow:0 0 0 1px rgba(124,58,237,.5), 0 6px 18px rgba(124,58,237,.35)}
+  .pr-toolbar{display:flex;gap:.5rem;align-items:center;margin:.5rem 0}
+  .pr-toolbar .dial{max-width:120px}
+  .pr-badge{font-size:.7rem;color:#bbb;background:#1f1f28;border:1px solid #2b2b34;padding:.15rem .4rem;border-radius:.4rem}
+
+</style>
 
 <style>
   /* Beatloop Studio helpers */
@@ -56,23 +69,26 @@
 .arr-cell.playhead{ box-shadow: inset 0 0 12px rgba(255,255,255,.65), 0 0 12px rgba(255,255,255,.35) }
 
 
+
+  /* Piano roll modal */
+  .pr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:80;display:none}
+  .pr-card{position:relative;margin:4rem auto;max-width:min(1000px,92vw);max-height:82vh;overflow:auto;
+           background:#0f0f15;border:1px solid rgba(255,255,255,.08);border-radius:1rem;padding:1rem}
+  .pr-grid{display:grid;gap:2px;background:rgba(255,255,255,.06);padding:6px;border-radius:.75rem}
+  .pr-cell{height:22px;border-radius:.25rem;background:rgba(255,255,255,.06)}
+  .pr-cell.alt{background:rgba(255,255,255,.1)}
+  .pr-cell.on{background:rgba(124,58,237,.8);box-shadow:0 0 0 1px rgba(124,58,237,.5), 0 6px 18px rgba(124,58,237,.35)}
+  .pr-toolbar{display:flex;gap:.5rem;align-items:center;margin:.5rem 0}
+  .pr-toolbar .dial{max-width:120px}
+  .pr-badge{font-size:.7rem;color:#bbb;background:#1f1f28;border:1px solid #2b2b34;padding:.15rem .4rem;border-radius:.4rem}
+
+
+
   #blLoops{ -webkit-overflow-scrolling: touch; }
 
 </style>
 
 
-
-<style>
-  .pr-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:80;display:none}
-  .pr-card{position:relative;margin:4rem auto;max-width:min(1000px,92vw);max-height:82vh;overflow:auto;background:#0f0f15;border:1px solid rgba(255,255,255,.08);border-radius:1rem;padding:1rem}
-  .pr-grid{display:grid;gap:2px;background:rgba(255,255,255,.06);padding:6px;border-radius:.75rem}
-  .pr-cell{height:22px;border-radius:.25rem;background:rgba(255,255,255,.06)}
-  .pr-cell.alt{background:rgba(255,255,255,.1)}
-  .pr-cell.on{background:rgba(124,58,237,.8);box-shadow:0 0 0 1px rgba(124,58,237,.5),0 6px 18px rgba(124,58,237,.35)}
-  .pr-toolbar{display:flex;gap:.5rem;align-items:center;margin:.5rem 0}
-  .pr-toolbar .dial{max-width:120px}
-  .pr-badge{font-size:.7rem;color:#bbb;background:#1f1f28;border:1px solid #2b2b34;padding:.15rem .4rem;border-radius:.4rem}
-</style>
 </head>
 <body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
   <!-- Header -->
@@ -915,6 +931,34 @@
       loadMore()
     })
   </script>
+<!-- Piano Roll overlay -->
+<div id="prOverlay" class="pr-overlay">
+  <div class="pr-card">
+    <div class="flex items-center justify-between">
+      <h4 id="prTitle" class="font-semibold">Piano Roll</h4>
+      <div class="flex items-center gap-2">
+        <span class="pr-badge">Resolution</span>
+        <select id="prSubdiv" class="rounded bg-white/10 px-2 py-1 text-sm">
+          <option value="4" selected>1/4 step (64th)</option>
+          <option value="8">1/8 step (128th)</option>
+          <option value="16">1/16 step (256th)</option>
+        </select>
+        <button id="prClose" class="rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Close</button>
+      </div>
+    </div>
+
+    <div class="pr-toolbar">
+      <span class="pr-badge">Note</span>
+      <label class="dial"><b>Vol</b><input id="prVol" type="range" min="-10" max="10" step="1" value="0"></label>
+      <label class="dial"><b>Pan</b><input id="prPan" type="range" min="-10" max="10" step="1" value="0"></label>
+      <span class="text-xs text-white/60">Click cells to toggle; drag across to paint</span>
+    </div>
+
+    <div id="prGrid" class="pr-grid"></div>
+  </div>
+</div>
+
+
 
 <!-- Tone.js for WebAudio sequencing -->
 <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
@@ -978,69 +1022,75 @@ const LOOPS = {
   const kitSel    = document.getElementById('blKit');
   const loopsWrap = document.getElementById('blLoops');
   const saveBtn   = document.getElementById('blSaveWav');
-  // --- Piano Roll UI refs
-  const prOverlay = document.getElementById('prOverlay');
-  const prGridEl  = document.getElementById('prGrid');
-  const prClose   = document.getElementById('prClose');
-  const prTitle   = document.getElementById('prTitle');
-  const prSubdiv  = document.getElementById('prSubdiv');
-  const prVol     = document.getElementById('prVol');
-  const prPan     = document.getElementById('prPan');
-  // --- Piano Roll logic ---
-  let prRow = null; // which row we're editing
-  function openPianoRoll(row, label){
-    prRow = row;
-    if (prTitle) prTitle.textContent = `Piano Roll — ${label}`;
-    if (prSubdiv) prSubdiv.value = String(SUBDIV);
-    drawPianoRoll();
-    if (prOverlay) prOverlay.style.display = 'block';
-  }
-  function closePianoRoll(){ if (prOverlay) prOverlay.style.display = 'none'; prRow = null; }
-  if (prClose) prClose.addEventListener('click', closePianoRoll);
-  if (prSubdiv) prSubdiv.addEventListener('change', ()=>{
-    SUBDIV = +prSubdiv.value || 4;
-    drawPianoRoll();
-  });
+  
 
-  function drawPianoRoll(){
-    if (prRow == null || !prGridEl) return;
-    const cols = STEPS * SUBDIV;
-    prGridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(16px, 1fr))`;
-    prGridEl.style.gridTemplateRows    = `repeat(${PITCH_ROWS}, 22px)`;
-    prGridEl.innerHTML = '';
-    const roll = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow).notes;
+    // --- Piano Roll DOM refs & UI ---
+    const prOverlay = document.getElementById('prOverlay');
+    const prGridEl  = document.getElementById('prGrid');
+    const prClose   = document.getElementById('prClose');
+    const prTitle   = document.getElementById('prTitle');
+    const prSubdiv  = document.getElementById('prSubdiv');
+    const prVol     = document.getElementById('prVol');
+    const prPan     = document.getElementById('prPan');
+    let   prRow     = null;
 
-    for (let p = PITCH_ROWS-1; p >= 0; p--){
-      for (let i = 0; i < cols; i++){
-        const cell = document.createElement('div');
-        cell.className = 'pr-cell';
-        if (Math.floor(i / SUBDIV) % 2 === 1) cell.classList.add('alt');
-        if (roll[p][i]) cell.classList.add('on');
-        cell.dataset.p = p; cell.dataset.i = i;
+    function openPianoRoll(row, label){
+      prRow = row;
+      prTitle.textContent = `Piano Roll — ${label} (Pattern ${currentBank+1})`;
+      prSubdiv.value = String(SUBDIV);
+      drawPianoRoll();
+      if (prOverlay) prOverlay.style.display = 'block';
+    }
+    function closePianoRoll(){
+      if (prOverlay) prOverlay.style.display = 'none';
+      prRow = null;
+    }
+    if (prClose) prClose.addEventListener('click', closePianoRoll);
+    if (prSubdiv) prSubdiv.addEventListener('change', () => {
+      SUBDIV = +prSubdiv.value || 4;
+      // Re-init the current row grid (simple approach) to match new resolution
+      if (prRow != null) {
+        const cols = STEPS * SUBDIV;
+        const grid = Array.from({ length: PITCH_ROWS }, () => Array(cols).fill(null));
+        ensurePR(currentBank, prRow).notes = grid;
+      }
+      drawPianoRoll();
+    });
 
-        let painting = false;
-        cell.addEventListener('mousedown', (e)=>{
-          painting = true;
-          togglePR(p, i, e.ctrlKey || e.metaKey);
-        });
-        cell.addEventListener('mouseenter', (e)=>{
-          if (painting) togglePR(p, i, e.ctrlKey || e.metaKey);
-        });
-        cell.addEventListener('mouseup', ()=>{ painting = false; });
-
-        prGridEl.appendChild(cell);
+    function drawPianoRoll(){
+      if (prRow == null) return;
+      const cols = STEPS * SUBDIV;
+      prGridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(16px, 1fr))`;
+      prGridEl.style.gridTemplateRows    = `repeat(${PITCH_ROWS}, 22px)`;
+      prGridEl.innerHTML = '';
+      const roll = ensurePR(currentBank, prRow).notes;
+      for (let p = PITCH_ROWS-1; p >= 0; p--){
+        for (let i = 0; i < cols; i++){
+          const cell = document.createElement('div');
+          cell.className = 'pr-cell';
+          if (Math.floor(i / SUBDIV) % 2 === 1) cell.classList.add('alt');
+          if (roll[p][i]) cell.classList.add('on');
+          let painting = false;
+          cell.addEventListener('mousedown', (e)=>{ painting = true; togglePR(p, i, e.ctrlKey || e.metaKey); });
+          cell.addEventListener('mouseenter', (e)=>{ if (painting) togglePR(p, i, e.ctrlKey || e.metaKey); });
+          cell.addEventListener('mouseup', ()=> painting = false);
+          prGridEl.appendChild(cell);
+        }
       }
     }
-  }
-  function togglePR(p, i, erase){
-    const roll = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow).notes;
-    if (erase) roll[p][i] = null;
-    else roll[p][i] = { vol:+(prVol?.value||0), pan:+(prPan?.value||0) };
-    const idx = (PITCH_ROWS-1 - p) * (STEPS*SUBDIV) + i;
-    const cell = prGridEl?.children?.[idx];
-    if (cell) cell.classList.toggle('on', !!roll[p][i]);
-  }
-  const patternSel= document.getElementById('blPattern');
+    function togglePR(p, i, erase){
+      const roll = ensurePR(currentBank, prRow).notes;
+      if (erase) {
+        roll[p][i] = null;
+      } else {
+        roll[p][i] = { vol: +prVol.value || 0, pan: +prPan.value || 0 };
+      }
+      const idx = (PITCH_ROWS-1 - p) * (STEPS*SUBDIV) + i;
+      const cell = prGridEl.children[idx];
+      if (cell) cell.classList.toggle('on', !!roll[p][i]);
+    }
+
+const patternSel= document.getElementById('blPattern');
   const songToggle= document.getElementById('blSongToggle');
   const exportSongBtn = document.getElementById('blExportSong');
   const arrangerWrap  = document.getElementById('arrangerWrap');
@@ -1143,16 +1193,20 @@ let lastBar = -1;             // arranger playhead column
       // left label + one dial w/ V/P/T switch
       const lab = document.createElement('div');
       lab.className='flex items-center justify-between px-2 text-sm text-white/90 overflow-hidden';
-      lab.innerHTML =
-        `<span class="truncate mr-2 font-medium">${labels[r]} <button class="rounded bg-white/10 px-2 py-0.5 text-xs hover:bg-white/15" data-pr="${r}" title="Open Piano Roll">🎹</button></span>
-         <div class="flex items-center gap-2 shrink-0">
-           <div class="ctrl-switch" role="tablist" data-row="${r}">
-             <button type="button" class="on" data-kind="vol">V</button>
-             <button type="button" data-kind="pan">P</button>
-             <button type="button" data-kind="pit">T</button>
-           </div>
-           <label class="dial"><input class="dial-range" type="range" min="-10" max="10" step="1" value="0" data-row="${r}" data-kind="vol"></label>
-         </div>`;
+lab.innerHTML =
+  `<span class="truncate mr-2 font-medium flex items-center gap-2">
+     ${labels[r]}
+     <button class="rounded bg-white/10 px-2 py-0.5 text-xs hover:bg-white/15" data-pr="${r}" title="Open Piano Roll">🎹</button>
+   </span>
+   <div class="flex items-center gap-2 shrink-0">
+     <div class="ctrl-switch" role="tablist" data-row="${r}">
+       <button type="button" class="on" data-kind="vol">V</button>
+       <button type="button" data-kind="pan">P</button>
+       <button type="button" data-kind="pit">T</button>
+     </div>
+     <label class="dial"><input class="dial-range" type="range" min="-10" max="10" step="1" value="0" data-row="${r}" data-kind="vol"></label>
+   </div>`;
+
       const sw = lab.querySelector('.ctrl-switch');
       const dial = lab.querySelector('.dial-range');
       dial.value = getRowParamValue(r,'vol');
@@ -1166,8 +1220,6 @@ let lastBar = -1;             // arranger playhead column
         setRowParamValue(row, kind, val);
       });
       table.appendChild(lab);
-      const prBtn = lab.querySelector('button[data-pr]');
-      if (prBtn) prBtn.addEventListener('click', ()=> openPianoRoll(r, labels[r]));
 
       // steps (with 4-step striping)
 for (let c=0; c<STEPS; c++){
@@ -1346,57 +1398,7 @@ if (mode === 'song' && currentStep === 0) {
 }
 
       }
-      
-      // --- Piano roll micro-events (schedule within this 16th)
-      (function(){
-        try{
-          const stepDur  = Tone.Time('16n').toSeconds();
-          const microDur = stepDur / SUBDIV;
-          const stepBase = currentStep * SUBDIV;
-          for (let r = 0; r < (rowLabels?.length||0); r++){
-            const hasSongMute = (typeof songMute !== 'undefined') ? songMute : false;
-            if (typeof mode !== 'undefined' && mode === 'song' && hasSongMute) break;
-            const prEntry = (pianoRoll[(typeof currentBank!=='undefined'?currentBank:0)]||[])[r];
-            if (!prEntry) continue;
-            const rowPR = prEntry.notes;
-            const slice = prEntry.loopSlice || { start:0, end:1 };
-            for (let s = 0; s < SUBDIV; s++){
-              const microIndex = stepBase + s;
-              const when = (time||Tone.now()) + s * microDur;
-              for (let p = 0; p < PITCH_ROWS; p++){
-                const note = rowPR?.[p]?.[microIndex];
-                if (!note) continue;
-                const semi = (p - 8);
-                if (r < (typeof kitRowCount!=='undefined'?kitRowCount:0)){
-                  const pitchName = (typeof noteFromC3==='function') ? noteFromC3(semi + (pitches?.[r]||0)) : 'C3';
-                  try {
-                    if (volumes?.[r]) volumes[r].volume.value = (note.vol||0)*1.2;
-                    if (panners?.[r]) panners[r].pan.value    = (note.pan||0)/10;
-                    kitSamplers?.[r]?.triggerAttack?.(pitchName, when, 1);
-                  } catch {}
-                } else {
-                  const idxL = r - (typeof kitRowCount!=='undefined'?kitRowCount:0);
-                  const player = loopPlayers?.[idxL];
-                  if (!player || !player.buffer || !player.buffer.loaded) continue;
-                  try {
-                    if (player.state === 'started') player.stop(when);
-                    player.playbackRate = Math.pow(2, ((pitches?.[r]||0) + semi)/12);
-                    const dur = player.buffer.duration||1;
-                    const sliceStart = Math.min(slice.start||0, 0.99) * dur;
-                    const sliceEnd   = Math.max(slice.end||1, sliceStart+0.01) * dur;
-                    const playStart  = Math.min(sliceStart, sliceEnd-0.01);
-                    const playLen    = Math.min(microDur, Math.max(0.01, sliceEnd - sliceStart));
-                    player.start(when, playStart, playLen);
-                    if (volumes?.[r]) volumes[r].volume.value = (note.vol||0)*1.2;
-                    if (panners?.[r]) panners[r].pan.value    = (note.pan||0)/10;
-                  } catch {}
-                }
-              }
-            }
-          }
-        } catch {}
-      })();
-currentStep = (currentStep + 1) % STEPS;
+      currentStep = (currentStep + 1) % STEPS;
     }, '16n');
   }
 
@@ -1524,30 +1526,5 @@ stopBtn.addEventListener('click', () => {
 
 
 
-
-<!-- Piano Roll overlay -->
-<div id="prOverlay" class="pr-overlay">
-  <div class="pr-card">
-    <div class="flex items-center justify-between">
-      <h4 id="prTitle" class="font-semibold">Piano Roll</h4>
-      <div class="flex items-center gap-2">
-        <span class="pr-badge">Resolution</span>
-        <select id="prSubdiv" class="rounded bg-white/10 px-2 py-1 text-sm">
-          <option value="4" selected>1/4 step (64th)</option>
-          <option value="8">1/8 step (128th)</option>
-          <option value="16">1/16 step (256th)</option>
-        </select>
-        <button id="prClose" class="rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Close</button>
-      </div>
-    </div>
-    <div class="pr-toolbar">
-      <span class="pr-badge">Note</span>
-      <label class="dial"><b>Vol</b><input id="prVol" type="range" min="-10" max="10" step="1" value="0"></label>
-      <label class="dial"><b>Pan</b><input id="prPan" type="range" min="-10" max="10" step="1" value="0"></label>
-      <span class="text-xs text-white/60">Click cells to toggle; drag across to paint</span>
-    </div>
-    <div id="prGrid" class="pr-grid"></div>
-  </div>
-</div>
 </body>
 </html>
