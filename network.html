@@ -908,10 +908,10 @@
 const LOOPS = {
   library: [
     '/audio/loops/BEATS_LP_SOUN210156CSK.wav',
-    '/audio/loops/BEATS_LP_SOUNS018044CSK.wav',
-    '/audio/loops/BEATS LP SOUND10205GK.wav',
-    '/audio/loops/VOCALFIX_OS_SOUN125_5K.wav',
-    '/audio/loops/VOCALFIX_OS_SOUNS23_5K.wav'
+    '/audio/loops/BEATS_LP_SOUN508144GSK.wav',
+    '/audio/loops/BEATS_LP_SOUND4102GSK.wav',
+    '/audio/loops/VOCALFX_OS_SOUN125_SK.wav',
+    '/audio/loops/VOCALFX_OS_SOUN523_SK.wav'
   ],
 
 
@@ -985,7 +985,12 @@ const LOOPS = {
   // Helpers
   // ---------------------------------------------
   function filenameLabel(p){
-    return (p.split('/').pop()||'').replace(/\.[^/.]+$/,'');
+    return (p.split('/').pop()||'')
+  .replace(/\.[^/.]+$/,'')
+  .replace(/_/g,' ')
+  .replace(/\s+/g,' ')
+  .trim();
+
   }
   function noteFromC3(semi){
     const N = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
@@ -1120,15 +1125,29 @@ const LOOPS = {
       });
     }
 
-    // Build loop chains (Player -> Panner -> Volume -> Dest)
-    for (let j=0; j<loopFiles.length; j++){
-      const vol = new Tone.Volume(0).toDestination();
-      const pan = new Tone.Panner(0).connect(vol);
-      const p   = new Tone.Player({ url: encodeURI(loopFiles[j]), autostart: false, loop: false }).connect(pan);
-      loopPlayers[j] = p;
-      const row = kitRowCount + j;
-      volumes[row] = vol; panners[row] = pan; pitches[row] = 0;
-    }
+// Build loop chains (Player -> Panner -> Volume -> Dest) — wait until each buffer is loaded
+for (let j=0; j<loopFiles.length; j++){
+  await new Promise((resolve, reject) => {
+    const vol = new Tone.Volume(0).toDestination();
+    const pan = new Tone.Panner(0).connect(vol);
+    const p   = new Tone.Player({
+      url: encodeURI(loopFiles[j]),   // handle spaces safely
+      autostart: false,
+      loop: false,
+      fadeOut: 0.01,                  // click-free stop
+      onload: () => resolve(),        // only continue once the buffer is ready
+      onerror: (e) => reject(e)
+    }).connect(pan);
+
+    loopPlayers[j] = p;
+    const row = kitRowCount + j;
+    volumes[row] = vol; panners[row] = pan; pitches[row] = 0;
+  });
+}
+
+// Ensure all pending media is fully loaded before we can play
+await Tone.loaded();
+
 
     drawGrid(labels);
     paintPlayhead(0);
@@ -1180,14 +1199,18 @@ const LOOPS = {
           const note = noteFromC3(semi);
           kitSamplers[r]?.triggerAttack(note, time, 1);
         } else {
-          const idx = r - kitRowCount;
-          const player = loopPlayers[idx];
-          if (player){
-            player.playbackRate = rateFromSemi(pitches[r] || 0);
-            // restart cleanly if already playing (no pile-up)
-            if (player.state === 'started') player.stop(time);
-            player.start(time);
-          }
+const player = loopPlayers[idx];
+if (player && player.buffer && player.buffer.loaded) {
+  // If it’s currently playing, stop exactly at the scheduled time
+  if (player.state === 'started') {
+    try { player.stop(time); } catch {}
+  }
+  // Only touch playbackRate when the source is (or is about to be) running
+  player.playbackRate = rateFromSemi(pitches[r] || 0);
+  // Start exactly on this scheduled tick
+  player.start(time, 0);
+}
+
         }
       }
       currentStep = (currentStep + 1) % STEPS;
