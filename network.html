@@ -29,17 +29,24 @@
     /* add glow used by buttons */
     .shadow-glow{box-shadow:0 0 0 2px rgba(124,58,237,.25),0 5px 25px rgba(124,58,237,.35)}
   </style>
-  
-  <style>
+
+<style>
   /* Beatloop Studio helpers */
-  .step             { transition: background .08s, box-shadow .08s, transform .08s; }
-  .step.on          { background: rgba(124,58,237,.7)!important; box-shadow: 0 0 0 1px rgba(124,58,237,.5), 0 6px 18px rgba(124,58,237,.35); }
-  .step.playhead    { box-shadow: inset 0 0 12px rgba(255,255,255,.65), 0 0 12px rgba(255,255,255,.35); }
-  .dial { display:inline-flex; align-items:center; gap:.25rem; font-size:.7rem; color:#bbb }
-  .dial input[type=range]{ appearance:none; width:60px; height:6px; background:#2b2b34; border-radius:999px; outline:none }
-  .dial input[type=range]::-webkit-slider-thumb{ appearance:none; width:14px; height:14px; border-radius:50%; background:#fff; box-shadow:0 0 8px rgba(255,255,255,.4) }
-  .dial b{ color:#fff; font-weight:600; font-size:.7rem }
+  .step{transition:background .08s,box-shadow .08s,transform .08s}
+  .step.on{background:rgba(124,58,237,.7)!important;box-shadow:0 0 0 1px rgba(124,58,237,.5),0 6px 18px rgba(124,58,237,.35)}
+  .step.playhead{box-shadow:inset 0 0 12px rgba(255,255,255,.65),0 0 12px rgba(255,255,255,.35)}
+
+  /* single dial */
+  .dial{display:inline-flex;align-items:center;gap:.25rem;font-size:.7rem;color:#bbb;max-width:80px}
+  .dial input[type=range]{appearance:none;width:72px;height:6px;background:#2b2b34;border-radius:999px;outline:none}
+  .dial input[type=range]::-webkit-slider-thumb{appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,.4)}
+
+  /* tiny V/P/T switch */
+  .ctrl-switch{display:inline-flex;gap:2px;background:#1f1f28;border-radius:999px;padding:2px}
+  .ctrl-switch button{width:18px;height:18px;line-height:18px;border-radius:999px;font-size:.6rem;color:#bbb;background:transparent}
+  .ctrl-switch button.on{background:#7c3aed;color:#fff;box-shadow:0 0 8px rgba(124,58,237,.35)}
 </style>
+
 
 </head>
 <body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
@@ -939,6 +946,17 @@
     lastStep = step;
   }
 
+  function getRowParamValue(row, kind){
+    if (kind === 'vol') return Math.round(((volumes[row]?.volume.value ?? 0) / 1.2));
+    if (kind === 'pan') return Math.round(((panners[row]?.pan.value ?? 0) * 10));
+    return pitches[row] || 0; // 'pit'
+  }
+  function setRowParamValue(row, kind, val){
+    if (kind === 'vol' && volumes[row]) volumes[row].volume.value = val * 1.2; // -12..+12 dB
+    else if (kind === 'pan' && panners[row]) panners[row].pan.value = val / 10; // -1..+1
+    else if (kind === 'pit') pitches[row] = val; // semitones
+  }
+
   // Build grid (with per-row Volume, Pan, Pitch mini dials)
   function drawGrid(labels){
     gridWrap.innerHTML = '';
@@ -949,30 +967,51 @@
     table.style.gridTemplateColumns = `140px repeat(${STEPS}, minmax(24px, 1fr))`;
 
     for (let r=0; r<rows; r++){
-      // label + dials
+      // label + compact controls (V/P/T switch + ONE dial)
       const lab = document.createElement('div');
-      lab.className = 'flex items-center justify-between px-2 text-sm text-white/80';
+      lab.className = 'flex items-center justify-between px-2 text-sm text-white/80 overflow-hidden';
       lab.innerHTML =
-        `<span class="truncate">${labels[r]}</span>
-         <div class="flex items-center gap-2">
-           <label class="dial"><b>V</b><input type="range" min="-10" max="10" value="0" data-kind="vol" data-row="${r}"></label>
-           <label class="dial"><b>P</b><input type="range" min="-10" max="10" value="0" data-kind="pan" data-row="${r}"></label>
-           <label class="dial"><b>T</b><input type="range" min="-10" max="10" value="0" data-kind="pit" data-row="${r}"></label>
+        `<span class="truncate mr-2">${labels[r]}</span>
+         <div class="flex items-center gap-2 shrink-0">
+           <div class="ctrl-switch" role="tablist" data-row="${r}">
+             <button type="button" class="on"  data-kind="vol">V</button>
+             <button type="button"         data-kind="pan">P</button>
+             <button type="button"         data-kind="pit">T</button>
+           </div>
+           <label class="dial">
+             <input class="dial-range" type="range" min="-10" max="10" step="1" value="0" data-row="${r}" data-kind="vol">
+           </label>
          </div>`;
-      // wire dials
-      lab.querySelectorAll('input[type="range"]').forEach(inp => {
-        inp.addEventListener('input', e => {
-          const row = +e.target.dataset.row;
-          const val = +e.target.value;
-          const kind = e.target.dataset.kind;
-          if (kind === 'vol' && volumes[row])  volumes[row].volume.value = val * 1.2; // -12..+12 dB
-          if (kind === 'pan' && panners[row])  panners[row].pan.value    = val / 10;  // -1..+1
-          if (kind === 'pit')                  pitches[row]              = val;       // semitones
-        });
+
+      // wire the tiny switch
+      const sw = lab.querySelector('.ctrl-switch');
+      const dial = lab.querySelector('.dial-range');
+      // initialize dial to current VOL value
+      dial.value = getRowParamValue(r, 'vol');
+
+      sw.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-kind]');
+        if (!btn) return;
+        // highlight current
+        sw.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+        btn.classList.add('on');
+        // swap the meaning of the dial
+        const kind = btn.dataset.kind;
+        dial.dataset.kind = kind;
+        dial.value = getRowParamValue(r, kind);
       });
+
+      // dial changes the active parameter (vol/pan/pit)
+      dial.addEventListener('input', (e) => {
+        const row = +e.target.dataset.row;
+        const kind = e.target.dataset.kind || 'vol';
+        const val  = +e.target.value;
+        setRowParamValue(row, kind, val);
+      });
+
       table.appendChild(lab);
 
-      // steps
+      // steps (no overlap anymore)
       for (let c=0; c<STEPS; c++){
         const cell = document.createElement('button');
         cell.className = 'step h-10 rounded-md bg-white/10 hover:bg-white/15';
@@ -982,13 +1021,14 @@
           const rr = +e.currentTarget.dataset.r;
           const cc = +e.currentTarget.dataset.c;
           pattern[rr][cc] = !pattern[rr][cc];
-          e.currentTarget.classList.toggle('on', pattern[rr][cc]); // reflects next tick while playing
+          e.currentTarget.classList.toggle('on', pattern[rr][cc]); // takes effect next tick
         });
         table.appendChild(cell);
       }
     }
     gridWrap.appendChild(table);
   }
+
 
   // Load kit into Sampler chains (Sampler -> Panner -> Volume -> Destination)
   async function loadKit(key='trap'){
