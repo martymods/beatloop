@@ -1085,19 +1085,32 @@ let lastBar = -1;             // arranger playhead column
       table.appendChild(lab);
 
       // steps (with 4-step striping)
-      for (let c=0; c<STEPS; c++){
-        const cell = document.createElement('button');
-        cell.className = 'step h-10 rounded-md bg-white/10 hover:bg-white/15';
-        if (Math.floor(c/4)%2===1) cell.classList.add('alt');   // lighter group of 4
-        cell.dataset.r=r; cell.dataset.c=c;
-        if (pat?.[r]?.[c]) cell.classList.add('on');
-        cell.addEventListener('click', (e)=>{
-          const rr=+e.currentTarget.dataset.r, cc=+e.currentTarget.dataset.c;
-          pat[rr][cc] = !pat[rr][cc];
-          e.currentTarget.classList.toggle('on', pat[rr][cc]);
-        });
-        table.appendChild(cell);
-      }
+for (let c=0; c<STEPS; c++){
+  const cell = document.createElement('button');
+  cell.className = 'step h-10 rounded-md bg-white/10 hover:bg-white/15';
+  if (Math.floor(c/4)%2===1) cell.classList.add('alt');
+  cell.dataset.r = r; cell.dataset.c = c;
+
+  // draw from the CURRENT bank at paint time
+  const curPat = patterns[currentBank] || [];
+  if (curPat?.[r]?.[c]) cell.classList.add('on');
+
+  cell.addEventListener('click', (e) => {
+    const rr = +e.currentTarget.dataset.r;
+    const cc = +e.currentTarget.dataset.c;
+
+    // always re-fetch the active bank and ensure row/col exists
+    const p = patterns[currentBank] || (patterns[currentBank] = []);
+    if (!Array.isArray(p[rr])) p[rr] = Array(STEPS).fill(false);
+    if (typeof p[rr][cc] !== 'boolean') p[rr][cc] = false;
+
+    p[rr][cc] = !p[rr][cc];
+    e.currentTarget.classList.toggle('on', p[rr][cc]);
+  });
+
+  table.appendChild(cell);
+}
+
     }
     gridWrap.appendChild(table);
   }
@@ -1237,15 +1250,16 @@ if (mode === 'song' && currentStep === 0) {
         if (r < kitRowCount){
           const note = noteFromC3(pitches[r] || 0);
           kitSamplers[r]?.triggerAttack(note, time, 1);
-        } else {
-          const idx = r - kitRowCount;              // loop row index
-          const player = loopPlayers[idx];
-          if (player && player.buffer && player.buffer.loaded) {
-            if (player.state === 'started') { try { player.stop(time); } catch {} }
-            player.playbackRate = rateFromSemi(pitches[r] || 0);
-            player.start(time, 0);                  // schedule using the passed-in time
-          }
-        }
+} else {
+  const idx = r - kitRowCount;                      // loop row index
+  if (idx < 0 || idx >= loopPlayers.length) continue; // out of bounds → skip
+  const player = loopPlayers[idx];
+  if (!player || !player.buffer || !player.buffer.loaded) continue; // not ready
+  if (player.state === 'started') { try { player.stop(time); } catch {} }
+  player.playbackRate = rateFromSemi(pitches[r] || 0);
+  player.start(time, 0);                              // use passed-in time
+}
+
       }
       currentStep = (currentStep + 1) % STEPS;
     }, '16n');
