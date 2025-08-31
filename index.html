@@ -699,6 +699,35 @@ function setupSubscribe() {
       return null
     }
 
+// --- Stripe Payment Link wiring ---
+function setupPricing() {
+  const LINKS = {
+    // one-time
+    price_CAMPAIGN_ONETIME:  'https://buy.stripe.com/28E14n3Up7HDdNl3QpabK06', // Campaign Pack – $299
+    price_SPOTLIGHT_ONETIME: 'https://buy.stripe.com/5kQ14n1Mhge98t1biRabK07', // Spotlight Pass – $49
+    price_MICRO_ONETIME:     'https://buy.stripe.com/bJe3cvduZ2nj5gP5YxabK08', // Micro Buy-In – $4.99
+
+    // subscriptions
+    price_LEGEND_DAILY:      'https://buy.stripe.com/cNi3cvduZbXTcJh1IhabK09', // Legend (Daily) – $500/day
+    price_PRO_MONTHLY:       'https://buy.stripe.com/9B65kDfD7d1X7oX0EdabK0a', // Pro – $99/mo
+    price_STARTER_MONTHLY:   'https://buy.stripe.com/3cI14nfD7d1XdNl72BabK0b', // Starter – $9/mo
+  };
+
+  document.querySelectorAll('[data-price]').forEach(btn => {
+    const key = btn.getAttribute('data-price');
+    const url = LINKS[key];
+    if (!url) {
+      btn.disabled = true;
+      btn.title = 'Coming soon';
+      return;
+    }
+    btn.addEventListener('click', () => {
+      // open in a new tab; use '_self' if you prefer a hard redirect
+      window.open(url, '_blank', 'noopener');
+    });
+  });
+}
+    
     // ---------- Init
     window.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('year').textContent = new Date().getFullYear()
@@ -707,6 +736,7 @@ function setupSubscribe() {
       setupControls()
       setupFreestyleRecorder()
       setupSubscribe()
+      setupPricing()   
       writeStructuredData()
       await discoverApiBase()
     })
