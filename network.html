@@ -29,6 +29,18 @@
     /* add glow used by buttons */
     .shadow-glow{box-shadow:0 0 0 2px rgba(124,58,237,.25),0 5px 25px rgba(124,58,237,.35)}
   </style>
+  
+  <style>
+  /* Beatloop Studio helpers */
+  .step             { transition: background .08s, box-shadow .08s, transform .08s; }
+  .step.on          { background: rgba(124,58,237,.7)!important; box-shadow: 0 0 0 1px rgba(124,58,237,.5), 0 6px 18px rgba(124,58,237,.35); }
+  .step.playhead    { box-shadow: inset 0 0 12px rgba(255,255,255,.65), 0 0 12px rgba(255,255,255,.35); }
+  .dial { display:inline-flex; align-items:center; gap:.25rem; font-size:.7rem; color:#bbb }
+  .dial input[type=range]{ appearance:none; width:60px; height:6px; background:#2b2b34; border-radius:999px; outline:none }
+  .dial input[type=range]::-webkit-slider-thumb{ appearance:none; width:14px; height:14px; border-radius:50%; background:#fff; box-shadow:0 0 8px rgba(255,255,255,.4) }
+  .dial b{ color:#fff; font-weight:600; font-size:.7rem }
+</style>
+
 </head>
 <body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
   <!-- Header -->
@@ -846,184 +858,224 @@
     })
   </script>
 
-  <!-- Tone.js for WebAudio sequencing -->
-  <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
-  <script>
-  (() => {
-    // --- assets (swap with your own samples if you want) ---
-    const KITS = {
-      trap: {
-    names: ['Kick','Snare','ClosedHat','OpenHat','Clap'],
-    files: [
-      '/audio/kits/trap/kick.wav',
-      '/audio/kits/trap/snare.wav',
-      '/audio/kits/trap/hat.wav',
-      '/audio/kits/trap/oh.wav',
-      '/audio/kits/trap/clap.wav'   // ← add file and drop it in that folder
-    ]
-      },
-      boom: {
-        names: ['Kick','Snare','Hat','Perc'],
-        files: [
-          '/audio/kits/boom/kick.wav',
-          '/audio/kits/boom/snare.wav',
-          '/audio/kits/boom/hat.wav',
-          '/audio/kits/boom/perc.wav'
-        ]
+<!-- Tone.js for WebAudio sequencing -->
+<script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
+<script>
+(() => {
+  // --- assets (swap/extend as you like) ---
+  const KITS = {
+    trap: {
+      names: ['Kick','Snare','ClosedHat','OpenHat','Clap'],
+      files: [
+        '/audio/kits/trap/kick.wav',
+        '/audio/kits/trap/snare.wav',
+        '/audio/kits/trap/hat.wav',
+        '/audio/kits/trap/oh.wav',
+        '/audio/kits/trap/clap.wav'
+      ]
+    },
+    boom: {
+      names: ['Kick','Snare','Hat','Perc'],
+      files: [
+        '/audio/kits/boom/kick.wav',
+        '/audio/kits/boom/snare.wav',
+        '/audio/kits/boom/hat.wav',
+        '/audio/kits/boom/perc.wav'
+      ]
+    }
+  };
+
+  // --- UI refs ---
+  const openBtn   = document.getElementById('beatloopBtn');
+  const studio    = document.getElementById('beatloopStudio');
+  const closeBtn  = document.getElementById('blClose');
+  const gridWrap  = document.getElementById('blGrid');
+  const bpmRange  = document.getElementById('blBpm');
+  const bpmVal    = document.getElementById('blBpmVal');
+  const playBtn   = document.getElementById('blPlay');
+  const stopBtn   = document.getElementById('blStop');
+  const clearBtn  = document.getElementById('blClear');
+  const kitSel    = document.getElementById('blKit');
+  const saveBtn   = document.getElementById('blSaveWav');
+
+  function showStudio(){ studio.classList.remove('hidden'); }
+  function hideStudio(){ studio.classList.add('hidden'); }
+  openBtn?.addEventListener('click', async () => {
+    showStudio();
+    await Tone.start();              // unlock audio from a real click
+    await loadKit(kitSel.value);     // lazy-load kit after unlock
+  });
+  closeBtn?.addEventListener('click', hideStudio);
+
+  // --- Sequencer state ---
+  const STEPS = 16;
+  let rows = 4;
+  let pattern = Array.from({length: rows}, () => Array(STEPS).fill(false));
+
+  let samplers = [];
+  let volumes  = [];  // Tone.Volume (dB)
+  let panners  = [];  // Tone.Panner (-1..1)
+  let pitches  = [];  // semitone offsets (-10..+10)
+
+  // transport/loop + recorder
+  let loop = null, currentStep = 0, lastStep = -1;
+  let recorder = null;
+
+  bpmRange.addEventListener('input', () => {
+    bpmVal.textContent = bpmRange.value;
+    Tone.Transport.bpm.value = +bpmRange.value; // live tempo change
+  });
+
+  // --- helpers ---
+  function noteFromC3(semi){
+    const N = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    let idx = ((semi % 12) + 12) % 12;
+    let oct = 3 + Math.floor(semi/12);
+    return N[idx] + oct; // e.g., "D#4"
+  }
+  function paintPlayhead(step){
+    if (lastStep >= 0) gridWrap.querySelectorAll(`[data-c="${lastStep}"]`).forEach(el => el.classList.remove('playhead'));
+    gridWrap.querySelectorAll(`[data-c="${step}"]`).forEach(el => el.classList.add('playhead'));
+    lastStep = step;
+  }
+
+  // Build grid (with per-row Volume, Pan, Pitch mini dials)
+  function drawGrid(labels){
+    gridWrap.innerHTML = '';
+    const table = document.createElement('div');
+    table.className = 'grid gap-2';
+    table.style.position = 'relative';
+    table.style.gridTemplateRows = `repeat(${rows}, 40px)`;
+    table.style.gridTemplateColumns = `140px repeat(${STEPS}, minmax(24px, 1fr))`;
+
+    for (let r=0; r<rows; r++){
+      // label + dials
+      const lab = document.createElement('div');
+      lab.className = 'flex items-center justify-between px-2 text-sm text-white/80';
+      lab.innerHTML =
+        `<span class="truncate">${labels[r]}</span>
+         <div class="flex items-center gap-2">
+           <label class="dial"><b>V</b><input type="range" min="-10" max="10" value="0" data-kind="vol" data-row="${r}"></label>
+           <label class="dial"><b>P</b><input type="range" min="-10" max="10" value="0" data-kind="pan" data-row="${r}"></label>
+           <label class="dial"><b>T</b><input type="range" min="-10" max="10" value="0" data-kind="pit" data-row="${r}"></label>
+         </div>`;
+      // wire dials
+      lab.querySelectorAll('input[type="range"]').forEach(inp => {
+        inp.addEventListener('input', e => {
+          const row = +e.target.dataset.row;
+          const val = +e.target.value;
+          const kind = e.target.dataset.kind;
+          if (kind === 'vol' && volumes[row])  volumes[row].volume.value = val * 1.2; // -12..+12 dB
+          if (kind === 'pan' && panners[row])  panners[row].pan.value    = val / 10;  // -1..+1
+          if (kind === 'pit')                  pitches[row]              = val;       // semitones
+        });
+      });
+      table.appendChild(lab);
+
+      // steps
+      for (let c=0; c<STEPS; c++){
+        const cell = document.createElement('button');
+        cell.className = 'step h-10 rounded-md bg-white/10 hover:bg-white/15';
+        cell.dataset.r = r; cell.dataset.c = c;
+        if (pattern[r][c]) cell.classList.add('on');
+        cell.addEventListener('click', e => {
+          const rr = +e.currentTarget.dataset.r;
+          const cc = +e.currentTarget.dataset.c;
+          pattern[rr][cc] = !pattern[rr][cc];
+          e.currentTarget.classList.toggle('on', pattern[rr][cc]); // reflects next tick while playing
+        });
+        table.appendChild(cell);
       }
-    };
+    }
+    gridWrap.appendChild(table);
+  }
 
-    // --- UI refs ---
-    const openBtn   = document.getElementById('beatloopBtn');
-    const studio    = document.getElementById('beatloopStudio');
-    const closeBtn  = document.getElementById('blClose');
-    const gridWrap  = document.getElementById('blGrid');
-    const bpmRange  = document.getElementById('blBpm');
-    const bpmVal    = document.getElementById('blBpmVal');
-    const playBtn   = document.getElementById('blPlay');
-    const stopBtn   = document.getElementById('blStop');
-    const clearBtn  = document.getElementById('blClear');
-    const kitSel    = document.getElementById('blKit');
-    const saveBtn   = document.getElementById('blSaveWav');
+  // Load kit into Sampler chains (Sampler -> Panner -> Volume -> Destination)
+  async function loadKit(key='trap'){
+    const kit = KITS[key];
+    rows = kit.names.length;
+    pattern = Array.from({length: rows}, () => Array(STEPS).fill(false));
+    pitches = Array.from({length: rows}, () => 0);
+    drawGrid(kit.names);
 
-    // --- Sequencer state ---
-    const STEPS = 16;
-    let rows = 4;
-    let pattern = Array.from({length: rows}, () => Array(STEPS).fill(false));
-    let samplers = [];
-    let recorder = null;
+    await Tone.start();
+    // clean up old graph
+    samplers.forEach(s => s.dispose());
+    volumes.forEach(v => v.dispose && v.dispose());
+    panners.forEach(p => p.dispose && p.dispose());
+    samplers = []; volumes = []; panners = [];
 
-    function showStudio() { studio.classList.remove('hidden'); }
-    function hideStudio() { studio.classList.add('hidden'); }
+    // build chains
+    for (let i=0; i<kit.files.length; i++){
+      await new Promise(resolve => {
+        const vol = new Tone.Volume(0).toDestination();     // per-row volume (dB)
+        const pan = new Tone.Panner(0).connect(vol);        // per-row pan   (-1..1)
+        const s   = new Tone.Sampler({ C3: kit.files[i] },  // single-zone, retunes by pitch
+                     () => resolve()).connect(pan);
+        samplers[i] = s; volumes[i] = vol; panners[i] = pan;
+      });
+    }
+    paintPlayhead(0); // reset glow
+  }
 
-    openBtn?.addEventListener('click', async () => {
-  showStudio();
-  await Tone.start();            // unlock AudioContext from a real click
-  await loadKit(kitSel.value);   // load the selected kit now
-});
-
-    closeBtn?.addEventListener('click', hideStudio);
-
-    bpmRange.addEventListener('input', () => {
-      bpmVal.textContent = bpmRange.value;
-      Tone.Transport.bpm.value = +bpmRange.value;
-    });
-
-    // Build grid
-    function drawGrid(labels) {
-      gridWrap.innerHTML = '';
-      const table = document.createElement('div');
-      table.className = 'grid gap-2';
-      table.style.gridTemplateRows = `repeat(${rows}, 40px)`;
-      table.style.gridTemplateColumns = `140px repeat(${STEPS}, minmax(24px, 1fr))`;
-
-      for (let r = 0; r < rows; r++) {
-        // row label
-        const lab = document.createElement('div');
-        lab.textContent = labels[r];
-        lab.className = 'flex items-center px-2 text-sm text-white/80';
-        table.appendChild(lab);
-
-        for (let c = 0; c < STEPS; c++) {
-          const cell = document.createElement('button');
-          cell.className = 'h-10 rounded-md bg-white/10 hover:bg-white/15';
-          cell.dataset.r = r; cell.dataset.c = c;
-          if (pattern[r][c]) cell.classList.add('!bg-primary/70', 'shadow-glow');
-          cell.addEventListener('click', e => {
-            const rr = +e.currentTarget.dataset.r;
-            const cc = +e.currentTarget.dataset.c;
-            pattern[rr][cc] = !pattern[rr][cc];
-            e.currentTarget.classList.toggle('!bg-primary/70', pattern[rr][cc]);
-            e.currentTarget.classList.toggle('shadow-glow', pattern[rr][cc]);
-          });
-          table.appendChild(cell);
+  // Repeating loop that reads the pattern live (no rebuild needed)
+  function ensureLoop(){
+    if (loop) return;
+    loop = new Tone.Loop((time) => {
+      paintPlayhead(currentStep); // playhead glow
+      for (let r=0; r<rows; r++){
+        if (pattern[r][currentStep]){
+          const note = noteFromC3(pitches[r] || 0);
+          samplers[r] && samplers[r].triggerAttack(note, time, 1);
         }
       }
-      gridWrap.appendChild(table);
+      currentStep = (currentStep + 1) % STEPS;
+    }, '16n');
+  }
+
+  // Controls
+  playBtn.addEventListener('click', async () => {
+    await Tone.start();
+    ensureLoop();
+    if (!recorder) recorder = new Tone.Recorder();
+    Tone.Destination.connect(recorder);
+    Tone.Transport.bpm.value = +bpmRange.value;
+    loop.start(0);
+    if (Tone.Transport.state !== 'started') {
+      recorder.start();
+      Tone.Transport.start('+0.03');
     }
+  });
 
-    // Load kit into Tone.Sampler[]
-    async function loadKit(key='trap') {
-      const kit = KITS[key];
-      rows = kit.names.length;
-      pattern = Array.from({length: rows}, () => Array(STEPS).fill(false));
-      drawGrid(kit.names);
+  stopBtn.addEventListener('click', () => {
+    if (loop) loop.stop();
+    Tone.Transport.stop();
+    currentStep = 0;
+    paintPlayhead(0);
+  });
 
-      await Tone.start(); // user gesture already happened
-      if (samplers.length) samplers.forEach(s => s.dispose());
-      samplers = await Promise.all(
-        kit.files.map(file => new Promise(resolve => {
-          const s = new Tone.Sampler({ C3: file }, () => resolve(s)).toDestination();
-        }))
-      );
-    }
+  clearBtn.addEventListener('click', () => {
+    pattern.forEach(row => row.fill(false));
+    drawGrid(KITS[kitSel.value].names);
+  });
 
-    // Schedule playback
-    let part = null;
-    function rebuildPart() {
-      if (part) { part.dispose(); part = null; }
-      const events = [];
-      for (let step=0; step<STEPS; step++) {
-        for (let r=0; r<rows; r++) {
-          if (pattern[r][step]) {
-            events.push({ time: `0:${Math.floor(step/4)}:${step%4}`, row: r });
-          }
-        }
-      }
-      part = new Tone.Part((time, ev) => {
-        const s = samplers[ev.row];
-        s && s.triggerAttack('C3', time, 1);
-      }, events).start(0);
-      Tone.Transport.loop = true;
-      Tone.Transport.loopStart = 0;
-      Tone.Transport.loopEnd = '1:0:0'; // 1 measure at 4/4 with 16th notes → 16 steps
-    }
+  kitSel.addEventListener('change', async () => {
+    await loadKit(kitSel.value);
+  });
 
-    // Controls
-    playBtn.addEventListener('click', async () => {
-      await Tone.start();
-      rebuildPart();
-      if (!recorder) recorder = new Tone.Recorder();
-      Tone.Destination.connect(recorder);
-      if (!Tone.Transport.state || Tone.Transport.state !== 'started') {
-        recorder.start();
-        Tone.Transport.bpm.value = +bpmRange.value;
-        Tone.Transport.start('+0.05');
-      }
-    });
+  // Export WAV
+  saveBtn.addEventListener('click', async () => {
+    if (!recorder) return;
+    const blob = await recorder.stop();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `beatloop_${Date.now()}.wav`;
+    document.body.appendChild(a); a.click(); a.remove();
+    alert('WAV exported. You can upload it via the Upload Track button.');
+  });
 
-    stopBtn.addEventListener('click', async () => {
-      Tone.Transport.stop();
-    });
+})();
+</script>
 
-    clearBtn.addEventListener('click', () => {
-      pattern.forEach(row => row.fill(false));
-      drawGrid(KITS[kitSel.value].names);
-    });
-
-    kitSel.addEventListener('change', async () => {
-      await loadKit(kitSel.value);
-    });
-
-    // Export WAV
-    saveBtn.addEventListener('click', async () => {
-      if (!recorder) return;
-      const blob = await recorder.stop();
-      const url = URL.createObjectURL(blob);
-
-      // Download
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `beatloop_${Date.now()}.wav`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-
-      alert('WAV exported. You can upload it via the Upload Track button.');
-    });
-
-
-  })();
-  </script>
 </body>
 </html>
