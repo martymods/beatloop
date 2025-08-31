@@ -853,13 +853,14 @@
     // --- assets (swap with your own samples if you want) ---
     const KITS = {
       trap: {
-        names: ['Kick','Snare','ClosedHat','OpenHat'],
-        files: [
-          '/audio/kits/trap/kick.wav',
-          '/audio/kits/trap/snare.wav',
-          '/audio/kits/trap/hat.wav',
-          '/audio/kits/trap/oh.wav'
-        ]
+    names: ['Kick','Snare','ClosedHat','OpenHat','Clap'],
+    files: [
+      '/audio/kits/trap/kick.wav',
+      '/audio/kits/trap/snare.wav',
+      '/audio/kits/trap/hat.wav',
+      '/audio/kits/trap/oh.wav',
+      '/audio/kits/trap/clap.wav'   // ← add file and drop it in that folder
+    ]
       },
       boom: {
         names: ['Kick','Snare','Hat','Perc'],
@@ -895,7 +896,12 @@
     function showStudio() { studio.classList.remove('hidden'); }
     function hideStudio() { studio.classList.add('hidden'); }
 
-    openBtn?.addEventListener('click', showStudio);
+    openBtn?.addEventListener('click', async () => {
+  showStudio();
+  await Tone.start();            // unlock AudioContext from a real click
+  await loadKit(kitSel.value);   // load the selected kit now
+});
+
     closeBtn?.addEventListener('click', hideStudio);
 
     bpmRange.addEventListener('input', () => {
@@ -947,7 +953,7 @@
       if (samplers.length) samplers.forEach(s => s.dispose());
       samplers = await Promise.all(
         kit.files.map(file => new Promise(resolve => {
-          const s = new Tone.Sampler({ urls: { C3: file }}, () => resolve(s)).toDestination();
+          const s = new Tone.Sampler({ C3: file }, () => resolve(s)).toDestination();
         }))
       );
     }
@@ -1016,8 +1022,7 @@
       alert('WAV exported. You can upload it via the Upload Track button.');
     });
 
-    // Init
-    loadKit('trap');
+
   })();
   </script>
 </body>
