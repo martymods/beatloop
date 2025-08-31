@@ -53,6 +53,7 @@
 .arr-cell{ height:40px; border-radius:.5rem; background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; font-weight:600; color:#bbb }
 .arr-cell.alt{ background:rgba(255,255,255,.1) }
 .arr-cell.on{ background:rgba(124,58,237,.7); color:#fff; box-shadow:0 0 0 1px rgba(124,58,237,.5), 0 6px 18px rgba(124,58,237,.35) }
+.arr-cell.playhead{ box-shadow: inset 0 0 12px rgba(255,255,255,.65), 0 0 12px rgba(255,255,255,.35) }
 
 
   #blLoops{ -webkit-overflow-scrolling: touch; }
@@ -992,6 +993,9 @@
   let loop = null, currentStep = 0, lastStep = -1, recorder = null;
   let mode = 'pattern';     // 'pattern' | 'song'
   let songIdx = 0;          // which bar in arrangement we’re on
+let userBankBeforeSong = 0;   // remember the bank before entering Song Mode
+let songMute = false;         // true when the current bar is empty (–)
+let lastBar = -1;             // arranger playhead column
 
   // ---------- Helpers ----------
   const filenameLabel = (p) => (p.split('/').pop()||'')
@@ -1007,6 +1011,19 @@
     gridWrap.querySelectorAll(`[data-c="${step}"]`).forEach(el=>el.classList.add('playhead'));
     lastStep = step;
   }
+  function paintArrangerPlayhead(i){
+  if (!arrGrid) return;
+  if (lastBar >= 0) {
+    const prev = arrGrid.querySelector(`.arr-cell[data-i="${lastBar}"]`);
+    prev && prev.classList.remove('playhead');
+  }
+  if (i >= 0) {
+    const cur = arrGrid.querySelector(`.arr-cell[data-i="${i}"]`);
+    cur && cur.classList.add('playhead');
+  }
+  lastBar = i;
+}
+
   function ensurePatternForBank(bank, rows){
     const old = patterns[bank] || [];
     patterns[bank] = Array.from({length: rows}, (_,r)=> old[r]?.slice(0,STEPS) || Array(STEPS).fill(false));
@@ -1194,17 +1211,28 @@
     if (loop) return;
     loop = new Tone.Loop((time) => {
       // On bar boundary in Song Mode, switch to next pattern bank
-      if(mode==='song' && currentStep===0){
-        const next = arrangement[songIdx];
-        if(next>=0){ currentBank = next; if (patternSel) patternSel.value = String(next+1); drawGrid(rowLabels); }
-        songIdx = (songIdx+1) % arrangement.length;
-      }
+if (mode === 'song' && currentStep === 0) {
+  // show white bar on the Song grid at the bar we’re entering
+  paintArrangerPlayhead(songIdx);
+
+  const next = arrangement[songIdx];
+  songMute = (next < 0); // empty bar → silence this bar
+  if (next >= 0) {
+    currentBank = next;
+    if (patternSel) patternSel.value = String(next + 1);
+    drawGrid(rowLabels);
+  }
+  songIdx = (songIdx + 1) % arrangement.length;
+}
+
 
       paintPlayhead(currentStep);
       const rows = rowLabels.length;
       const pat = activePattern();
 
       for (let r=0; r<rows; r++){
+          if (mode === 'song' && songMute) break; // empty bar: nothing triggers this step
+
         if (!pat?.[r]?.[currentStep]) continue;
         if (r < kitRowCount){
           const note = noteFromC3(pitches[r] || 0);
@@ -1234,10 +1262,27 @@
     drawGrid(rowLabels);
   });
 
-  songToggle?.addEventListener('click', ()=>{
-    arrangerWrap.classList.toggle('hidden');
+songToggle?.addEventListener('click', ()=>{
+  const wasHidden = arrangerWrap.classList.contains('hidden');
+  arrangerWrap.classList.toggle('hidden');
+
+  if (wasHidden) {
+    // entering Song UI
     drawArranger();
-  });
+  } else {
+    // leaving Song UI -> go back to Pattern mode view
+    mode = 'pattern';
+    paintArrangerPlayhead(-1);
+    // restore bank to what the user has selected in the dropdown
+    if (patternSel) {
+      currentBank = Math.max(0, Math.min(MAX_BANKS-1, (+patternSel.value||1)-1));
+    } else {
+      currentBank = userBankBeforeSong;
+    }
+    drawGrid(rowLabels);
+  }
+});
+
 
   exportSongBtn?.addEventListener('click', async ()=>{
     if(!hasArrangement()){ alert('Add at least one bar in Song Mode first.'); return; }
@@ -1262,22 +1307,47 @@
     }, totalMs);
   });
 
-  playBtn.addEventListener('click', async () => {
-    await Tone.start();
-    ensureLoop();
-    mode = (!arrangerWrap.classList.contains('hidden') && hasArrangement()) ? 'song' : 'pattern';
-    if(mode==='song'){ currentStep=0; songIdx=0; }
-    if(!recorder) recorder = new Tone.Recorder(); Tone.Destination.connect(recorder);
-    Tone.Transport.bpm.value = +bpmRange.value;
-    loop.start(0);
-    if (Tone.Transport.state !== 'started') { recorder.start(); Tone.Transport.start('+0.03'); }
-  });
+playBtn.addEventListener('click', async () => {
+  await Tone.start();
+  ensureLoop();
 
-  stopBtn.addEventListener('click', () => {
-    if (loop) loop.stop();
-    Tone.Transport.stop();
-    mode='pattern'; currentStep = 0; songIdx=0; paintPlayhead(0);
-  });
+  // decide playback mode
+  const inSongUI = !arrangerWrap.classList.contains('hidden') && hasArrangement();
+  mode = inSongUI ? 'song' : 'pattern';
+
+  if (mode === 'song') {
+    userBankBeforeSong = currentBank; // remember the pattern you were on
+    currentStep = 0;
+    songIdx = 0;
+    paintArrangerPlayhead(0);         // show playhead on the Song grid
+  } else {
+    paintArrangerPlayhead(-1);        // hide Song playhead in pattern mode
+  }
+
+  if (!recorder) recorder = new Tone.Recorder();
+  Tone.Destination.connect(recorder);
+
+  Tone.Transport.bpm.value = +bpmRange.value;
+  loop.start(0);
+
+  if (Tone.Transport.state !== 'started') {
+    recorder.start();
+    Tone.Transport.start('+0.03');
+  }
+});
+
+
+stopBtn.addEventListener('click', () => {
+  if (loop) loop.stop();
+  Tone.Transport.stop();
+  mode = 'pattern';
+  songMute = false;
+  currentStep = 0;
+  songIdx = 0;
+  paintPlayhead(0);
+  paintArrangerPlayhead(-1);
+});
+
 
   clearBtn.addEventListener('click', () => {
     const pat = activePattern(); pat.forEach(row => row.fill(false));
