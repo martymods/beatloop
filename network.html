@@ -1109,27 +1109,57 @@ prGridEl.appendChild(cell);
     }
       prEnsurePlayline();
 }
-  function togglePR(p, i, erase){ _ensurePRRefs(); const roll = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow).notes;
-    if (erase) setPR(p,i,false); else setPR(p,i,true);
+  // --- Robust setter for Piano Roll cells that updates the main grid preview ---
   function setPR(p, i, on){
-    _ensurePRRefs();
-    const pr = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow);
-    const roll = pr.notes;
-    if (on) {
-      roll[p][i] = { vol:+(prVol?.value||0), pan:+(prPan?.value||0) };
-    } else {
-      roll[p][i] = null;
+    try { if (typeof _ensurePRRefs === 'function') _ensurePRRefs(); } catch(e) {}
+    const bank = (typeof currentBank!=='undefined' ? currentBank : 0);
+    const entry = ensurePR(bank, prRow);
+    const roll = entry.notes;
+    const wasOn = !!roll[p][i];
+
+    // Apply (store vol/pan if turning on)
+    roll[p][i] = on ? { vol: +(typeof prVol!=='undefined' && prVol ? prVol.value : 0),
+                        pan: +(typeof prPan!=='undefined' && prPan ? prPan.value : 0) } : null;
+
+    // Update just this PR cell visually (if PR grid mounted)
+    try {
+      const idxCell = (PITCH_ROWS-1 - p) * (STEPS*SUBDIV) + i;
+      const cell = (typeof prGridEl!=='undefined' && prGridEl && prGridEl.children) ? prGridEl.children[idxCell] : null;
+      if (cell) cell.classList.toggle('on', !!roll[p][i]);
+    } catch(e){}
+
+    // Determine row state transition empty <-> non-empty
+    let hadAnyBefore = wasOn;
+    if (!hadAnyBefore) {
+      outer: for (let pp=0; pp<PITCH_ROWS; pp++){
+        for (let ii=0; ii<STEPS*SUBDIV; ii++){
+          if (pp===p && ii===i) continue;
+          if (roll[pp][ii]) { hadAnyBefore = true; break outer; }
+        }
+      }
     }
-    const idx = (PITCH_ROWS-1 - p) * (STEPS*SUBDIV) + i;
-    const cell = prGridEl?.children?.[idx];
-    if (cell) cell.classList.toggle('on', !!roll[p][i]);
+    let hasAnyNow = false;
+    outer2: for (let pp=0; pp<PITCH_ROWS; pp++){
+      for (let ii=0; ii<STEPS*SUBDIV; ii++){
+        if (roll[pp][ii]) { hasAnyNow = true; break outer2; }
+      }
+    }
+
+    // If row toggled empty/non-empty, redraw 16-step grid to show/hide PR preview
+    try {
+      if (hadAnyBefore !== hasAnyNow && typeof drawGrid === 'function' && Array.isArray(rowLabels)) {
+        drawGrid(rowLabels);
+      }
+    } catch(e){}
   }
 
-    const idx = (PITCH_ROWS-1 - p) * (STEPS*SUBDIV) + i;
-    const cell = prGridEl?.children?.[idx];
-    if (cell) cell.classList.toggle('on', !!roll[p][i]);
+  
+  function togglePR(p, i, erase){
+    try { if (typeof _ensurePRRefs === 'function') _ensurePRRefs(); } catch(e) {}
+    setPR(p, i, !erase);
   }
-  const patternSel= document.getElementById('blPattern');
+
+const patternSel= document.getElementById('blPattern');
   const songToggle= document.getElementById('blSongToggle');
   const exportSongBtn = document.getElementById('blExportSong');
   const arrangerWrap  = document.getElementById('arrangerWrap');
