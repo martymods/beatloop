@@ -47,10 +47,7 @@
   .ctrl-switch button.on{background:#7c3aed;color:#fff;box-shadow:0 0 8px rgba(124,58,237,.35)}
   
 /* 4-step striping + arranger cells */
-.step.alt{ background: rgba(255,255,255,.14)!important; }  
-/* when selected inside alt stripes, keep the purple ON color */
-.step.alt.on, .step.on.alt{ background: rgba(124,58,237,.7)!important; box-shadow:0 0 0 1px rgba(124,58,237,.5),0 6px 18px rgba(124,58,237,.35) }
-/* slightly lighter every 4 cols */
+.step.alt{ background: rgba(255,255,255,.14)!important; }  /* slightly lighter every 4 cols */
 
 .arr-label{ display:flex; align-items:center; justify-content:space-between; padding:0 .5rem; font-size:.875rem; color:#fff; opacity:.9 }
 .arr-cell{ height:40px; border-radius:.5rem; background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; font-weight:600; color:#bbb }
@@ -60,6 +57,13 @@
 
 
   #blLoops{ -webkit-overflow-scrolling: touch; }
+
+
+/* Better visibility for inactive steps */
+.step{ background: rgba(56,189,248,.12) !important; }           /* cyan-400 @ ~12% */
+.step:hover{ background: rgba(56,189,248,.18) !important; }
+.step.alt{ background: rgba(56,189,248,.20) !important; }       /* alt stripe */
+.step.on{ background: rgba(124,58,237,.7) !important; }         /* keep purple for ON */
 
 </style>
 
@@ -1009,7 +1013,10 @@ const LOOPS = {
     prVol     = document.getElementById('prVol');
     prPan     = document.getElementById('prPan');
     if (prClose) prClose.addEventListener('click', closePianoRoll);
-    if (prSubdiv) prSubdiv.addEventListener('change', ()=>{ SUBDIV = +prSubdiv.value || 4; drawPianoRoll(); });
+    if (prSubdiv) prSubdiv.addEventListener('change', ()=>{
+      SUBDIV = +prSubdiv.value || 4;
+      drawPianoRoll();
+    });
     _prInit = true;
   }
   // --- Piano Roll logic ---
@@ -1165,8 +1172,8 @@ let lastBar = -1;             // arranger playhead column
     for (let r=0; r<rows; r++){
       // left label + one dial w/ V/P/T switch
       const lab = document.createElement('div');
-      lab.className='flex items-center justify-between px-2 text-sm text-white/90';
-      lab.innerHTML = `<div class="flex flex-col gap-1 min-w-0 w-full">
+      lab.className='flex items-start justify-between px-2 text-sm text-white/90';
+      lab.innerHTML = `<div class="flex flex-col gap-1 min-w-0">
   <div class="flex items-center gap-2">
     <button class="rounded bg-white/10 px-2 py-0.5 text-xs hover:bg-white/15 shrink-0" data-pr="${r}" title="Open Piano Roll">🎹</button>
     <div class="flex items-center gap-2 shrink-0 ml-auto">
