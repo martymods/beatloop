@@ -2011,11 +2011,43 @@ stopBtn.addEventListener('click', () => {
 
   // --- Require login for this page ---
   (function requireLogin(){
-    try {
-      const u = JSON.parse(localStorage.getItem('user') || 'null');
-      const token = AUTH.token;
-      if (!u || !token) location.href = 'login.html';
-    } catch { location.href = 'login.html'; }
+    const params = new URLSearchParams(location.search);
+    const debug  = params.get('debug') === '1';
+
+    const API_BASE = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
+    const token = localStorage.getItem('jwt');
+
+    let user = null;
+    try { user = JSON.parse(localStorage.getItem('user') || 'null'); } catch(_) {}
+
+    // Legacy fallback (older pages stored current_user only)
+    if (!user) {
+      const legacyEmail = localStorage.getItem('current_user') || localStorage.getItem('currentUser');
+      if (legacyEmail) user = { name: legacyEmail.split('@')[0], email: legacyEmail, avatar: '/img/avatar-default.svg' };
+      if (user) localStorage.setItem('user', JSON.stringify(user));
+    }
+
+    if (!token && !user) {
+      if (debug) { console.warn('Auth gate: no token & no user — staying on page for debugging'); return; }
+      location.href = 'login.html';
+      return;
+    }
+
+    // If we have a token but no user object, try to hydrate it (don’t block UI if it fails)
+    if (token && !user) {
+      fetch(API_BASE + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => d?.user && localStorage.setItem('user', JSON.stringify(d.user)))
+        .catch(()=>{});
+    }
+
+    // Presence heartbeat
+    setInterval(() => {
+      fetch(API_BASE + '/api/presence/ping', {
+        method:'POST',
+        headers:{ Authorization: 'Bearer ' + (token || '') }
+      }).catch(()=>{});
+    }, 15000);
   })();
 
   // --- Presence ping so the server can reap idle tabs (and time-on-site stats) ---
