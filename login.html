@@ -42,71 +42,72 @@
     <p id="errorMsg" class="mt-3 text-sm text-red-500 hidden"></p>
   </div>
 
-  <!-- API + auth helpers -->
-  <script>
-    const API_BASE = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
-    const AUTH = {
-      token: localStorage.getItem('jwt') || '',
-      set(t){ this.token = t; localStorage.setItem('jwt', t); },
-      hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
-    };
-  </script>
+<!-- API + auth helpers -->
+<script>
+  const API_BASE = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
+  const AUTH = {
+    token: localStorage.getItem('jwt') || '',
+    set(t){ this.token = t; localStorage.setItem('jwt', t); },
+    hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
+  };
+</script>
 
-  <script>
-    (function(){
-      const form = document.getElementById('loginForm');
-      const submitBtn = document.getElementById('submitBtn');
-      const err = document.getElementById('errorMsg');
+<script>
+  (function(){
+    const form = document.getElementById('loginForm');
+    const btn  = document.getElementById('submitBtn');
+    const err  = document.getElementById('errorMsg');
 
-      async function doLogin(e){
-        e?.preventDefault?.();
-        err.classList.add('hidden');
-        submitBtn.disabled = true;
+    // Never let the browser navigate the form by itself
+    form.setAttribute('onsubmit', 'return false');
 
-        const email = document.getElementById('email').value.trim().toLowerCase();
-        const password = document.getElementById('password').value;
+    async function doLogin(e){
+      e?.preventDefault?.();
+      err.classList.add('hidden');
+      btn.disabled = true;
 
+      const email = document.getElementById('email').value.trim().toLowerCase();
+      const password = document.getElementById('password').value;
+
+      try {
+        const r = await fetch(API_BASE + '/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await r.json().catch(()=>({}));
+        if (!r.ok || !data?.token || !data?.user) throw new Error(data?.error || 'Login failed');
+
+        // Save ALL keys the app expects
+        AUTH.set(data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('current_user', data.user.email || email); // legacy key some pages look for
+
+        location.href = 'network.html';
+      } catch (ex) {
+        // Offline/dev fallback (legacy local users)
         try {
-          const res = await fetch(API_BASE + '/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-          });
-          const data = await res.json().catch(()=>({}));
-          if (!res.ok || !data?.token || !data?.user) {
-            throw new Error(data?.error || 'Login failed');
+          const users = JSON.parse(localStorage.getItem('users') || '{}');
+          if (users[email] && users[email].password === password) {
+            localStorage.setItem('current_user', email);
+            localStorage.setItem('user', JSON.stringify({
+              name: users[email].name || email.split('@')[0],
+              email, avatar: users[email].avatar || '/img/avatar-default.svg'
+            }));
+            location.href = 'network.html';
+            return;
           }
-
-          // Save both new + legacy keys so Network page never bounces you back
-          AUTH.set(data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-          localStorage.setItem('current_user', data.user.email || email);
-
-          location.href = 'network.html';
-        } catch (ex) {
-          // If API unreachable, allow legacy localStorage users
-          try {
-            const users = JSON.parse(localStorage.getItem('users') || '{}');
-            if (users[email] && users[email].password === password) {
-              localStorage.setItem('current_user', email);
-              // keep 'user' shape for the network page header/avatar
-              localStorage.setItem('user', JSON.stringify({ email, name: users[email].name || email, avatar: users[email].avatar || '/img/avatar-default.svg' }));
-              location.href = 'network.html';
-              return;
-            }
-          } catch(_) {}
-
-          err.textContent = ex.message || 'Login failed';
-          err.classList.remove('hidden');
-        } finally {
-          submitBtn.disabled = false;
-        }
+        } catch(_){}
+        err.textContent = ex.message || 'Login failed';
+        err.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
       }
+    }
 
-      // submit button + Enter key both funnel here; form never navigates
-      form.addEventListener('submit', doLogin);
-      submitBtn.addEventListener('click', doLogin);
-    })();
-  </script>
+    form.addEventListener('submit', doLogin);
+    btn.addEventListener('click', doLogin);
+  })();
+</script>
 </body>
 </html>
