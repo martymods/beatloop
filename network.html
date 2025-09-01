@@ -214,7 +214,8 @@
       <option>13</option><option>14</option><option>15</option><option>16</option>
     </select>
   </label>
-  <button id="blSongToggle" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Song Mode</button>
+  <button id="blClone" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Clone Pattern</button>
+    <button id="blSongToggle" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Song Mode</button>
   <button id="blExportSong" class="hidden rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Export Song</button>
   <button id="blSaveWav" class="rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Export WAV</button>
   <button id="blClose" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Close</button>
@@ -1023,7 +1024,32 @@ const LOOPS = {
       SUBDIV = +prSubdiv.value || 4;
       drawPianoRoll();
     });
-    _prInit = true;
+    
+    // Global drag-to-paint handlers (fix for left-drag painting)
+    if (prGridEl && !prGridEl._dragBound) {
+      let prIsPainting = false;
+      let prPaintOn = true;
+      function setFromCell(target, forceDraw=False) {
+        const cell = target && target.closest ? target.closest('.pr-cell') : null;
+        if (!cell) return;
+        const p = +cell.dataset.p, i = +cell.dataset.i;
+        const bank = (typeof currentBank!=='undefined'?currentBank:0);
+        const entry = ensurePR(bank, prRow);
+        const exists = !!(entry.notes?.[p]?.[i]);
+        if (forceDraw) {
+          setPR(p, i, prPaintOn);
+          return;
+        }
+        prPaintOn = !(window.event && (window.event.ctrlKey || window.event.metaKey)) && !exists;
+        prIsPainting = true;
+        setPR(p, i, prPaintOn);
+      }
+      prGridEl.addEventListener('mousedown', (e) => { e.preventDefault(); setFromCell(e.target); });
+      prGridEl.addEventListener('mouseover', (e) => { if (prIsPainting) setFromCell(e.target, true); });
+      window.addEventListener('mouseup', () => { prIsPainting = false; }, { passive: true });
+      prGridEl._dragBound = true;
+    }
+_prInit = true;
   }
   // --- Piano Roll logic ---
   let prRow = null; // which row we're editing
@@ -1160,6 +1186,7 @@ prGridEl.appendChild(cell);
   }
 
 const patternSel= document.getElementById('blPattern');
+  const cloneBtn = document.getElementById('blClone');
   const songToggle= document.getElementById('blSongToggle');
   const exportSongBtn = document.getElementById('blExportSong');
   const arrangerWrap  = document.getElementById('arrangerWrap');
@@ -1582,6 +1609,58 @@ currentStep = (currentStep + 1) % STEPS;
     currentBank = Math.max(0, Math.min(MAX_BANKS-1, (+patternSel.value||1)-1));
     drawGrid(rowLabels);
   });
+  // --- Clone Pattern button: duplicates current bank into next empty slot (includes Piano Roll) ---
+  cloneBtn?.addEventListener('click', () => {
+    const rows = rowLabels.length || 0;
+    ensurePatternForBank(currentBank, rows);
+    // helper to decide if a bank is empty (no 16-step hits AND no PR notes)
+    function bankIsEmpty(b) {
+      ensurePatternForBank(b, rows);
+      const pat = patterns[b] || [];
+      let any=false;
+      for (let r=0; r<pat.length && !any; r++){
+        for (let c=0; c<STEPS; c++){ if (pat[r]?.[c]) { any=true; break; } }
+      }
+      if (any) return false;
+      const pr = pianoRoll[b] || [];
+      for (let r=0; r<pr.length; r++){
+        const entry = pr[r];
+        if (!entry || !entry.notes) continue;
+        for (let p=0; p<entry.notes.length; p++){
+          for (let i=0; i<entry.notes[p].length; i++){ if (entry.notes[p][i]) return false; }
+        }
+      }
+      return true;
+    }
+    // find next empty slot
+    let target = -1;
+    for (let b=(currentBank+1)%MAX_BANKS, count=0; count<MAX_BANKS-1; b=(b+1)%MAX_BANKS, count++){
+      if (b===currentBank) continue;
+      if (bankIsEmpty(b)) { target = b; break; }
+    }
+    if (target < 0) { alert('No empty pattern slots available.'); return; }
+
+    // deep-clone 16-step pattern
+    const src = patterns[currentBank] || [];
+    patterns[target] = src.map(row => Array.isArray(row) ? row.slice(0, STEPS).map(Boolean) : Array(STEPS).fill(false));
+
+    // deep-clone Piano Roll grid
+    const srcPR = pianoRoll[currentBank] || [];
+    pianoRoll[target] = srcPR.map(entry => {
+      if (!entry || !entry.notes) return undefined;
+      const copy = { loopSlice: { start: entry.loopSlice?.start||0, end: entry.loopSlice?.end||1 }, notes: [] };
+      for (let p=0; p<entry.notes.length; p++){
+        copy.notes[p] = entry.notes[p].map(cell => cell ? { vol: cell.vol||0, pan: cell.pan||0 } : null);
+      }
+      return copy;
+    });
+
+    // switch UI to cloned bank
+    currentBank = target;
+    if (patternSel) patternSel.value = String(target + 1);
+    drawGrid(rowLabels);
+  });
+
 
 songToggle?.addEventListener('click', ()=>{
   const wasHidden = arrangerWrap.classList.contains('hidden');
