@@ -1025,32 +1025,150 @@ const LOOPS = {
       drawPianoRoll();
     });
     
-    // Global drag-to-paint handlers (fix for left-drag painting)
+
+    // Global drag-to-paint handlers (fix for left-drag painting) + LOOP CLIP edge-resizing
+    // - For Kit rows: paint cells normally (drag to add/erase)
+    // - For Loop rows: treat contiguous ON cells as a "clip"; you can drag edges to resize,
+    //   or drag across empty cells to create a new clip spanning the drag.
     if (prGridEl && !prGridEl._dragBound) {
       let prIsPainting = false;
       let prPaintOn = true;
-      function setFromCell(target, forceDraw=False) {
+      let loopDrag = null; // { mode: 'new'|'resizeLeft'|'resizeRight', p, start, end }
+      function getCell(target){
         const cell = target && target.closest ? target.closest('.pr-cell') : null;
-        if (!cell) return;
-        const p = +cell.dataset.p, i = +cell.dataset.i;
+        if (!cell) return null;
+        return { cell, p: +cell.dataset.p, i: +cell.dataset.i };
+      }
+      function findRun(entry, p, i){
+        const notes = entry.notes?.[p]; if (!notes) return {L:i, R:i-1};
+        let L=i, R=i;
+        while (L-1 >=0 && notes[L-1]) L--;
+        while (R+1 < notes.length && notes[R+1]) R++;
+        if (!notes[i]) { // if starting from empty, treat next to determine intent
+          if (i+1<notes.length && notes[i+1]) { // on right edge
+            R = i+1; while (R+1<notes.length && notes[R+1]) R++;
+            L = i+1; while (L-1>=0 && notes[L-1]) L--;
+          } else if (i-1>=0 && notes[i-1]) { // on left edge
+            L = i-1; while (L-1>=0 && notes[L-1]) L--;
+            R = i-1; while (R+1<notes.length && notes[R+1]) R++;
+          } else { L=i; R=i; }
+        }
+        return {L,R};
+      }
+      function setRange(p, i0, i1, on){
         const bank = (typeof currentBank!=='undefined'?currentBank:0);
         const entry = ensurePR(bank, prRow);
-        const exists = !!(entry.notes?.[p]?.[i]);
-        if (forceDraw) {
-          setPR(p, i, prPaintOn);
+        const notes = entry.notes[p];
+        const a = Math.max(0, Math.min(i0, i1));
+        const b = Math.min(notes.length-1, Math.max(i0, i1));
+        for (let i=a;i<=b;i++) setPR(p, i, on);
+      }
+      function startFrom(target){
+        const meta = getCell(target); if (!meta) return;
+        const bank = (typeof currentBank!=='undefined'?currentBank:0);
+        const entry = ensurePR(bank, prRow);
+        const isLoopRow = (typeof kitRowCount!=='undefined' && typeof prRow!=='undefined') ? (prRow >= kitRowCount) : false;
+        if (!isLoopRow){
+          // --- KIT rows: classic paint toggle
+          const exists = !!(entry.notes?.[meta.p]?.[meta.i]);
+          prPaintOn = !(window.event && (window.event.ctrlKey || window.event.metaKey)) && !exists;
+          prIsPainting = true;
+          setPR(meta.p, meta.i, prPaintOn);
+          loopDrag = null;
           return;
         }
-        prPaintOn = !(window.event && (window.event.ctrlKey || window.event.metaKey)) && !exists;
+        // --- LOOP rows: segment logic
+        const exists = !!(entry.notes?.[meta.p]?.[meta.i]);
+        const run = findRun(entry, meta.p, meta.i);
+        // Click on an edge of an existing run?
+        if (exists){
+          if (meta.i === run.L) {
+            loopDrag = { mode:'resizeLeft', p:meta.p, start:run.L, end:run.R };
+          } else if (meta.i === run.R) {
+            loopDrag = { mode:'resizeRight', p:meta.p, start:run.L, end:run.R };
+          } else {
+            // middle → choose nearest edge; default resizeRight
+            loopDrag = { mode:'resizeRight', p:meta.p, start:run.L, end:run.R };
+          }
+        } else {
+          // start a new clip
+          loopDrag = { mode:'new', p:meta.p, start:meta.i, end:meta.i };
+          setPR(meta.p, meta.i, true);
+        }
         prIsPainting = true;
-        setPR(p, i, prPaintOn);
       }
-      prGridEl.addEventListener('mousedown', (e) => { e.preventDefault(); setFromCell(e.target); });
-      prGridEl.addEventListener('mouseover', (e) => { if (prIsPainting) setFromCell(e.target, true); });
-      window.addEventListener('mouseup', () => { prIsPainting = false; }, { passive: true });
+      function dragOver(target){
+        if (!prIsPainting) return;
+        const meta = getCell(target); if (!meta) return;
+        const bank = (typeof currentBank!=='undefined'?currentBank:0);
+        const entry = ensurePR(bank, prRow);
+        const isLoopRow = (typeof kitRowCount!=='undefined' && typeof prRow!=='undefined') ? (prRow >= kitRowCount) : false;
+        if (!isLoopRow){
+          setPR(meta.p, meta.i, prPaintOn);
+          return;
+        }
+        // loops: perform edge resize or create new span
+        if (!loopDrag) return;
+        if (loopDrag.mode === 'eraseDrag') { setPR(loopDrag.p, meta.i, false); return; }
+        if (loopDrag.mode === 'new'){
+          // turn on the whole span between start and current
+          setRange(loopDrag.p, loopDrag.start, meta.i, true);
+          loopDrag.end = meta.i;
+        } else if (loopDrag.mode === 'resizeLeft'){
+          // clear old left side, then turn on the new span
+          setRange(loopDrag.p, loopDrag.start, loopDrag.end, false);
+          loopDrag.start = Math.min(meta.i, loopDrag.end);
+          setRange(loopDrag.p, loopDrag.start, loopDrag.end, true);
+        } else if (loopDrag.mode === 'resizeRight'){
+          setRange(loopDrag.p, loopDrag.start, loopDrag.end, false);
+          loopDrag.end = Math.max(meta.i, loopDrag.start);
+          setRange(loopDrag.p, loopDrag.start, loopDrag.end, true);
+        }
+      }
+      prGridEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const meta = (function(t){ const c=t && t.closest?t.closest('.pr-cell'):null; return c?{p:+c.dataset.p,i:+c.dataset.i}:null; })(e.target);
+        const bank = (typeof currentBank!=='undefined'?currentBank:0);
+        const entry = ensurePR(bank, prRow);
+        const isLoopRow = (typeof kitRowCount!=='undefined' && typeof prRow!=='undefined') ? (prRow >= kitRowCount) : false;
+        const exists = meta ? !!(entry.notes?.[meta.p]?.[meta.i]) : false;
+        // Right-click or Ctrl/Cmd = erase
+        if (e.button === 2 || e.ctrlKey || e.metaKey) {
+          if (!isLoopRow) {
+            prPaintOn = false;
+            prIsPainting = true;
+            if (meta) setPR(meta.p, meta.i, false);
+            loopDrag = null;
+          } else {
+            prIsPainting = true;
+            if (meta) {
+              // erase whole run if present; otherwise erase single hovered cells during drag
+              // Find run and clear it
+              const notes = entry.notes?.[meta.p];
+              if (exists) {
+                let L=meta.i, R=meta.i;
+                while (L-1>=0 && notes[L-1]) L--;
+                while (R+1<notes.length && notes[R+1]) R++;
+                for (let k=L;k<=R;k++) setPR(meta.p, k, false);
+              } else {
+                setPR(meta.p, meta.i, false);
+              }
+              loopDrag = { mode:'eraseDrag', p: meta.p };
+            }
+          }
+        } else {
+          startFrom(e.target);
+        }
+      });
+      prGridEl.addEventListener('mouseover', (e) => { dragOver(e.target); });
+      prGridEl.addEventListener('contextmenu', (e) => { e.preventDefault(); });
+      window.addEventListener('mouseup', () => { prIsPainting = false; loopDrag = null; }, { passive: true });
       prGridEl._dragBound = true;
     }
-_prInit = true;
+
+    _prInit = true;
   }
+
   // --- Piano Roll logic ---
   let prRow = null; // which row we're editing
   function openPianoRoll(row, label){
@@ -1089,47 +1207,6 @@ _prInit = true;
         if (Math.floor(i / SUBDIV) % 2 === 1) cell.classList.add('alt');
         if (roll[p][i]) cell.classList.add('on');
         cell.dataset.p = p; cell.dataset.i = i;
-
-        let painting = false;
-
-
-        let paintOn = true; // drag mode: add or erase
-
-
-        cell.addEventListener('mousedown', (e)=>{
-
-
-          painting = true;
-
-
-          const bank = (typeof currentBank!=='undefined'?currentBank:0);
-
-
-          const entry = ensurePR(bank, prRow);
-
-
-          const exists = !!entry.notes[p][i];
-
-
-          // Ctrl/Cmd forces erase; otherwise toggle based on existing state
-
-
-          paintOn = !(e.ctrlKey || e.metaKey) && !exists;
-
-
-          setPR(p, i, paintOn);
-
-
-        });
-
-
-        cell.addEventListener('mouseenter', (e)=>{ if (painting) setPR(p, i, paintOn); });
-
-
-        cell.addEventListener('mouseup', ()=>{ painting = false; });
-
-
-        cell.addEventListener('contextmenu', (e)=>{ e.preventDefault(); setPR(p, i, false); });
 prGridEl.appendChild(cell);
       }
     }
@@ -1577,17 +1654,29 @@ if (mode === 'song' && currentStep === 0) {
                   const idxL = r - (typeof kitRowCount!=='undefined'?kitRowCount:0);
                   const player = loopPlayers?.[idxL];
                   if (!player || !player.buffer || !player.buffer.loaded) continue;
+                  // Only trigger at the START of a contiguous run of ON cells.
+                  const notesRow = rowPR?.[p];
+                  const isOn = !!notesRow?.[microIndex];
+                  const prevOn = microIndex > 0 ? !!notesRow?.[microIndex-1] : false;
+                  if (!isOn || prevOn) continue; // skip if not a start
+                  // Determine run length
+                  let runLen = 1;
+                  const maxIndex = STEPS*SUBDIV;
+                  while ((microIndex + runLen) < maxIndex && !!notesRow?.[microIndex + runLen]) runLen++;
                   try {
-                    if (player.state === 'started') player.stop(when);
-                    player.playbackRate = Math.pow(2, ((pitches?.[r]||0) + semi)/12);
+                    // convert run length into seconds
                     const dur = player.buffer.duration||1;
                     const sliceStart = Math.min(slice.start||0, 0.99) * dur;
                     const sliceEnd   = Math.max(slice.end||1, sliceStart+0.01) * dur;
                     const playStart  = Math.min(sliceStart, sliceEnd-0.01);
-                    const playLen    = Math.min(microDur, Math.max(0.01, sliceEnd - sliceStart));
+                    const playLenMax = Math.max(0.01, sliceEnd - sliceStart);
+                    const playLenTimeline = runLen * microDur;
+                    const playLen = Math.min(playLenTimeline, playLenMax);
+                    if (player.state === 'started') player.stop(when);
+                    player.playbackRate = Math.pow(2, ((pitches?.[r]||0) + semi)/12);
                     player.start(when, playStart, playLen);
-                    if (volumes?.[r]) volumes[r].volume.value = (note.vol||0)*1.2;
-                    if (panners?.[r]) panners[r].pan.value    = (note.pan||0)/10;
+                    if (volumes?.[r]) volumes[r].volume.value = (notesRow[microIndex]?.vol||0)*1.2;
+                    if (panners?.[r]) panners[r].pan.value    = (notesRow[microIndex]?.pan||0)/10;
                   } catch {}
                 }
               }
