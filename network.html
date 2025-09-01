@@ -422,12 +422,21 @@
       if (user && !user.avatar) user.avatar = fallbackAvatar
       return user
     }
-    function ensureLoggedIn() {
-      currentUser = loadCurrentUser()
-      if (!currentUser) {
-        window.location.href = 'login.html'
-      }
+function ensureLoggedIn() {
+  // Prefer new shape
+  let u = null;
+  try { u = JSON.parse(localStorage.getItem('user') || 'null'); } catch {}
+  // Fall back to legacy local account
+  if (!u) {
+    currentUser = loadCurrentUser();
+    if (currentUser) {
+      u = { name: currentUser.name || 'me', email: currentUser.email || localStorage.getItem('current_user'), avatar: currentUser.avatar || '/img/avatar-default.svg' };
+      localStorage.setItem('user', JSON.stringify(u));
     }
+  }
+  if (!u) window.location.href = 'login.html';
+}
+
 
     // ---------- Comments storage
     function getComments(key) { return getJSON('comments_' + key, '[]') }
@@ -2009,51 +2018,44 @@ stopBtn.addEventListener('click', () => {
     hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
   };
 
-  // --- Require login for this page ---
-  (function requireLogin(){
-    const params = new URLSearchParams(location.search);
-    const debug  = params.get('debug') === '1';
+/* ---------- Unified login gate (works with API JWT and legacy local users) ---------- */
+(() => {
+  const API_BASE = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
 
-    const API_BASE = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
-    const token = localStorage.getItem('jwt');
+  // Try to read the “new” user object
+  let user = null;
+  try { user = JSON.parse(localStorage.getItem('user') || 'null'); } catch {}
 
-    let user = null;
-    try { user = JSON.parse(localStorage.getItem('user') || 'null'); } catch(_) {}
-
-    // Legacy fallback (older pages stored current_user only)
-    if (!user) {
-      const legacyEmail = localStorage.getItem('current_user') || localStorage.getItem('currentUser');
-      if (legacyEmail) user = { name: legacyEmail.split('@')[0], email: legacyEmail, avatar: '/img/avatar-default.svg' };
-      if (user) localStorage.setItem('user', JSON.stringify(user));
+  // Fallback to legacy key if needed and upgrade it to `user`
+  if (!user) {
+    const legacyEmail = localStorage.getItem('current_user') || localStorage.getItem('currentUser');
+    if (legacyEmail) {
+      user = { name: legacyEmail.split('@')[0], email: legacyEmail, avatar: '/img/avatar-default.svg' };
+      localStorage.setItem('user', JSON.stringify(user));
     }
+  }
 
-    if (!token && !user) {
-      if (debug) { console.warn('Auth gate: no token & no user — staying on page for debugging'); return; }
-      location.href = 'login.html';
-      return;
-    }
+  // If we still don’t have *any* identity, go to login
+  if (!user) { location.href = 'login.html'; return; }
 
-    // If we have a token but no user object, try to hydrate it (don’t block UI if it fails)
-    if (token && !user) {
-      fetch(API_BASE + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(d => d?.user && localStorage.setItem('user', JSON.stringify(d.user)))
-        .catch(()=>{});
-    }
+  // If we have a token later, great; if not, we still allow the page to load.
+  // Hydrate user non-blocking if JWT exists but user is stale/missing fields.
+  const token = localStorage.getItem('jwt');
+  if (token && (!user.name || !user.email)) {
+    fetch(API_BASE + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => d?.user && localStorage.setItem('user', JSON.stringify(d.user)))
+      .catch(()=>{});
+  }
 
-    // Presence heartbeat
-    setInterval(() => {
-      fetch(API_BASE + '/api/presence/ping', {
-        method:'POST',
-        headers:{ Authorization: 'Bearer ' + (token || '') }
-      }).catch(()=>{});
-    }, 15000);
-  })();
-
-  // --- Presence ping so the server can reap idle tabs (and time-on-site stats) ---
+  // Presence heartbeat (safe even without token)
   setInterval(() => {
-    fetch(API + '/api/presence/ping', { method:'POST', headers: { ...AUTH.hdr() } }).catch(()=>{});
+    fetch(API_BASE + '/api/presence/ping', {
+      method: 'POST',
+      headers: token ? { Authorization: 'Bearer ' + token } : {}
+    }).catch(()=>{});
   }, 15000);
+})();
 
   // --- Build the Sessions card (prepends to #feed) ---
   const feed = document.getElementById('feed');
