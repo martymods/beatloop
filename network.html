@@ -79,6 +79,12 @@
   .pr-toolbar{display:flex;gap:.5rem;align-items:center;margin:.5rem 0}
   .pr-toolbar .dial{max-width:120px}
   .pr-badge{font-size:.7rem;color:#bbb;background:#1f1f28;border:1px solid #2b2b34;padding:.15rem .4rem;border-radius:.4rem}
+
+  /* Piano Roll playline & preview row */
+  .pr-playline{grid-row:1 / -1;width:2px;background:rgba(255,255,255,.85);border-radius:1px;box-shadow:0 0 8px rgba(255,255,255,.5);pointer-events:none}
+  .pr-preview{position:relative;height:40px;border-radius:.5rem;background:rgba(255,255,255,.06);outline:1px solid rgba(255,255,255,.08);}
+  .pr-preview .mini{position:absolute;top:6px;bottom:6px;border-radius:.25rem;background:rgba(124,58,237,.7);box-shadow:0 0 0 1px rgba(124,58,237,.45),0 6px 12px rgba(124,58,237,.35)}
+  .pr-preview .tag{position:absolute;left:6px;top:6px;font-size:.625rem;color:#bbb;background:#1f1f28;border:1px solid #2b2b34;padding:.1rem .35rem;border-radius:.35rem}
 </style>
 </head>
 <body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
@@ -1001,7 +1007,7 @@ const LOOPS = {
   const loopsWrap = document.getElementById('blLoops');
   const saveBtn   = document.getElementById('blSaveWav');
   // --- Piano Roll UI refs (lazy) ---
-  let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan;
+  let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan; let prPlayline=null;
   let _prInit = false;
   function _ensurePRRefs(){
     if (_prInit) return;
@@ -1034,6 +1040,15 @@ const LOOPS = {
     if (prOverlay) prOverlay.style.display = 'none';
     prRow = null;
   }
+  function prEnsurePlayline(){
+    if(!prGridEl) return;
+    if(!prPlayline){
+      prPlayline=document.createElement('div');
+      prPlayline.className='pr-playline';
+    }
+    if(!prPlayline.parentNode) prGridEl.appendChild(prPlayline);
+  }
+
   function drawPianoRoll(){ _ensurePRRefs(); if (prRow == null || !prGridEl) return;
     const cols = STEPS * SUBDIV;
     prGridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(16px, 1fr))`;
@@ -1062,10 +1077,24 @@ const LOOPS = {
         prGridEl.appendChild(cell);
       }
     }
-  }
+      prEnsurePlayline();
+}
   function togglePR(p, i, erase){ _ensurePRRefs(); const roll = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow).notes;
-    if (erase) roll[p][i] = null;
-    else roll[p][i] = { vol:+(prVol?.value||0), pan:+(prPan?.value||0) };
+    if (erase) setPR(p,i,false); else setPR(p,i,true);
+  function setPR(p, i, on){
+    _ensurePRRefs();
+    const pr = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow);
+    const roll = pr.notes;
+    if (on) {
+      roll[p][i] = { vol:+(prVol?.value||0), pan:+(prPan?.value||0) };
+    } else {
+      roll[p][i] = null;
+    }
+    const idx = (PITCH_ROWS-1 - p) * (STEPS*SUBDIV) + i;
+    const cell = prGridEl?.children?.[idx];
+    if (cell) cell.classList.toggle('on', !!roll[p][i]);
+  }
+
     const idx = (PITCH_ROWS-1 - p) * (STEPS*SUBDIV) + i;
     const cell = prGridEl?.children?.[idx];
     if (cell) cell.classList.toggle('on', !!roll[p][i]);
@@ -1111,6 +1140,43 @@ let songMute = false;         // true when the current bar is empty (–)
 let lastBar = -1;             // arranger playhead column
 
   // ---------- Helpers ----------
+  function hasAnyPR(bank,row){
+    const pr = (pianoRoll[bank] && pianoRoll[bank][row]) ? pianoRoll[bank][row].notes : null;
+    if (!pr) return false;
+    for (let p=0;p<PITCH_ROWS;p++){
+      for (let i=0;i<STEPS*SUBDIV;i++){
+        if (pr[p][i]) return true;
+      }
+    }
+    return false;
+  }
+  function renderPRPreview(row, container){
+    const pr = pianoRoll[currentBank][row];
+    const cols = STEPS*SUBDIV;
+    const wrap = document.createElement('div');
+    wrap.className = 'pr-preview';
+    wrap.style.gridColumn = 'span ' + STEPS;
+    wrap.innerHTML = '<span class="tag">PR</span>';
+    wrap.title = 'This row is driven by Piano Roll';
+    wrap.addEventListener('click', ()=>openPianoRoll(row, rowLabels[row]||'Row'));
+    if (pr && pr.notes){
+      for (let i=0;i<cols;i++){
+        let on=false;
+        for (let p=0;p<PITCH_ROWS;p++){ if (pr.notes[p][i]) { on=true; break; } }
+        if (on){
+          const d=document.createElement('div');
+          d.className='mini';
+          const left = (i/cols)*100.0;
+          const width = (1/cols)*100.0;
+          d.style.left = left + '%';
+          d.style.width = width + '%';
+          wrap.appendChild(d);
+        }
+      }
+    }
+    container.appendChild(wrap);
+  }
+
   const filenameLabel = (p) => (p.split('/').pop()||'')
     .replace(/\.[^/.]+$/,'').replace(/_/g,' ').replace(/\s+/g,' ').trim();
   const noteFromC3 = (semi)=>{
@@ -1203,32 +1269,35 @@ let lastBar = -1;             // arranger playhead column
       const prBtn = lab.querySelector('button[data-pr]');
       if (prBtn) prBtn.addEventListener('click', ()=> openPianoRoll(r, labels[r]));
 
-      // steps (with 4-step striping)
-for (let c=0; c<STEPS; c++){
-  const cell = document.createElement('button');
-  cell.className = 'step h-10 rounded-md bg-white/10 hover:bg-white/15';
-  if (Math.floor(c/4)%2===1) cell.classList.add('alt');
-  cell.dataset.r = r; cell.dataset.c = c;
+      
+      // steps (with 4-step striping) OR PR preview
+      if (hasAnyPR(currentBank, r)) {
+        renderPRPreview(r, table);
+      } else {
+        for (let c=0; c<STEPS; c++){
+          const cell = document.createElement('button');
+          cell.className = 'step h-10 rounded-md bg-white/10 hover:bg-white/15';
+          if (Math.floor(c/4)%2===1) cell.classList.add('alt');
+          cell.dataset.r = r; cell.dataset.c = c;
 
-  // draw from the CURRENT bank at paint time
-  const curPat = patterns[currentBank] || [];
-  if (curPat?.[r]?.[c]) cell.classList.add('on');
+          const curPat = patterns[currentBank] || [];
+          if (curPat?.[r]?.[c]) cell.classList.add('on');
 
-  cell.addEventListener('click', (e) => {
-    const rr = +e.currentTarget.dataset.r;
-    const cc = +e.currentTarget.dataset.c;
+          cell.addEventListener('click', (e) => {
+            const rr = +e.currentTarget.dataset.r;
+            const cc = +e.currentTarget.dataset.c;
 
-    // always re-fetch the active bank and ensure row/col exists
-    const p = patterns[currentBank] || (patterns[currentBank] = []);
-    if (!Array.isArray(p[rr])) p[rr] = Array(STEPS).fill(false);
-    if (typeof p[rr][cc] !== 'boolean') p[rr][cc] = false;
+            const p = patterns[currentBank] || (patterns[currentBank] = []);
+            if (!Array.isArray(p[rr])) p[rr] = Array(STEPS).fill(false);
+            if (typeof p[rr][cc] !== 'boolean') p[rr][cc] = false;
 
-    p[rr][cc] = !p[rr][cc];
-    e.currentTarget.classList.toggle('on', p[rr][cc]);
-  });
+            p[rr][cc] = !p[rr][cc];
+            e.currentTarget.classList.toggle('on', p[rr][cc]);
+          });
 
-  table.appendChild(cell);
-}
+          table.appendChild(cell);
+        }
+      }
 
     }
     gridWrap.appendChild(table);
@@ -1395,6 +1464,15 @@ if (mode === 'song' && currentStep === 0) {
             const rowPR = prEntry.notes;
             const slice = prEntry.loopSlice || { start:0, end:1 };
             for (let s = 0; s < SUBDIV; s++){
+              // update PR playline if overlay is open
+              try {
+                if (prOverlay && prOverlay.style.display !== 'none') {
+                  prEnsurePlayline();
+                  const colForPR = stepBase + s;
+                  prPlayline.style.gridColumn = (colForPR + 1) + ' / span 1';
+                }
+              } catch {}
+
               const microIndex = stepBase + s;
               const when = (time||Tone.now()) + s * microDur;
               for (let p = 0; p < PITCH_ROWS; p++){
