@@ -202,28 +202,38 @@
   <div id="beatloopStudio" class="fixed inset-0 z-[70] hidden">
     <div class="absolute inset-0 bg-black/70 backdrop-blur"></div>
     <div class="relative mx-auto mt-10 w-[min(1100px,92vw)] max-h-[88vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#0f0f15] p-4 ring-1 ring-white/10">
-      <div class="flex items-center justify-between">
-        <h3 class="text-lg font-semibold">Beatloop Studio — 16-Step Sampler</h3>
-<div class="flex items-center gap-3 text-sm">
-  <div id="rosterCount" class="rounded-full bg-white/10 px-2 py-1">0/8</div>
-  <div id="rosterList" class="flex -space-x-2"></div>
-</div>
-<div class="flex items-center gap-2">
-  <label class="hidden md:flex items-center gap-2 text-sm text-white/70">
-    Pattern
-    <select id="blPattern" class="rounded-md bg-white/10 px-2 py-1">
-      <option>1</option><option>2</option><option>3</option><option>4</option>
-      <option>5</option><option>6</option><option>7</option><option>8</option>
-      <option>9</option><option>10</option><option>11</option><option>12</option>
-      <option>13</option><option>14</option><option>15</option><option>16</option>
-    </select>
-  </label>
-  <button id="blClone" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Clone Pattern</button>
+<div class="flex items-center justify-between">
+  <h3 class="text-lg font-semibold">
+    Beatloop Studio — 16-Step Sampler
+    <!-- live count the sockets will update -->
+    <span id="sessionCount" class="ml-2 text-xs text-white/60">0/8</span>
+  </h3>
+
+  <!-- (kept) compact roster bubbles shown at the top-right -->
+  <div class="hidden md:flex items-center gap-3 text-sm">
+    <div id="rosterCount" class="rounded-full bg-white/10 px-2 py-1">0/8</div>
+    <div id="rosterList" class="flex -space-x-2"></div>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <label class="hidden md:flex items-center gap-2 text-sm text-white/70">
+      Pattern
+      <select id="blPattern" class="rounded-md bg-white/10 px-2 py-1">
+        <option>1</option><option>2</option><option>3</option><option>4</option>
+        <option>5</option><option>6</option><option>7</option><option>8</option>
+        <option>9</option><option>10</option><option>11</option><option>12</option>
+        <option>13</option><option>14</option><option>15</option><option>16</option>
+      </select>
+    </label>
+    <button id="blClone" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Clone Pattern</button>
     <button id="blSongToggle" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Song Mode</button>
-  <button id="blExportSong" class="hidden rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Export Song</button>
-  <button id="blSaveWav" class="rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Export WAV</button>
-  <button id="blClose" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Close</button>
+    <button id="blExportSong" class="hidden rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Export Song</button>
+    <button id="blSaveWav" class="rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Export WAV</button>
+    <button id="blClose" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Close</button>
+  </div>
 </div>
+<!-- the participant strip will be injected right after the title by JS -->
+
 
       </div>
 
@@ -431,8 +441,9 @@
       updateLeaderboard()
     }
 
-    // ---------- Elements
-    const feedEl = document.getElementById('feed');
+// ---------- Elements
+const feedEl = document.getElementById('feed');
+
     const loadingEl = document.getElementById('loading')
     const scrollTopBtn = document.getElementById('scrollTop')
     const composerAvatarEl = document.getElementById('composerAvatar')
@@ -1981,175 +1992,244 @@ stopBtn.addEventListener('click', () => {
 </body>
 </html>
 
-<!-- Socket.IO for sessions -->
+<!-- Socket.IO client -->
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
-// --------- API base + auth helpers (reuse if defined) ---------
-window.API_BASE = window.API_BASE || localStorage.getItem('beatloop_api') || 'http://localhost:8080';
-window.AUTH = window.AUTH || {
-  token: localStorage.getItem('jwt') || '',
-  set(t){ this.token=t; localStorage.setItem('jwt', t); },
-  hdr(){ return this.token ? { 'Authorization':'Bearer '+this.token } : {}; }
-};
+/* =========================================================
+   Sessions + Presence + Participant strip (merged version)
+   ========================================================= */
 
-// --------- Sessions card in feed ---------
-(function(){
-  const feedEl = document.getElementById('feed');
-  if (!feedEl) return;
-  const card = document.createElement('article');
-  card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4';
-  card.innerHTML = `
-    <div class="flex items-center justify-between">
-      <h3 class="font-semibold">Live Beatloop Sessions</h3>
-      <div class="flex gap-2 items-center">
-        <input id="apiBaseInput" class="hidden md:inline-block rounded-md bg-white/10 px-2 py-1 text-xs w-[260px]" placeholder="API e.g. https://beatloop-api.onrender.com" />
-        <button id="btnNewSession" class="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold">Start Session</button>
+(() => {
+  // --- API + auth helpers (reuse existing globals when present) ---
+  const API = (window.API_BASE && String(window.API_BASE)) ||
+              localStorage.getItem('beatloop_api') ||
+              'https://beatloop-api.onrender.com';
+
+  const AUTH = window.AUTH || {
+    token: localStorage.getItem('jwt') || '',
+    set(t){ this.token = t; localStorage.setItem('jwt', t); },
+    hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
+  };
+
+  // --- Require login for this page ---
+  (function requireLogin(){
+    try {
+      const u = JSON.parse(localStorage.getItem('user') || 'null');
+      const token = AUTH.token;
+      if (!u || !token) location.href = 'login.html';
+    } catch { location.href = 'login.html'; }
+  })();
+
+  // --- Presence ping so the server can reap idle tabs (and time-on-site stats) ---
+  setInterval(() => {
+    fetch(API + '/api/presence/ping', { method:'POST', headers: { ...AUTH.hdr() } }).catch(()=>{});
+  }, 15000);
+
+  // --- Build the Sessions card (prepends to #feed) ---
+  const feed = document.getElementById('feed');
+  if (feed) {
+    const sessionsCard = document.createElement('article');
+    sessionsCard.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4';
+    sessionsCard.innerHTML = `
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="font-semibold">Live Beatloop Sessions</h3>
+        <div class="flex items-center gap-2">
+          <input id="newSessionName" class="rounded-md bg-white/10 px-3 py-1.5 text-sm outline-none"
+                 placeholder="Session name (optional)" />
+          <button id="btnNewSession" class="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold">Start Session</button>
+        </div>
       </div>
-    </div>
-    <div id="sessionsList" class="mt-3 grid gap-2"></div>
-    <div id="sessionLog" class="mt-2 space-y-0.5"></div>`;
-  feedEl.prepend(card);
-  const input = card.querySelector('#apiBaseInput');
-  if (input){ input.value = API_BASE; input.addEventListener('change', ()=>{ localStorage.setItem('beatloop_api', input.value.trim()); API_BASE = input.value.trim(); refreshSessions(); }); }
+      <div id="sessionsList" class="mt-3 grid gap-2"></div>`;
+    feed.prepend(sessionsCard);
+  }
 
+  // --- Helpers to fetch + paint the sessions list ---
   async function refreshSessions(){
     try{
-      const r = await fetch(API_BASE + '/api/sessions');
+      const r = await fetch(API + '/api/sessions');
       const { sessions=[] } = await r.json();
-      const wrap = card.querySelector('#sessionsList');
+      const wrap = document.getElementById('sessionsList'); if (!wrap) return;
       wrap.innerHTML = '';
       sessions.forEach(s => {
         const row = document.createElement('div');
         row.className = 'flex items-center justify-between rounded-lg bg-white/5 px-3 py-2';
+        const host = s.host || {};
+        const hostName = host.name || 'host';
+        const hostAvatar = host.avatar || '/img/avatar-default.svg';
         row.innerHTML = `
-          <div class="text-sm">
-            <div class="font-semibold">Tempo ${s.tempo} • ${s.participants}/${s.maxPlayers} inside ${s.host && s.host.name ? `— host: ${s.host.name}` : ''}</div>
-            <div class="text-white/60 text-xs">Open ${Math.floor((s.openSec||0)/60)}m ${(s.openSec||0)%60}s ago</div>
-            <div class="flex items-center gap-1 mt-1">
-              ${(s.roster||[]).slice(0,6).map(u=>`<img src="${u.avatar||'/avatar-default.svg'}" title="${u.name||u.email||'user'}" class="h-6 w-6 rounded-full ring-1 ring-white/20">`).join('')}
-              ${(s.roster||[]).length>6? `<span class="text-xs text-white/60 pl-1">+${(s.roster||[]).length-6} more</span>`:''}
+          <div class="flex items-center gap-2 text-sm">
+            <img src="${hostAvatar}" class="h-6 w-6 rounded-full ring-1 ring-white/20" alt="">
+            <div>
+              <div class="font-semibold">${s.name || 'Untitled'} • Tempo ${s.tempo}</div>
+              <div class="text-white/60 text-xs">by ${hostName} • ${s.participants}/${s.maxPlayers} inside • Open ${Math.max(0, Math.floor((s.openSec||0)/60))}m ${(s.openSec||0)%60}s</div>
             </div>
           </div>
           <button data-id="${s.id}" class="joinSession rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Join</button>`;
         wrap.appendChild(row);
       });
-      wrap.querySelectorAll('.joinSession').forEach(btn => btn.onclick = ()=> joinSession(btn.dataset.id));
-    } catch(e){ /* silent */ }
+      wrap.querySelectorAll('.joinSession').forEach(btn => btn.onclick = () => joinSession(btn.dataset.id));
+    } catch {}
   }
-  window.refreshSessions = refreshSessions;
   refreshSessions();
   setInterval(refreshSessions, 5000);
 
-  card.querySelector('#btnNewSession').onclick = async ()=>{
-    try{
+  // --- Start Session (optional name) ---
+  document.getElementById('btnNewSession')?.addEventListener('click', async () => {
+    try {
       const bpmEl = document.getElementById('blBpm');
       const tempo = bpmEl ? +bpmEl.value : 92;
-      const r = await fetch(API_BASE + '/api/sessions', { method:'POST', headers:{'Content-Type':'application/json', ...AUTH.hdr()}, body: JSON.stringify({ tempo })});
+      const name = (document.getElementById('newSessionName')?.value || '').trim();
+      const r = await fetch(API + '/api/sessions', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', ...AUTH.hdr() },
+        body: JSON.stringify({ tempo, name })
+      });
       const { id } = await r.json();
       await refreshSessions();
       joinSession(id);
-    } catch(e){ alert('Could not start session.'); }
-  };
-})();
-
-// --------- Join + sockets + roster ---------
-let socket=null, currentSessionId=null, sessionMax=8;
-function renderRoster(roster){
-  try {
-    const list = document.getElementById('rosterList');
-    const countEl = document.getElementById('rosterCount');
-    if (!list || !countEl) return;
-    list.innerHTML = '';
-    (roster||[]).forEach(u => {
-      const img = document.createElement('img');
-      img.src = u.avatar || '/avatar-default.svg';
-      img.title = u.name || u.email || 'user';
-      img.className = 'h-7 w-7 rounded-full ring-1 ring-white/20';
-      list.appendChild(img);
-    });
-    countEl.textContent = `${(roster||[]).length}/${sessionMax}`;
-  } catch(e){}
-}
-
-async function joinSession(id){
-  if (!AUTH.token){ window.location.href = 'login.html'; return; }
-  try {
-    const r = await fetch(`${API_BASE}/api/sessions/${id}/join`, { method:'POST', headers:{ ...AUTH.hdr() }});
-    if (!r.ok) throw new Error('Join failed');
-    currentSessionId = id;
-    document.getElementById('beatloopStudio')?.classList.remove('hidden');
-
-    // fetch details for header/roster
-    try {
-      const det = await (await fetch(`${API_BASE}/api/sessions/${id}`, { headers:{...AUTH.hdr()} })).json();
-      sessionMax = det.maxPlayers || 8;
-      renderRoster(det.roster || det.participants || []);
-      const hdr = document.querySelector('#beatloopStudio h3');
-      if (hdr && det.host && det.host.name) hdr.title = `Host: ${det.host.name}`;
-    } catch {}
-
-    // connect socket
-    socket?.disconnect();
-    socket = io(API_BASE, { auth: { token: AUTH.token }});
-    socket.emit('session:join', { sessionId: id });
-
-    socket.on('tempo:update', ({ tempo }) => {
-      const bpm = document.getElementById('blBpm');
-      if (bpm) { bpm.value = tempo; document.getElementById('blBpmVal').textContent = tempo; }
-    });
-    socket.on('grid:update', ({ row, col, on, bank }) => {
-      const b = (typeof bank==='number') ? bank : window.currentBank || 0;
-      const p = window.patterns ? (window.patterns[b] || (window.patterns[b] = [])) : null;
-      if (p){
-        if (!Array.isArray(p[row])) p[row] = Array(window.STEPS||16).fill(false);
-        p[row][col] = !!on;
-      }
-      const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
-      if (cell) cell.classList.toggle('on', !!on);
-    });
-    socket.on('tag:play', ({ url, at }) => {
-      const when = Math.max(0, at - Date.now());
-      const audio = new Audio(url);
-      setTimeout(()=> audio.play().catch(()=>{}), when);
-    });
-    socket.on('presence:update', ({ roster }) => renderRoster(roster));
-    socket.on('session:roster', ({ roster }) => renderRoster(roster));
-    socket.on('user:joined', ({ roster }) => renderRoster(roster));
-    socket.on('user:left', ({ roster, name }) => {
-      renderRoster(roster);
-      const log = document.getElementById('sessionLog');
-      if (log && name) { const li = document.createElement('div'); li.className='text-xs text-white/60'; li.textContent = `${name} left`; log.prepend(li); }
-    });
-    socket.on('session:ended', ()=>{
-      alert('This session has ended.');
-      document.getElementById('beatloopStudio')?.classList.add('hidden');
-      currentSessionId = null;
-    });
-
-    // host-only tempo control emission
-    const tempoSlider = document.getElementById('blBpm');
-    if (tempoSlider){
-      tempoSlider.oninput = (e)=>{
-        const t = +e.target.value;
-        document.getElementById('blBpmVal').textContent = t;
-        if (currentSessionId && socket) socket.emit('tempo:set', { sessionId: currentSessionId, tempo: t });
-      };
+    } catch {
+      alert('Could not start session.');
     }
+  });
 
-    // grid click sends updates
-    const grid = document.getElementById('blGrid');
-    if (grid){
-      grid.addEventListener('click', (e)=>{
-        const cell = e.target.closest('.step');
-        if (!cell || !currentSessionId || !socket) return;
-        const row = +cell.dataset.r, col = +cell.dataset.c;
-        const on = !cell.classList.contains('on');
-        cell.classList.toggle('on', on);
-        socket.emit('grid:update', { sessionId: currentSessionId, row, col, on, bank: window.currentBank||0 });
+  // --- Participant strip (avatars under the Studio title) ---
+  const studio = document.getElementById('beatloopStudio');
+  const strip = document.createElement('div');
+  strip.id = 'participantsStrip';
+  strip.className = 'mt-2 flex items-center gap-2 overflow-x-auto';
+  (studio?.querySelector('h3, .studio-title') || studio?.firstElementChild || studio)?.after(strip);
+
+  function openProfileCard(p){
+    const existing = document.getElementById('profileFly');
+    if (existing) existing.remove();
+    const fly = document.createElement('div');
+    fly.id = 'profileFly';
+    fly.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200]';
+    fly.innerHTML = `
+      <div class="rounded-2xl bg-[#16161c] ring-1 ring-white/10 p-6 w-[320px]">
+        <div class="flex items-center gap-3">
+          <img src="${(p.avatar || '/img/avatar-default.svg')}" class="h-12 w-12 rounded-full ring-1 ring-white/20" alt="">
+          <div>
+            <div class="text-lg font-semibold">${p.name || 'user'}</div>
+            <div class="text-white/50 text-xs">${p.email || ''}</div>
+          </div>
+        </div>
+        <div class="mt-4 text-sm text-white/70">Joined: ${p.joinedAt ? new Date(p.joinedAt).toLocaleString() : '—'}</div>
+        <div class="mt-6 flex justify-end">
+          <button class="rounded-lg bg-white/10 px-3 py-1.5" onclick="document.getElementById('profileFly').remove()">Close</button>
+        </div>
+      </div>`;
+    document.body.appendChild(fly);
+  }
+
+  function renderParticipants(list){
+    const count = (list||[]).length;
+    const cap = 8;
+    const countEl = document.getElementById('sessionCount');
+    const rosterCount = document.getElementById('rosterCount');
+    const rosterList  = document.getElementById('rosterList');
+    if (countEl) countEl.textContent = `${count}/${cap}`;
+    if (rosterCount) rosterCount.textContent = `${count}/${cap}`;
+    if (rosterList) {
+      rosterList.innerHTML = '';
+      (list||[]).slice(0,8).forEach(p => {
+        const img = document.createElement('img');
+        img.src = p.avatar || '/img/avatar-default.svg';
+        img.className = 'h-7 w-7 rounded-full ring-1 ring-white/20';
+        img.title = p.name || p.email || 'user';
+        img.onclick = () => openProfileCard(p);
+        rosterList.appendChild(img);
       });
     }
-  } catch(e){
-    alert(e.message || 'Could not join session');
+    strip.innerHTML = '';
+    (list||[]).forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = 'relative shrink-0';
+      btn.innerHTML = `
+        <img src="${(p.avatar || '/img/avatar-default.svg')}" class="h-8 w-8 rounded-full ring-1 ring-white/20" alt="">
+        <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-white/70">${p.name || 'user'}</span>`;
+      btn.onclick = () => openProfileCard(p);
+      strip.appendChild(btn);
+    });
   }
-}
+
+  // --- Join, sockets, leave-on-close, grid sync ---
+  let socket = null, currentSessionId = null;
+
+  async function joinSession(id){
+    try {
+      const r = await fetch(API + `/api/sessions/${id}/join`, { method:'POST', headers:{ ...AUTH.hdr() }});
+      if (!r.ok) return alert('Session full or unavailable.');
+      const { participants } = await r.json();
+      currentSessionId = id;
+      document.getElementById('beatloopStudio')?.classList.remove('hidden');
+      renderParticipants(participants);
+
+      // (re)connect socket
+      if (socket) try { socket.disconnect(); } catch {}
+      socket = io(API, { auth: { token: AUTH.token }});
+      socket.emit('session:join', { sessionId: id });
+
+      // tempo + grid + roster updates
+      socket.on('tempo:update', ({ tempo }) => {
+        const bpm = document.getElementById('blBpm');
+        if (bpm) { bpm.value = tempo; document.getElementById('blBpmVal').textContent = tempo; }
+      });
+      socket.on('grid:update', ({ row, col, on }) => {
+        const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
+        if (cell) cell.classList.toggle('on', !!on);
+      });
+      socket.on('participants', ({ list }) => renderParticipants(list));
+      socket.on('presence:update', ({ roster }) => renderParticipants(roster));
+      socket.on('user:joined', ({ roster }) => renderParticipants(roster));
+      socket.on('user:left',    ({ roster }) => renderParticipants(roster));
+      socket.on('session:ended', () => {
+        alert('This session has ended.');
+        currentSessionId = null;
+        document.getElementById('beatloopStudio')?.classList.add('hidden');
+      });
+
+      // host-only tempo control emission (server enforces host)
+      const tempoSlider = document.getElementById('blBpm');
+      if (tempoSlider){
+        tempoSlider.oninput = (e) => {
+          const t = +e.target.value;
+          document.getElementById('blBpmVal').textContent = t;
+          if (currentSessionId && socket) socket.emit('tempo:set', { sessionId: currentSessionId, tempo: t });
+        };
+      }
+
+      // grid click → broadcast
+      const grid = document.getElementById('blGrid');
+      if (grid && !grid._socketBound){
+        grid.addEventListener('click', (e) => {
+          const cell = e.target.closest('.step');
+          if (!cell || !currentSessionId || !socket) return;
+          const row = +cell.dataset.r, col = +cell.dataset.c;
+          const on  = !cell.classList.contains('on');
+          cell.classList.toggle('on', on);
+          socket.emit('grid:update', { sessionId: currentSessionId, row, col, on });
+        });
+        grid._socketBound = true;
+      }
+
+      // leave on tab close or Close button
+      const leave = async () => {
+        try { socket && socket.emit('session:leave', { sessionId: currentSessionId }); } catch {}
+        try { await fetch(API + `/api/sessions/${currentSessionId}/leave`, { method:'POST', headers:{ ...AUTH.hdr() } }); } catch {}
+      };
+      window.addEventListener('beforeunload', leave, { once:true });
+      document.getElementById('blClose')?.addEventListener('click', leave, { once:true });
+
+    } catch {
+      alert('Could not join session');
+    }
+  }
+  window.joinSession = joinSession;
+
+  // (Optional) thumbnails stream hook if the server emits per-user snapshots
+  // socket?.on('grid:snapshot', ({ user, steps }) => { /* render tiny 16-step thumbnails here */ });
+
+})();
 </script>
+
