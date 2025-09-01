@@ -828,35 +828,84 @@ function createPost(track) {
     }
 
     // ---------- Upload track -> IDB blob + meta in localStorage
-    uploadTrackInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0]
-      if (!file) return
-      const id = 'custom-' + Date.now()
-      try {
-        await putBlob('tracks', id, file)
-        const meta = {
-          id,
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          artist: (currentUser?.name || currentUser?.email || 'me'),
-          bpm: 0, db: true, coverKey: pendingCoverKey || null
-        }
-        // keep meta small & cap list to avoid growth
-        customMeta.push(meta)
-        if (customMeta.length > 30) customMeta.shift()
-        setJSON('custom_tracks', customMeta)
+uploadTrackInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  const API = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com'
+  const token = localStorage.getItem('jwt') || ''
+  const idLocal = 'custom-' + Date.now()
 
-        // immediate preview with blob URL
-        const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
-        const url = URL.createObjectURL(file)
-        createPost({ ...meta, url, cover: coverUrl })
-        updateLeaderboard()
-        pendingMeta = meta
-      } catch (err) {
-        alert('Save failed: ' + err.message)
-      } finally {
-        e.target.value = ''
+  // Build a tiny meta now so we can still post locally if API fails
+  const metaLocal = {
+    id: idLocal,
+    title: file.name.replace(/\.[^/.]+$/, ''),
+    artist: (currentUser?.name || currentUser?.email || 'me'),
+    bpm: 0, db: true, coverKey: pendingCoverKey || null
+  }
+
+  try {
+    // 1) Try API save
+    const fd = new FormData()
+    fd.append('audio', file)
+    if (pendingCoverKey) {
+      // resolve cover blob from IDB and attach
+      const coverUrl = await getBlobUrl('covers', pendingCoverKey)
+      if (coverUrl) {
+        const coverBlob = await fetch(coverUrl).then(r=>r.blob())
+        fd.append('cover', coverBlob, 'cover.png')
       }
+    }
+    fd.append('title', metaLocal.title)
+    fd.append('bpm', String(metaLocal.bpm))
+
+    const r = await fetch(API + '/api/tracks', {
+      method: 'POST',
+      headers: token ? { Authorization: 'Bearer ' + token } : {},
+      body: fd
     })
+
+    if (r.ok) {
+      // server returns {id,title,artist,bpm,coverUrl,audioUrl}
+      const saved = await r.json()
+      // Show the post immediately with server URLs
+      createPost({
+        id: saved.id || metaLocal.id,
+        title: saved.title || metaLocal.title,
+        artist: saved.artist || metaLocal.artist,
+        bpm: saved.bpm || 0,
+        db: false,
+        url: saved.audioUrl,
+        cover: saved.coverUrl || DEFAULT_TRACK_COVER
+      })
+      updateLeaderboard()
+      pendingMeta = null
+      pendingCoverKey = null
+      return
+    }
+
+    // If API wasn’t OK → fall through to local
+    throw new Error('API rejected, using local fallback')
+  } catch (err) {
+    // 2) Local fallback (IDB)
+    try {
+      await putBlob('tracks', idLocal, file)
+      customMeta.push(metaLocal)
+      if (customMeta.length > 30) customMeta.shift()
+      setJSON('custom_tracks', customMeta)
+
+      const coverUrl = metaLocal.coverKey ? (await getBlobUrl('covers', metaLocal.coverKey)) : DEFAULT_TRACK_COVER
+      const url = URL.createObjectURL(file)
+      createPost({ ...metaLocal, url, cover: coverUrl })
+      updateLeaderboard()
+      pendingMeta = metaLocal
+    } catch (saveErr) {
+      alert('Save failed: ' + (saveErr?.message || saveErr))
+    }
+  } finally {
+    e.target.value = ''
+  }
+})
+
 
     // ---------- Optional cover upload -> IDB
     uploadCoverInput.addEventListener('change', async (e)=>{
@@ -865,7 +914,7 @@ function createPost(track) {
       const key = 'cover-' + Date.now()
       try {
         await putBlob('covers', key, file)
-        pendingCoverKey = key
+        pendingCoverKey = key || null
       } catch (err) {
         alert('Cover save failed: ' + err.message)
       } finally {
