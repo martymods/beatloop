@@ -1064,25 +1064,48 @@ const LOOPS = {
         if (roll[p][i]) cell.classList.add('on');
         cell.dataset.p = p; cell.dataset.i = i;
 
-        
-      let painting = false;
-      let paintOn = true; // drag mode: add or erase
-      cell.addEventListener('mousedown', (e)=>{
-        painting = true;
-        const bank = (typeof currentBank!=='undefined'?currentBank:0);
-        const entry = ensurePR(bank, prRow);
-        const exists = !!entry.notes[p][i];
-        // Ctrl/Cmd forces erase; otherwise toggle based on current state
-        paintOn = !(e.ctrlKey || e.metaKey) && !exists;
-        setPR(p, i, paintOn);
-      });
-      cell.addEventListener('mouseenter', (e)=>{
-        if (painting) setPR(p, i, paintOn);
-      });
-      cell.addEventListener('mouseup', ()=>{ painting = false; });
-      cell.addEventListener('contextmenu', (e)=>{ e.preventDefault(); setPR(p, i, false); });
-      prGridEl.appendChild(cell);
-}
+        let painting = false;
+
+
+        let paintOn = true; // drag mode: add or erase
+
+
+        cell.addEventListener('mousedown', (e)=>{
+
+
+          painting = true;
+
+
+          const bank = (typeof currentBank!=='undefined'?currentBank:0);
+
+
+          const entry = ensurePR(bank, prRow);
+
+
+          const exists = !!entry.notes[p][i];
+
+
+          // Ctrl/Cmd forces erase; otherwise toggle based on existing state
+
+
+          paintOn = !(e.ctrlKey || e.metaKey) && !exists;
+
+
+          setPR(p, i, paintOn);
+
+
+        });
+
+
+        cell.addEventListener('mouseenter', (e)=>{ if (painting) setPR(p, i, paintOn); });
+
+
+        cell.addEventListener('mouseup', ()=>{ painting = false; });
+
+
+        cell.addEventListener('contextmenu', (e)=>{ e.preventDefault(); setPR(p, i, false); });
+prGridEl.appendChild(cell);
+      }
     }
       prEnsurePlayline();
 }
