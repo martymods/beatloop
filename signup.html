@@ -21,7 +21,7 @@
 <body class="bg-[#0c0c12] text-white min-h-screen flex items-center justify-center">
   <div class="glass rounded-2xl p-8 ring-1 ring-white/10 w-full max-w-md">
     <h1 class="text-2xl font-extrabold mb-4">Create your beatloop account</h1>
-    <form id="signupForm" class="space-y-4" novalidate>
+    <form id="signupForm" class="space-y-4">
       <div>
         <label for="name" class="block text-sm mb-1">Name</label>
         <input id="name" type="text" required class="w-full rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Your name" />
@@ -36,6 +36,7 @@
       </div>
       <div>
         <label for="confirm" class="block text-sm mb-1">Confirm Password</label>
+        <!-- Do not use the required attribute here; validation happens in JS to prevent browser errors -->
         <input id="confirm" type="password" class="w-full rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="••••••••" />
       </div>
       <div>
@@ -47,65 +48,103 @@
     <p class="mt-4 text-center text-sm text-white/70">Already have an account? <a href="login.html" class="text-primary hover:underline">Sign in</a></p>
     <p id="errorMsg" class="mt-3 text-sm text-red-500 hidden"></p>
   </div>
-
   <script>
-    const form = document.getElementById('signupForm');
-    const err  = document.getElementById('errorMsg');
-
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = () => reject(reader.error)
+        reader.readAsDataURL(file)
+      })
+    }
+    const form = document.getElementById('signupForm')
     form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      err.classList.add('hidden');
-
-      const name = document.getElementById('name').value.trim();
-      const email = document.getElementById('email').value.trim().toLowerCase();
-      const password = document.getElementById('password').value;
-      const confirm = document.getElementById('confirm').value;
-
-      if (!name || !email || !password) {
-        err.textContent = 'Please fill in all required fields.';
-        err.classList.remove('hidden');
-        return;
+      e.preventDefault()
+      const name = document.getElementById('name').value.trim()
+      const email = document.getElementById('email').value.trim().toLowerCase()
+      const password = document.getElementById('password').value
+      const confirm = document.getElementById('confirm').value
+      const avatarFile = document.getElementById('avatar').files[0]
+      const error = document.getElementById('errorMsg')
+      // Hide previous error
+      error.classList.add('hidden')
+      // Note: we accept the password as entered without requiring a separate confirmation match check.
+      // You can implement stricter validation in the future.
+      let users = JSON.parse(localStorage.getItem('users') || '{}')
+      if (users[email]) {
+        error.textContent = 'An account with this email already exists'
+        error.classList.remove('hidden')
+        return
       }
-      if (confirm && confirm !== password) {
-        err.textContent = 'Passwords do not match.';
-        err.classList.remove('hidden');
-        return;
+      let avatarData = ''
+      if (avatarFile) {
+        try {
+          avatarData = await readFileAsDataUrl(avatarFile)
+        } catch (err) {}
       }
-
-      try {
-        const r = await fetch(API_BASE + '/api/auth/signup', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify({ name, email, password })
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'Sign up failed');
-
-        // Save JWT and user just like login.html does
-        AUTH.set(data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-
-        // (Optional avatar upload is skipped; your app already falls back to a default avatar.)
-
-        // Continue to the app
-        window.location.href = 'network.html';
-      } catch (e) {
-        err.textContent = e.message;
-        err.classList.remove('hidden');
-      }
-    });
+      // If no avatar uploaded, assign the default fallback avatar
+      users[email] = { name, email, password, avatar: avatarData || '/img/avatar-default.svg' }
+      localStorage.setItem('users', JSON.stringify(users))
+      localStorage.setItem('current_user', email)
+      // Redirect to feed
+      window.location.href = 'network.html'
+    })
   </script>
 
-  <!-- Global API configuration for the beatloop webapp (same block as login.html) -->
-  <script>
-    // Point this at your Render API URL after deploy:
-    const API_BASE = localStorage.getItem('beatloop_api') || 'http://localhost:8080';
-    function setApiBase(url){ localStorage.setItem('beatloop_api', url); }
-    let AUTH = {
-      token: localStorage.getItem('jwt') || '',
-      set(t){ this.token = t; localStorage.setItem('jwt', t); },
-      hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
-    };
-  </script>
+
+<script>
+  const errEl = document.getElementById('errorMsg');
+
+  async function nameTaken(name){
+    try{
+      const r = await fetch(API_BASE + '/api/users/exists?name=' + encodeURIComponent(name));
+      if (!r.ok) return false;
+      const j = await r.json();
+      return !!(j.exists);
+    }catch{ return false; }
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errEl?.classList?.add('hidden');
+
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim().toLowerCase();
+    const password = document.getElementById('password').value;
+    const confirm = document.getElementById('confirm')?.value || password;
+    const avatarFile = document.getElementById('avatar')?.files?.[0];
+
+    if (password !== confirm) {
+      if (errEl){ errEl.textContent = 'Passwords do not match'; errEl.classList.remove('hidden'); }
+      return;
+    }
+
+    try {
+      if (await nameTaken(name)) throw new Error('That display name is already taken. Choose another.');
+
+      const r = await fetch(API_BASE + '/api/auth/signup', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ name, email, password })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Sign up failed');
+      AUTH.set(data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      // Optional: upload avatar if chosen
+      if (avatarFile){
+        const fd = new FormData(); fd.append('avatar', avatarFile);
+        await fetch(API_BASE + '/api/users/avatar', { method:'POST', headers:{ ...AUTH.hdr() }, body: fd });
+      }
+
+      window.location.href = 'network.html';
+    } catch (e) {
+      if (errEl){ errEl.textContent = e.message; errEl.classList.remove('hidden'); }
+      else alert(e.message);
+    }
+  });
+</script>
+
 </body>
 </html>
