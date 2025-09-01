@@ -930,6 +930,7 @@
     })
   </script>
 
+<script src="https://unpkg.com/wavesurfer.js@7"></script>
 <!-- Tone.js for WebAudio sequencing -->
 <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
 <script>
@@ -1008,12 +1009,13 @@ const LOOPS = {
   const loopsWrap = document.getElementById('blLoops');
   const saveBtn   = document.getElementById('blSaveWav');
   // --- Piano Roll UI refs (lazy) ---
-  let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan; let prPlayline=null;
+  let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl; let prPlayline=null; let prWS=null;
   let _prInit = false;
   function _ensurePRRefs(){
     if (_prInit) return;
     prOverlay = document.getElementById('prOverlay');
     prGridEl  = document.getElementById('prGrid');
+    prWaveEl  = document.getElementById('prWave');
     prClose   = document.getElementById('prClose');
     prTitle   = document.getElementById('prTitle');
     prSubdiv  = document.getElementById('prSubdiv');
@@ -1172,16 +1174,42 @@ const LOOPS = {
   // --- Piano Roll logic ---
   let prRow = null; // which row we're editing
   function openPianoRoll(row, label){
-    _ensurePRRefs();
-    prRow = row;
-    if (prTitle) prTitle.textContent = `Piano Roll — ${label}`;
-    if (prSubdiv) prSubdiv.value = String(SUBDIV);
-    drawPianoRoll();
-    if (prOverlay) prOverlay.style.display = 'block';
+_ensurePRRefs();
+prRow = row;
+if (prTitle) prTitle.textContent = `Piano Roll — ${label}`;
+if (prSubdiv) prSubdiv.value = String(SUBDIV);
+// Waveform for LOOP rows only
+try {
+  if (prWaveEl) prWaveEl.innerHTML = '';
+  const isLoopRow = (typeof kitRowCount!=='undefined' && typeof row!=='undefined') ? (row >= kitRowCount) : false;
+  if (isLoopRow) {
+    if (typeof WaveSurfer !== 'undefined' && prWaveEl) {
+      if (prWS && typeof prWS.destroy === 'function') { try { prWS.destroy(); } catch {} prWS = null; }
+      prWS = WaveSurfer.create({
+        container: prWaveEl,
+        height: 64,
+        barWidth: 2,
+        barGap: 1,
+        waveColor: ['#ffffff22', '#7c3aed'],
+        progressColor: ['#7c3aed', '#22d3ee'],
+        cursorWidth: 0,
+      });
+      const idx = row - (typeof kitRowCount!=='undefined'?kitRowCount:0);
+      const src = (Array.isArray(loopSources) && loopSources[idx]) ? loopSources[idx] : null;
+      if (src) prWS.load(src);
+    }
+  } else {
+    if (prWS && typeof prWS.destroy === 'function') { try { prWS.destroy(); } catch {} prWS = null; }
+    if (prWaveEl) prWaveEl.innerHTML = '';
+  }
+} catch {}
+drawPianoRoll();
+if (prOverlay) prOverlay.style.display = 'block';
   }
   function closePianoRoll(){
     _ensurePRRefs();
     if (prOverlay) prOverlay.style.display = 'none';
+    try { if (prWS && prWS.destroy) { prWS.destroy(); prWS = null; } if (prWaveEl) prWaveEl.innerHTML=''; } catch {}
     prRow = null;
   }
   function prEnsurePlayline(){
@@ -1293,6 +1321,7 @@ const patternSel= document.getElementById('blPattern');
   // per-row nodes
   let volumes=[], panners=[], pitches=[], rowLabels=[];
   let kitSamplers=[], loopPlayers=[];
+  let loopSources=[];
   const selectedLoops = new Set();
 
   // transport
@@ -1483,6 +1512,7 @@ let lastBar = -1;             // arranger playhead column
     kitRowCount = files.length;
 
     const loopFiles = Array.from(selectedLoops);
+    loopSources = loopFiles.slice();
     const labels = [...kit.names, ...loopFiles.map(filenameLabel)];
     resizeAllBanks(labels.length);    // keep all banks in-sync with row count
 
@@ -1886,6 +1916,7 @@ stopBtn.addEventListener('click', () => {
       <label class="dial"><b>Pan</b><input id="prPan" type="range" min="-10" max="10" step="1" value="0"></label>
       <span class="text-xs text-white/60">Click cells to toggle; drag across to paint</span>
     </div>
+    <div id="prWave" class="mt-2 h-16 w-full rounded bg-white/5 ring-1 ring-white/10"></div>
     <div id="prGrid" class="pr-grid"></div>
   </div>
 </div>
