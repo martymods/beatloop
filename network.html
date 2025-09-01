@@ -423,19 +423,26 @@
       return user
     }
 function ensureLoggedIn() {
-  // Prefer new shape
+  // Prefer the new user shape
   let u = null;
   try { u = JSON.parse(localStorage.getItem('user') || 'null'); } catch {}
-  // Fall back to legacy local account
+
+  // Fall back to legacy local account and upgrade it to `user`
   if (!u) {
-    currentUser = loadCurrentUser();
-    if (currentUser) {
-      u = { name: currentUser.name || 'me', email: currentUser.email || localStorage.getItem('current_user'), avatar: currentUser.avatar || '/img/avatar-default.svg' };
+    const legacy = localStorage.getItem('current_user') || localStorage.getItem('currentUser');
+    if (legacy) {
+      u = { name: legacy.split('@')[0], email: legacy, avatar: '/img/avatar-default.svg' };
       localStorage.setItem('user', JSON.stringify(u));
     }
   }
-  if (!u) window.location.href = 'login.html';
+
+  // If we *still* have no identity → go to login
+  if (!u) { window.location.href = 'login.html'; return; }
+
+  // ✅ make it globally available
+  currentUser = u;
 }
+
 
 
     // ---------- Comments storage
@@ -510,41 +517,43 @@ const feedEl = document.getElementById('feed');
     }
 
     // ---------- Build a feed card
-    function createPost(track) {
-      const stats = getStats(track.id)
-      const card = document.createElement('article')
-      card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
+function createPost(track) {
+  const me = currentUser || (function(){ try { return JSON.parse(localStorage.getItem('user')||'null') } catch{} return null })() || {};
+  const stats = getStats(track.id)
+  const card = document.createElement('article')
+  card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
 
-      const header = document.createElement('div')
-      header.className = 'flex gap-3'
-      const avatar = document.createElement('img')
-      avatar.src = currentUser.avatar || fallbackAvatar
-      avatar.onerror = () => { avatar.src = fallbackAvatar }
-      avatar.alt = 'avatar'
-      avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
-      header.appendChild(avatar)
+  const header = document.createElement('div')
+  header.className = 'flex gap-3'
+  const avatar = document.createElement('img')
+  avatar.src = me.avatar || fallbackAvatar
+  avatar.onerror = () => { avatar.src = fallbackAvatar }
+  avatar.alt = 'avatar'
+  avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
+  header.appendChild(avatar)
 
-      const info = document.createElement('div')
-      info.className = 'min-w-0 flex-1'
-      const topRow = document.createElement('div')
-      topRow.className = 'flex items-center gap-2 text-sm'
-      const nameEl = document.createElement('span')
-      nameEl.className = 'font-semibold truncate'
-      nameEl.textContent = currentUser.name || currentUser.email
-      const handleEl = document.createElement('span')
-      handleEl.className = 'text-white/50 truncate'
-      const handle = (currentUser.name || currentUser.email).toLowerCase().replace(/[^a-z0-9_]/g, '')
-      handleEl.textContent = '@' + handle
-      const timeEl = document.createElement('span')
-      timeEl.className = 'text-white/40'
-      timeEl.textContent = '· ' + timeAgo(Date.now())
-      topRow.appendChild(nameEl)
-      topRow.appendChild(handleEl)
-      topRow.appendChild(timeEl)
-      info.appendChild(topRow)
-      info.appendChild(document.createElement('p'))
-      header.appendChild(info)
-      card.appendChild(header)
+  const info = document.createElement('div')
+  info.className = 'min-w-0 flex-1'
+  const topRow = document.createElement('div')
+  topRow.className = 'flex items-center gap-2 text-sm'
+  const nameEl = document.createElement('span')
+  nameEl.className = 'font-semibold truncate'
+  nameEl.textContent = me.name || me.email || 'me'
+  const handleEl = document.createElement('span')
+  handleEl.className = 'text-white/50 truncate'
+  const handle = (me.name || me.email || 'me').toLowerCase().replace(/[^a-z0-9_]/g, '')
+  handleEl.textContent = '@' + handle
+  const timeEl = document.createElement('span')
+  timeEl.className = 'text-white/40'
+  timeEl.textContent = '· ' + timeAgo(Date.now())
+  topRow.appendChild(nameEl)
+  topRow.appendChild(handleEl)
+  topRow.appendChild(timeEl)
+  info.appendChild(topRow)
+  info.appendChild(document.createElement('p'))
+  header.appendChild(info)
+  card.appendChild(header)
+
 
       const trackWrapper = document.createElement('div')
       trackWrapper.className = 'mt-3 rounded-xl bg-black/30 p-3 ring-1 ring-white/10'
@@ -938,7 +947,7 @@ const feedEl = document.getElementById('feed');
 
       // Set composer avatar
       if (composerAvatarEl) {
-        composerAvatarEl.src = currentUser.avatar || fallbackAvatar
+        composerAvatarEl.src = (currentUser && currentUser.avatar) ? currentUser.avatar : fallbackAvatar
         composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar }
       }
       // Render suggestions / trends / leaderboard for both mobile & desktop blocks
@@ -2104,6 +2113,14 @@ stopBtn.addEventListener('click', () => {
   }
   refreshSessions();
   setInterval(refreshSessions, 5000);
+  // Attempt stale session cleanup every minute (no-op if endpoint doesn’t exist)
+setInterval(() => {
+  fetch((localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com') + '/api/sessions/cleanup', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('jwt') || '') }
+  }).catch(()=>{});
+}, 60000);
+
 
   // --- Start Session (optional name) ---
   document.getElementById('btnNewSession')?.addEventListener('click', async () => {
@@ -2250,7 +2267,9 @@ stopBtn.addEventListener('click', () => {
         try { socket && socket.emit('session:leave', { sessionId: currentSessionId }); } catch {}
         try { await fetch(API + `/api/sessions/${currentSessionId}/leave`, { method:'POST', headers:{ ...AUTH.hdr() } }); } catch {}
       };
-      window.addEventListener('beforeunload', leave, { once:true });
+window.addEventListener('beforeunload', leave, { once:true });
+document.addEventListener('visibilitychange', () => { if (document.hidden) leave(); }, { passive:true });
+
       document.getElementById('blClose')?.addEventListener('click', leave, { once:true });
 
     } catch {
