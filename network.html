@@ -45,17 +45,6 @@
   .ctrl-switch{display:inline-flex;gap:2px;background:#1f1f28;border-radius:999px;padding:2px}
   .ctrl-switch button{width:18px;height:18px;line-height:18px;border-radius:999px;font-size:.6rem;color:#bbb;background:transparent}
   .ctrl-switch button.on{background:#7c3aed;color:#fff;box-shadow:0 0 8px rgba(124,58,237,.35)}
-
-  /* Volume indicator bubble: green (normal) → purple (selected) → hazard orange (mute) */
-  .v-indicator {
-    display:inline-flex; align-items:center; justify-content:center;
-    width:22px; height:22px; border-radius:999px; font-size:.65rem;
-    color:#0f0f15; background:#10b981;
-    box-shadow:0 0 10px rgba(16,185,129,.6);
-    cursor:pointer; user-select:none;
-  }
-  .v-indicator.sel   { background:#7c3aed; color:#fff; box-shadow:0 0 12px rgba(124,58,237,.6); }
-  .v-indicator.muted { background:#f59e0b; color:#0f0f15; box-shadow:0 0 12px rgba(245,158,11,.8); }
   
 /* 4-step striping + arranger cells */
 .step.alt{ background: rgba(255,255,255,.14)!important; }  /* slightly lighter every 4 cols */
@@ -215,6 +204,10 @@
     <div class="relative mx-auto mt-10 w-[min(1100px,92vw)] max-h-[88vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#0f0f15] p-4 ring-1 ring-white/10">
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-semibold">Beatloop Studio — 16-Step Sampler</h3>
+<div class="flex items-center gap-3 text-sm">
+  <div id="rosterCount" class="rounded-full bg-white/10 px-2 py-1">0/8</div>
+  <div id="rosterList" class="flex -space-x-2"></div>
+</div>
 <div class="flex items-center gap-2">
   <label class="hidden md:flex items-center gap-2 text-sm text-white/70">
     Pattern
@@ -260,14 +253,6 @@
     <!-- Populated by script -->
   </div>
 </div>
-
-        <!-- Sound Tag uploader -->
-        <div class="mt-4">
-          <label class="block text-xs text-white/60 mb-1">Your 3-sec Sound Tag</label>
-          <input id="tagFile" type="file" accept="audio/*" class="w-full text-xs">
-          <button id="btnTagUpload" class="mt-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/15">Upload tag</button>
-          <p id="tagMsg" class="text-xs text-white/60 mt-1"></p>
-        </div>
 
           <p class="mt-4 text-xs text-white/50">Tip: click steps to toggle. Each row = a sound.</p>
         </div>
@@ -447,7 +432,7 @@
     }
 
     // ---------- Elements
-    const feedEl = document.getElementById('feed')
+    const feedEl = document.getElementById('feed');
     const loadingEl = document.getElementById('loading')
     const scrollTopBtn = document.getElementById('scrollTop')
     const composerAvatarEl = document.getElementById('composerAvatar')
@@ -1454,7 +1439,6 @@ let lastBar = -1;             // arranger playhead column
       lab.innerHTML = `<div class="flex flex-col gap-1 min-w-0">
   <div class="flex items-center gap-2">
     <button class="rounded bg-white/10 px-2 py-0.5 text-xs hover:bg-white/15 shrink-0" data-pr="${r}" title="Open Piano Roll">🎹</button>
-    <button class="v-indicator" data-row="${r}" title="Volume (click = select, second click = mute)">V</button>
     <div class="flex items-center gap-2 shrink-0 ml-auto">
       <div class="ctrl-switch" role="tablist" data-row="${r}">
         <button type="button" class="on" data-kind="vol">V</button>
@@ -1940,185 +1924,232 @@ stopBtn.addEventListener('click', () => {
     <div id="prGrid" class="pr-grid"></div>
   </div>
 </div>
-  <!-- Socket.IO and Live Session, Presence, V/Mute, Tag upload scripts -->
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script>
-    // Ensure the user is logged in and start presence ping
-    (async function ensure() {
-      if (!AUTH || !AUTH.token) {
-        window.location.href = 'login.html';
-        return;
-      }
-      setInterval(async () => {
-        try { await fetch(API_BASE + '/api/presence/ping', { method:'POST', headers: { ...AUTH.hdr() } }); } catch {}
-      }, 15000);
-    })();
 
-    // Volume indicator selection & mute state per row
-    const rowState = {};
-    function setRowMuted(row, muted){
-      try { if (window.volumes && volumes[row]) volumes[row].mute = !!muted; } catch {}
-    }
-    document.addEventListener('click', (e) => {
-      const v = e.target && e.target.closest ? e.target.closest('.v-indicator') : null;
-      if (!v) return;
-      const row = +v.dataset.row;
-      rowState[row] = rowState[row] || { sel:false, muted:false };
-      if (!rowState[row].sel) {
-        rowState[row].sel = true; rowState[row].muted = false;
-      } else {
-        rowState[row].muted = !rowState[row].muted;
-      }
-      v.classList.toggle('sel', rowState[row].sel && !rowState[row].muted);
-      v.classList.toggle('muted', rowState[row].muted);
-      setRowMuted(row, rowState[row].muted);
-    });
+<!-- Profile overlay -->
+<div id="profileOverlay" class="fixed inset-0 z-[80] hidden">
+  <div class="absolute inset-0 bg-black/70 backdrop-blur"></div>
+  <div class="relative mx-auto mt-20 w-[min(520px,92vw)] rounded-2xl border border-white/10 bg-[#0f0f15] p-4 ring-1 ring-white/10">
+    <h3 class="text-lg font-semibold mb-3">Edit Profile</h3>
+    <label class="block text-xs text-white/60 mb-1">Display name</label>
+    <input id="profName" class="w-full rounded-md bg-white/10 px-2 py-1 mb-3" placeholder="Your name">
+    <label class="block text-xs text-white/60 mb-1">Profile photo</label>
+    <input id="profAvatar" type="file" accept="image/*" class="w-full text-xs mb-4">
+    <div class="flex justify-end gap-2">
+      <button id="profCancel" class="rounded-md bg-white/10 px-3 py-1.5">Cancel</button>
+      <button id="profSave" class="rounded-md bg-primary px-3 py-1.5 font-semibold">Save</button>
+    </div>
+  </div>
+</div>
 
-    // Sound tag upload handler
-    const btnTagUpload = document.getElementById('btnTagUpload');
-    if (btnTagUpload) {
-      btnTagUpload.addEventListener('click', async () => {
-        const fileInput = document.getElementById('tagFile');
-        const f = fileInput && fileInput.files ? fileInput.files[0] : null;
-        if (!f) return;
-        const fd = new FormData(); fd.append('tag', f);
-        const r = await fetch(API_BASE + '/api/users/tag', { method:'POST', headers: { ...AUTH.hdr() }, body: fd });
-        const data = await r.json();
-        const msg = document.getElementById('tagMsg');
-        if (!r.ok) {
-          msg.textContent = (data && data.error) || 'Upload failed';
-          return;
-        }
-        msg.textContent = `Uploaded. Duration ${data.duration}s`;
-        const u = JSON.parse(localStorage.getItem('user')||'{}');
-        u.tagUrl = data.tagUrl; localStorage.setItem('user', JSON.stringify(u));
-      });
-    }
 
-    // Live sessions list injection in the timeline
+<script>
+  document.addEventListener('click', (e)=>{
+    if (e.target.matches('a[href="#profile"], button#openProfile, .open-profile')){
+      e.preventDefault();
+      const u = JSON.parse(localStorage.getItem('user')||'{}');
+      document.getElementById('profName').value = u?.name || '';
+      document.getElementById('profileOverlay').classList.remove('hidden');
+    }
+    if (e.target.id === 'profCancel' || e.target.id==='profileOverlay'){
+      document.getElementById('profileOverlay').classList.add('hidden');
+    }
+  }, true);
 
-    if (feedEl) {
-      const sessionsCard = document.createElement('article');
-      sessionsCard.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4';
-      sessionsCard.innerHTML = `<div class="flex items-center justify-between">
-        <h3 class="font-semibold">Live Beatloop Sessions</h3>
-        <button id="btnNewSession" class="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold">Start Session</button>
-      </div>
-      <div id="sessionsList" class="mt-3 grid gap-2"></div>`;
-      feedEl.prepend(sessionsCard);
+  document.getElementById('profSave').onclick = async ()=>{
+    const name = document.getElementById('profName').value.trim();
+    const file = document.getElementById('profAvatar').files[0];
+    // update name
+    if (name){
+      await fetch(API_BASE + '/api/users/profile', { method:'PUT', headers: {'Content-Type':'application/json', ...AUTH.hdr()}, body: JSON.stringify({ name }) }).catch(()=>{});
     }
+    // upload avatar
+    if (file){
+      const fd = new FormData(); fd.append('avatar', file);
+      await fetch(API_BASE + '/api/users/avatar', { method:'POST', headers: { ...AUTH.hdr() }, body: fd }).catch(()=>{});
+    }
+    // refresh local user
+    try {
+      const r = await fetch(API_BASE + '/api/users/me', { headers: { ...AUTH.hdr() }});
+      if (r.ok){ const me = await r.json(); localStorage.setItem('user', JSON.stringify(me)); }
+    } catch {}
+    document.getElementById('profileOverlay').classList.add('hidden');
+    // also refresh session roster if we are inside a session
+    try { if (currentSessionId) { const d = await (await fetch(`${API_BASE}/api/sessions/${currentSessionId}`, { headers:{...AUTH.hdr()} })).json(); renderRoster(d.roster||[]); } } catch {}
+  };
+</script>
 
-    async function refreshSessions(){
-      try {
-        const resp = await fetch(API_BASE + '/api/sessions');
-        const json = await resp.json();
-        const sessions = json.sessions || [];
-        const wrap = document.getElementById('sessionsList');
-        if (!wrap) return;
-        wrap.innerHTML = '';
-        sessions.forEach(s => {
-          const row = document.createElement('div');
-          row.className = 'flex items-center justify-between rounded-lg bg-white/5 px-3 py-2';
-          row.innerHTML = `<div class="text-sm">
-            <div class="font-semibold">Tempo ${s.tempo} • ${s.participants}/${s.maxPlayers} inside</div>
-            <div class="text-white/60 text-xs">Open ${Math.floor(s.openSec/60)}m ${s.openSec%60}s ago</div>
-          </div>
-          <button data-id="${s.id}" class="joinSession rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Join</button>`;
-          wrap.appendChild(row);
-        });
-        Array.from(document.querySelectorAll('.joinSession')).forEach(btn => {
-          btn.onclick = () => joinSession(btn.dataset.id);
-        });
-      } catch(e){}
-    }
-    // Poll sessions only if list exists
-    if (document.getElementById('sessionsList')) {
-      refreshSessions();
-      setInterval(refreshSessions, 5000);
-    }
-
-    const newBtn = document.getElementById('btnNewSession');
-    if (newBtn) {
-      newBtn.addEventListener('click', async () => {
-        try {
-          const bpmSlider = document.getElementById('blBpm');
-          const tempo = bpmSlider ? +bpmSlider.value : 92;
-          const res = await fetch(API_BASE + '/api/sessions', {
-            method:'POST', headers:{'Content-Type':'application/json', ...AUTH.hdr()},
-            body: JSON.stringify({ tempo })
-          });
-          const data = await res.json();
-          const id = data.id;
-          await refreshSessions();
-          joinSession(id);
-        } catch(e){}
-      });
-    }
-
-    let socket = null, currentSessionId = null;
-    async function joinSession(id){
-      try {
-        const resp = await fetch(API_BASE + `/api/sessions/${id}/join`, { method:'POST', headers: { ...AUTH.hdr() } });
-        if (!resp.ok) { alert('Session full or unavailable.'); return; }
-        const { tempo } = await resp.json();
-        currentSessionId = id;
-        const studioEl = document.getElementById('beatloopStudio');
-        if (studioEl) studioEl.classList.remove('hidden');
-        socket = io(API_BASE, { auth: { token: AUTH.token } });
-        socket.emit('session:join', { sessionId: id });
-        socket.on('tempo:update', ({ tempo }) => {
-          const bpmSlider = document.getElementById('blBpm');
-          const bpmVal = document.getElementById('blBpmVal');
-          if (bpmSlider) bpmSlider.value = tempo;
-          if (bpmVal) bpmVal.textContent = tempo;
-        });
-        socket.on('grid:update', ({ row, col, on }) => {
-          const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
-          if (cell) cell.classList.toggle('on', !!on);
-        });
-        socket.on('tag:play', ({ url, at }) => {
-          const when = Math.max(0, at - Date.now());
-          const audio = new Audio(url);
-          setTimeout(() => { try { audio.play(); } catch{} }, when);
-        });
-        const tempoSlider = document.getElementById('blBpm');
-        if (tempoSlider && !tempoSlider._bound) {
-          tempoSlider._bound = true;
-          tempoSlider.oninput = (e) => {
-            const t = +e.target.value;
-            const bpmVal = document.getElementById('blBpmVal');
-            if (bpmVal) bpmVal.textContent = t;
-            if (currentSessionId && socket) socket.emit('tempo:set', { sessionId: currentSessionId, tempo: t });
-          };
-        }
-      } catch(e){}
-    }
-    // Broadcast click on grid
-    const blGrid = document.getElementById('blGrid');
-    if (blGrid) {
-      blGrid.addEventListener('click', (e) => {
-        const cell = e.target && e.target.closest ? e.target.closest('.step') : null;
-        if (!cell || !currentSessionId || !socket) return;
-        const row = +cell.dataset.r;
-        const col = +cell.dataset.c;
-        const on = !cell.classList.contains('on');
-        cell.classList.toggle('on', on);
-        socket.emit('grid:update', { sessionId: currentSessionId, row, col, on });
-      });
-    }
-  </script>
-  <!-- Ensure API_BASE and AUTH exist if this file is loaded without login.html -->
-  <script>
-    if (typeof API_BASE === 'undefined') {
-      window.API_BASE = localStorage.getItem('beatloop_api') || 'http://localhost:8080';
-    }
-    if (typeof AUTH === 'undefined') {
-      window.AUTH = {
-        token: localStorage.getItem('jwt') || '',
-        set(t){ this.token = t; localStorage.setItem('jwt', t); },
-        hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
-      };
-    }
-  </script>
 </body>
 </html>
+
+<!-- Socket.IO for sessions -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+// --------- API base + auth helpers (reuse if defined) ---------
+window.API_BASE = window.API_BASE || localStorage.getItem('beatloop_api') || 'http://localhost:8080';
+window.AUTH = window.AUTH || {
+  token: localStorage.getItem('jwt') || '',
+  set(t){ this.token=t; localStorage.setItem('jwt', t); },
+  hdr(){ return this.token ? { 'Authorization':'Bearer '+this.token } : {}; }
+};
+
+// --------- Sessions card in feed ---------
+(function(){
+  const feedEl = document.getElementById('feed');
+  if (!feedEl) return;
+  const card = document.createElement('article');
+  card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4';
+  card.innerHTML = `
+    <div class="flex items-center justify-between">
+      <h3 class="font-semibold">Live Beatloop Sessions</h3>
+      <div class="flex gap-2 items-center">
+        <input id="apiBaseInput" class="hidden md:inline-block rounded-md bg-white/10 px-2 py-1 text-xs w-[260px]" placeholder="API e.g. https://beatloop-api.onrender.com" />
+        <button id="btnNewSession" class="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold">Start Session</button>
+      </div>
+    </div>
+    <div id="sessionsList" class="mt-3 grid gap-2"></div>
+    <div id="sessionLog" class="mt-2 space-y-0.5"></div>`;
+  feedEl.prepend(card);
+  const input = card.querySelector('#apiBaseInput');
+  if (input){ input.value = API_BASE; input.addEventListener('change', ()=>{ localStorage.setItem('beatloop_api', input.value.trim()); API_BASE = input.value.trim(); refreshSessions(); }); }
+
+  async function refreshSessions(){
+    try{
+      const r = await fetch(API_BASE + '/api/sessions');
+      const { sessions=[] } = await r.json();
+      const wrap = card.querySelector('#sessionsList');
+      wrap.innerHTML = '';
+      sessions.forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between rounded-lg bg-white/5 px-3 py-2';
+        row.innerHTML = `
+          <div class="text-sm">
+            <div class="font-semibold">Tempo ${s.tempo} • ${s.participants}/${s.maxPlayers} inside ${s.host && s.host.name ? `— host: ${s.host.name}` : ''}</div>
+            <div class="text-white/60 text-xs">Open ${Math.floor((s.openSec||0)/60)}m ${(s.openSec||0)%60}s ago</div>
+            <div class="flex items-center gap-1 mt-1">
+              ${(s.roster||[]).slice(0,6).map(u=>`<img src="${u.avatar||'/avatar-default.svg'}" title="${u.name||u.email||'user'}" class="h-6 w-6 rounded-full ring-1 ring-white/20">`).join('')}
+              ${(s.roster||[]).length>6? `<span class="text-xs text-white/60 pl-1">+${(s.roster||[]).length-6} more</span>`:''}
+            </div>
+          </div>
+          <button data-id="${s.id}" class="joinSession rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Join</button>`;
+        wrap.appendChild(row);
+      });
+      wrap.querySelectorAll('.joinSession').forEach(btn => btn.onclick = ()=> joinSession(btn.dataset.id));
+    } catch(e){ /* silent */ }
+  }
+  window.refreshSessions = refreshSessions;
+  refreshSessions();
+  setInterval(refreshSessions, 5000);
+
+  card.querySelector('#btnNewSession').onclick = async ()=>{
+    try{
+      const bpmEl = document.getElementById('blBpm');
+      const tempo = bpmEl ? +bpmEl.value : 92;
+      const r = await fetch(API_BASE + '/api/sessions', { method:'POST', headers:{'Content-Type':'application/json', ...AUTH.hdr()}, body: JSON.stringify({ tempo })});
+      const { id } = await r.json();
+      await refreshSessions();
+      joinSession(id);
+    } catch(e){ alert('Could not start session.'); }
+  };
+})();
+
+// --------- Join + sockets + roster ---------
+let socket=null, currentSessionId=null, sessionMax=8;
+function renderRoster(roster){
+  try {
+    const list = document.getElementById('rosterList');
+    const countEl = document.getElementById('rosterCount');
+    if (!list || !countEl) return;
+    list.innerHTML = '';
+    (roster||[]).forEach(u => {
+      const img = document.createElement('img');
+      img.src = u.avatar || '/avatar-default.svg';
+      img.title = u.name || u.email || 'user';
+      img.className = 'h-7 w-7 rounded-full ring-1 ring-white/20';
+      list.appendChild(img);
+    });
+    countEl.textContent = `${(roster||[]).length}/${sessionMax}`;
+  } catch(e){}
+}
+
+async function joinSession(id){
+  if (!AUTH.token){ window.location.href = 'login.html'; return; }
+  try {
+    const r = await fetch(`${API_BASE}/api/sessions/${id}/join`, { method:'POST', headers:{ ...AUTH.hdr() }});
+    if (!r.ok) throw new Error('Join failed');
+    currentSessionId = id;
+    document.getElementById('beatloopStudio')?.classList.remove('hidden');
+
+    // fetch details for header/roster
+    try {
+      const det = await (await fetch(`${API_BASE}/api/sessions/${id}`, { headers:{...AUTH.hdr()} })).json();
+      sessionMax = det.maxPlayers || 8;
+      renderRoster(det.roster || det.participants || []);
+      const hdr = document.querySelector('#beatloopStudio h3');
+      if (hdr && det.host && det.host.name) hdr.title = `Host: ${det.host.name}`;
+    } catch {}
+
+    // connect socket
+    socket?.disconnect();
+    socket = io(API_BASE, { auth: { token: AUTH.token }});
+    socket.emit('session:join', { sessionId: id });
+
+    socket.on('tempo:update', ({ tempo }) => {
+      const bpm = document.getElementById('blBpm');
+      if (bpm) { bpm.value = tempo; document.getElementById('blBpmVal').textContent = tempo; }
+    });
+    socket.on('grid:update', ({ row, col, on, bank }) => {
+      const b = (typeof bank==='number') ? bank : window.currentBank || 0;
+      const p = window.patterns ? (window.patterns[b] || (window.patterns[b] = [])) : null;
+      if (p){
+        if (!Array.isArray(p[row])) p[row] = Array(window.STEPS||16).fill(false);
+        p[row][col] = !!on;
+      }
+      const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
+      if (cell) cell.classList.toggle('on', !!on);
+    });
+    socket.on('tag:play', ({ url, at }) => {
+      const when = Math.max(0, at - Date.now());
+      const audio = new Audio(url);
+      setTimeout(()=> audio.play().catch(()=>{}), when);
+    });
+    socket.on('presence:update', ({ roster }) => renderRoster(roster));
+    socket.on('session:roster', ({ roster }) => renderRoster(roster));
+    socket.on('user:joined', ({ roster }) => renderRoster(roster));
+    socket.on('user:left', ({ roster, name }) => {
+      renderRoster(roster);
+      const log = document.getElementById('sessionLog');
+      if (log && name) { const li = document.createElement('div'); li.className='text-xs text-white/60'; li.textContent = `${name} left`; log.prepend(li); }
+    });
+    socket.on('session:ended', ()=>{
+      alert('This session has ended.');
+      document.getElementById('beatloopStudio')?.classList.add('hidden');
+      currentSessionId = null;
+    });
+
+    // host-only tempo control emission
+    const tempoSlider = document.getElementById('blBpm');
+    if (tempoSlider){
+      tempoSlider.oninput = (e)=>{
+        const t = +e.target.value;
+        document.getElementById('blBpmVal').textContent = t;
+        if (currentSessionId && socket) socket.emit('tempo:set', { sessionId: currentSessionId, tempo: t });
+      };
+    }
+
+    // grid click sends updates
+    const grid = document.getElementById('blGrid');
+    if (grid){
+      grid.addEventListener('click', (e)=>{
+        const cell = e.target.closest('.step');
+        if (!cell || !currentSessionId || !socket) return;
+        const row = +cell.dataset.r, col = +cell.dataset.c;
+        const on = !cell.classList.contains('on');
+        cell.classList.toggle('on', on);
+        socket.emit('grid:update', { sessionId: currentSessionId, row, col, on, bank: window.currentBank||0 });
+      });
+    }
+  } catch(e){
+    alert(e.message || 'Could not join session');
+  }
+}
+</script>
