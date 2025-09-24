@@ -805,27 +805,54 @@ function createPost(track) {
     }
 
     // ---------- Leaderboard (uses meta titles/artists)
-    function updateLeaderboard() {
-      const stats = getJSON('track_stats', '{}')
+async function updateLeaderboard() {
+  const listEl = document.getElementById('leaderboardList') || document.querySelector('[data-leaderboard]');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  try {
+    const r = await fetch((window.API_BASE || 'https://beatloop-api.onrender.com') + '/api/leaderboard', {
+      headers: { ...AUTH.hdr() }
+    });
+    if (!r.ok) throw 0;
+    const { top = [] } = await r.json(); // [{track:{id,title,artist,cover}, score}, ...]
+    top.slice(0,5).forEach(({track, score}) => {
+      const li = document.createElement('li');
+      li.className = 'flex items-center gap-3';
+      const cover = document.createElement('img');
+      cover.src = (track && track.cover) || DEFAULT_TRACK_COVER;
+      cover.className = 'h-8 w-8 rounded ring-1 ring-white/10 object-cover';
+      const name = document.createElement('div');
+      name.className = 'min-w-0';
+      name.innerHTML = `<p class="font-semibold truncate">${(track?.title)||'Untitled'}</p>
+                        <p class="text-xs text-white/50 truncate">${(track?.artist)||'unknown'} • ${score}</p>`;
+      li.appendChild(cover); li.appendChild(name);
+      listEl.appendChild(li);
+    });
+  } catch {
+    // Fallback to your existing local leaderboard
+    const stats = getJSON('track_stats', '{}');
+    const all = [...TRACKS, ...customMeta];
+    const list = all.map(t => {
+      const s = stats?.[t.id] || {};
+      const score = (s.likes || 0) + (s.plays || 0) + (s.comments || 0);
+      return { track: t, score };
+    }).sort((a,b) => b.score - a.score).slice(0,5);
+    list.forEach(({track, score}) => {
+      const li = document.createElement('li');
+      li.className = 'flex items-center gap-3';
+      const cover = document.createElement('img');
+      cover.src = track.cover || DEFAULT_TRACK_COVER;
+      cover.className = 'h-8 w-8 rounded ring-1 ring-white/10 object-cover';
+      const name = document.createElement('div');
+      name.className = 'min-w-0';
+      name.innerHTML = `<p class="font-semibold truncate">${track.title || 'Untitled'}</p>
+                        <p class="text-xs text-white/50 truncate">${track.artist || 'unknown'} • ${score}</p>`;
+      li.appendChild(cover); li.appendChild(name);
+      listEl.appendChild(li);
+    });
+  }
+}
 
-      const all = [...TRACKS, ...customMeta]
-      const list = all.map(t => {
-        const s = stats?.[t.id] || {}
-        const score = (s.likes || 0) + (s.plays || 0) + (s.comments || 0)
-        return { track: t, score }
-      }).sort((a,b) => b.score - a.score).slice(0,5)
-
-      function paint(el){
-        if(!el) return
-        el.innerHTML = ''
-        list.forEach(item => {
-          const li = document.createElement('li')
-          li.innerHTML = item.track.title + ' — <span class="text-white">' + item.track.artist + '</span> (' + item.score + ')';
-          el.appendChild(li)
-        })
-      }
-      paint(leaderboardEl); paint(leaderboardMEl)
-    }
 
     // ---------- Upload track -> IDB blob + meta in localStorage
 uploadTrackInput.addEventListener('change', async (e) => {
@@ -2046,7 +2073,14 @@ stopBtn.addEventListener('click', () => {
     // refresh local user
     try {
       const r = await fetch(API_BASE + '/api/users/me', { headers: { ...AUTH.hdr() }});
-      if (r.ok){ const me = await r.json(); localStorage.setItem('user', JSON.stringify(me)); }
+           if (r.ok){
+        const payload = await r.json().catch(() => null);
+        const updated = (payload && payload.user) ? payload.user : payload;
+        if (updated) {
+          localStorage.setItem('user', JSON.stringify(updated));
+          if (window.updateCurrentUserFromProfile) window.updateCurrentUserFromProfile(updated);
+        }
+      }
     } catch {}
     document.getElementById('profileOverlay').classList.add('hidden');
     // also refresh session roster if we are inside a session
@@ -2146,12 +2180,13 @@ stopBtn.addEventListener('click', () => {
         const host = s.host || {};
         const hostName = host.name || 'host';
         const hostAvatar = host.avatar || '/img/avatar-default.svg';
+        const cap = s.maxPlayers || 8;
         row.innerHTML = `
           <div class="flex items-center gap-2 text-sm">
             <img src="${hostAvatar}" class="h-6 w-6 rounded-full ring-1 ring-white/20" alt="">
             <div>
               <div class="font-semibold">${s.name || 'Untitled'} • Tempo ${s.tempo}</div>
-              <div class="text-white/60 text-xs">by ${hostName} • ${s.participants}/${s.maxPlayers} inside • Open ${Math.max(0, Math.floor((s.openSec||0)/60))}m ${(s.openSec||0)%60}s</div>
+              <div class="text-white/60 text-xs">by ${hostName} • ${s.participants}/${cap} inside • Open ${Math.max(0, Math.floor((s.openSec||0)/60))}m ${(s.openSec||0)%60}s</div>
             </div>
           </div>
           <button data-id="${s.id}" class="joinSession rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Join</button>`;
@@ -2222,7 +2257,7 @@ setInterval(() => {
 
   function renderParticipants(list){
     const count = (list||[]).length;
-    const cap = 8;
+    const cap = currentSessionCap || 8;
     const countEl = document.getElementById('sessionCount');
     const rosterCount = document.getElementById('rosterCount');
     const rosterList  = document.getElementById('rosterList');
@@ -2251,17 +2286,43 @@ setInterval(() => {
     });
   }
 
+    function renderRoster(list){
+    renderParticipants(list);
+  }
+  window.renderRoster = renderRoster;
+  window.updateCurrentUserFromProfile = (u) => {
+    if (!u) return;
+    currentUser = u;
+    if (composerAvatarEl) {
+      composerAvatarEl.src = u.avatar || fallbackAvatar;
+      composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar; };
+    }
+  };
+
   // --- Join, sockets, leave-on-close, grid sync ---
-  let socket = null, currentSessionId = null;
+  let socket = null, currentSessionId = null, currentSessionCap = 8;
+  window.currentSessionId = null;
 
   async function joinSession(id){
     try {
       const r = await fetch(API + `/api/sessions/${id}/join`, { method:'POST', headers:{ ...AUTH.hdr() }});
       if (!r.ok) return alert('Session full or unavailable.');
-      const { participants } = await r.json();
+      const payload = await r.json();
+      const participants = payload.participants || [];
+      currentSessionCap = payload.maxPlayers || 8;
       currentSessionId = id;
+      window.currentSessionId = currentSessionId;
       document.getElementById('beatloopStudio')?.classList.remove('hidden');
       renderParticipants(participants);
+
+        if (typeof payload.tempo === 'number') {
+        const bpmEl = document.getElementById('blBpm');
+        if (bpmEl) {
+          bpmEl.value = payload.tempo;
+          const valEl = document.getElementById('blBpmVal');
+          if (valEl) valEl.textContent = payload.tempo;
+        }
+      }
 
       // (re)connect socket
       if (socket) try { socket.disconnect(); } catch {}
@@ -2284,6 +2345,8 @@ setInterval(() => {
       socket.on('session:ended', () => {
         alert('This session has ended.');
         currentSessionId = null;
+        window.currentSessionId = null;
+        currentSessionCap = 8;
         document.getElementById('beatloopStudio')?.classList.add('hidden');
       });
 
@@ -2313,8 +2376,14 @@ setInterval(() => {
 
       // leave on tab close or Close button
       const leave = async () => {
-        try { socket && socket.emit('session:leave', { sessionId: currentSessionId }); } catch {}
-        try { await fetch(API + `/api/sessions/${currentSessionId}/leave`, { method:'POST', headers:{ ...AUTH.hdr() } }); } catch {}
+        const activeSession = currentSessionId;
+        if (!activeSession) return;
+        try { socket && socket.emit('session:leave', { sessionId: activeSession }); } catch {}
+        try { await fetch(API + `/api/sessions/${activeSession}/leave`, { method:'POST', headers:{ ...AUTH.hdr() } }); } catch {}
+        currentSessionId = null;
+        window.currentSessionId = null;
+        currentSessionCap = 8;
+        document.getElementById('beatloopStudio')?.classList.add('hidden');
       };
 window.addEventListener('beforeunload', leave, { once:true });
 document.addEventListener('visibilitychange', () => { if (document.hidden) leave(); }, { passive:true });
@@ -2332,4 +2401,3 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) leave
 
 })();
 </script>
-
