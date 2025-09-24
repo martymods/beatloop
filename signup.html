@@ -105,11 +105,23 @@
           const fd = new FormData();
           fd.append('avatar', avatarFile);
           try {
-            await fetch(API_BASE + '/api/users/avatar', {
+            const avatarRes = await fetch(API_BASE + '/api/users/avatar', {
               method: 'POST',
               headers: { ...AUTH.hdr() },
               body: fd
             });
+                        if (avatarRes.ok) {
+              const avatarData = await avatarRes.json().catch(() => ({}));
+              if (avatarData?.avatarUrl) {
+                try {
+                  const stored = JSON.parse(localStorage.getItem('user') || 'null');
+                  if (stored) {
+                    stored.avatar = avatarData.avatarUrl;
+                    localStorage.setItem('user', JSON.stringify(stored));
+                  }
+                } catch (_) {}
+              }
+            }
           } catch (_) {}
         }
 
