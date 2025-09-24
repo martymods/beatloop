@@ -11,6 +11,7 @@ import multer from 'multer';
 import { parseFile } from 'music-metadata';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 
 /* ============================ ENV ============================ */
 const {
@@ -24,6 +25,17 @@ const {
 if (!MONGODB_URI) {
   console.warn('⚠️  MONGODB_URI not set. Add it in .env / Render Environment.');
 }
+
+const SESSION_EMPTY_TTL_MS = 3 * 60 * 1000;
+const IMAGE_MIME_EXT = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'image/svg+xml': '.svg',
+  'image/bmp': '.bmp'
+};
 
 /* ============================ DB ============================ */
 await mongoose.connect(MONGODB_URI, { dbName: 'beatloop' });
@@ -89,7 +101,9 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json({ limit: '5mb' }));
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+const uploadsRoot = path.join(process.cwd(), 'uploads');
+fs.mkdirSync(uploadsRoot, { recursive: true });
+app.use('/uploads', express.static(uploadsRoot));
 
 /* ============================ HELPERS ============================ */
 function sign(user) {
@@ -158,7 +172,7 @@ app.get('/api/auth/me', auth, async (req, res) => {
 });
 
 /* ---- profile update: change username (unique) and/or avatarUrl ---- */
-app.patch('/api/users/profile', auth, async (req, res) => {
+async function handleProfileUpdate(req, res) {
   const { name, avatarUrl } = req.body || {};
   if (name) {
     const taken = await User.exists({ name, _id: { $ne: req.user._id } });
@@ -167,6 +181,13 @@ app.patch('/api/users/profile', auth, async (req, res) => {
   }
   if (avatarUrl !== undefined) req.user.avatarUrl = avatarUrl;
   await req.user.save();
+  res.json({ user: await userSummary(req.user) });
+}
+
+app.patch('/api/users/profile', auth, handleProfileUpdate);
+app.put('/api/users/profile', auth, handleProfileUpdate);
+
+app.get('/api/users/me', auth, async (req, res) => {
   res.json({ user: await userSummary(req.user) });
 });
 
@@ -186,11 +207,55 @@ app.post('/api/presence/ping', auth, async (req, res) => {
 });
 
 /* ========================= Sound tag upload ========================= */
-const tagDir = path.join(process.cwd(), 'uploads', 'tags');
+const tagDir = path.join(uploadsRoot, 'tags');
 fs.mkdirSync(tagDir, { recursive: true });
-const upload = multer({ dest: tagDir });
+const tagUpload = multer({ dest: tagDir });
 
-app.post('/api/users/tag', auth, upload.single('tag'), async (req, res) => {
+const avatarDir = path.join(uploadsRoot, 'avatars');
+fs.mkdirSync(avatarDir, { recursive: true });
+
+function avatarFileExt(file) {
+  const fromName = (path.extname(file.originalname) || '').toLowerCase();
+  if (fromName && ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'].includes(fromName)) {
+    return fromName;
+  }
+  return IMAGE_MIME_EXT[file.mimetype] || '.png';
+}
+
+const avatarStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, avatarDir),
+  filename: (_req, file, cb) => {
+    const ext = avatarFileExt(file);
+    const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
+    cb(null, name);
+  }
+});
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 3 * 1024 * 1024 }, // 3MB avatar cap
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      return cb(new Error('avatar must be an image'));
+    }
+    cb(null, true);
+  }
+});
+
+function resolveUploadPath(url, folder) {
+  if (!url) return null;
+  try {
+    const base = `${PUBLIC_BASE_URL}/uploads/${folder}/`;
+    if (!url.startsWith(base)) return null;
+    const file = url.slice(base.length).split('?')[0];
+    if (!file) return null;
+    return path.join(uploadsRoot, folder, file);
+  } catch {
+    return null;
+  }
+}
+
+app.post('/api/users/tag', auth, tagUpload.single('tag'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'missing file' });
   const full = req.file.path;
   try {
@@ -211,8 +276,34 @@ app.post('/api/users/tag', auth, upload.single('tag'), async (req, res) => {
   }
 });
 
+app.post('/api/users/avatar', auth, (req, res) => {
+  avatarUpload.single('avatar')(req, res, async (err) => {
+    if (err) {
+      const message = err.message || 'upload failed';
+      return res.status(400).json({ error: message });
+    }
+    if (!req.file) return res.status(400).json({ error: 'missing file' });
+    try {
+      const previous = resolveUploadPath(req.user.avatarUrl, 'avatars');
+      if (previous) {
+        fs.promises.unlink(previous).catch(() => {});
+      }
+      const url = `${PUBLIC_BASE_URL}/uploads/avatars/${req.file.filename}`;
+      req.user.avatarUrl = url;
+      await req.user.save();
+      res.json({ ok: true, avatarUrl: url });
+    } catch (ex) {
+      if (req.file?.path) {
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
+      res.status(500).json({ error: 'could not save avatar' });
+    }
+  });
+});
+
 /* ============================ Sessions API ============================ */
 app.get('/api/sessions', async (_req, res) => {
+  await reapStaleSessions({ emit: false });
   const sessions = await Session.find({ isActive: true }).sort({ createdAt: -1 }).lean();
   // include host info + name + counts for the feed
   const hostIds = sessions.map(s => s.hostUserId).filter(Boolean);
@@ -222,7 +313,7 @@ app.get('/api/sessions', async (_req, res) => {
     id: s._id,
     name: s.name || 'Untitled',
     tempo: s.tempo,
-    participants: s.participants.length,
+    participants: Array.isArray(s.participants) ? s.participants.length : 0,
     maxPlayers: s.maxPlayers,
     openSec: Math.floor((Date.now() - new Date(s.createdAt).getTime()) / 1000),
     host: hostMap.get(String(s.hostUserId)) || null
@@ -245,16 +336,43 @@ app.post('/api/sessions', auth, async (req, res) => {
 app.post('/api/sessions/:id/join', auth, async (req, res) => {
   const s = await Session.findById(req.params.id);
   if (!s || !s.isActive) return res.status(404).json({ error: 'session not found' });
-  if (s.participants.length >= s.maxPlayers && !s.participants.find(p => String(p) === String(req.user._id))) {
+  if (!Array.isArray(s.participants)) s.participants = [];
+
+  if (s.participants.length === 0 && s.lastEmptyAt) {
+    const last = new Date(s.lastEmptyAt).getTime();
+    if (!Number.isNaN(last) && Date.now() - last >= SESSION_EMPTY_TTL_MS) {
+      s.isActive = false;
+      await s.save();
+      return res.status(410).json({ error: 'session expired' });
+    }
+  }
+
+  const already = s.participants.find(p => String(p) === String(req.user._id));
+
+  if (s.participants.length >= s.maxPlayers && !already) {
     return res.status(409).json({ error: 'session full' });
   }
-  if (!s.participants.find(p => String(p) === String(req.user._id))) {
+  if (!already) {
     s.participants.push(req.user._id);
     s.lastEmptyAt = undefined;
+    s.isActive = true;
     await s.save();
   }
   const participants = await rosterFor(s);
-  res.json({ ok: true, tempo: s.tempo, participants });
+  res.json({ ok: true, tempo: s.tempo, participants, maxPlayers: s.maxPlayers });
+});
+
+app.get('/api/sessions/:id', auth, async (req, res) => {
+  const s = await Session.findById(req.params.id);
+  if (!s || !s.isActive) return res.status(404).json({ error: 'session not found' });
+  const roster = await rosterFor(s);
+  res.json({
+    id: s._id.toString(),
+    name: s.name || 'Untitled',
+    tempo: s.tempo,
+    maxPlayers: s.maxPlayers,
+    roster
+  });
 });
 
 app.post('/api/sessions/:id/leave', auth, async (req, res) => {
@@ -278,6 +396,11 @@ app.post('/api/sessions/:id/tempo', auth, async (req, res) => {
   await s.save();
   io.to(`session:${s._id}`).emit('tempo:update', { tempo });
   res.json({ ok: true });
+});
+
+app.post('/api/sessions/cleanup', auth, async (_req, res) => {
+  const closed = await reapStaleSessions();
+  res.json({ ok: true, closed });
 });
 
 /* ============================ Socket.IO ============================ */
@@ -385,24 +508,29 @@ io.on('connection', (socket) => {
 });
 
 /* ============================ Reaper (3 min) ============================ */
-const THREE_MIN = 3 * 60 * 1000;
-setInterval(async () => {
+async function reapStaleSessions({ emit = true } = {}) {
   const now = Date.now();
-  const stale = await Session.find({
-    isActive: true,
-    $or: [
-      { participants: { $size: 0 }, lastEmptyAt: { $lte: new Date(now - THREE_MIN) } },
-      { participants: { $exists: true, $size: 0 }, lastEmptyAt: { $exists: true } }
-    ]
-  });
+  const stale = await Session.find({ isActive: true, participants: { $size: 0 } });
+  let closed = 0;
   for (const s of stale) {
-    if (!s.lastEmptyAt) s.lastEmptyAt = new Date(now - THREE_MIN - 1000);
-    if (now - new Date(s.lastEmptyAt).getTime() >= THREE_MIN) {
+    const lastEmpty = s.lastEmptyAt ? new Date(s.lastEmptyAt).getTime() : NaN;
+    if (Number.isNaN(lastEmpty)) {
+      s.lastEmptyAt = new Date(now);
+      await s.save();
+      continue;
+    }
+    if (now - lastEmpty >= SESSION_EMPTY_TTL_MS) {
       s.isActive = false;
       await s.save();
-      io.to(`session:${s._id}`).emit('session:ended', {});
+      closed += 1;
+      if (emit) io.to(`session:${s._id}`).emit('session:ended', {});
     }
   }
+  return closed;
+}
+
+setInterval(() => {
+  reapStaleSessions().catch(() => {});
 }, 30 * 1000);
 
 /* ============================ Server start ============================ */
