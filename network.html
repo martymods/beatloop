@@ -296,8 +296,8 @@
         <section id="butterFeaturePanel" class="rounded-xl border border-white/10 bg-white/5 p-4">
           <div class="text-sm text-white/60">Loading butterDAWg toolkit…</div>
         </section>
-        <section id="tuneflowPanel" class="rounded-xl border border-white/10 bg-white/5 p-4">
-          <div class="text-sm text-white/60">Loading TuneFlow AI effects…</div>
+        <section id="aiAssistantPanel" class="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div class="text-sm text-white/60">Loading Beatloop AI assistant…</div>
         </section>
       </div>
 
@@ -1258,47 +1258,11 @@ const BUTTER_MIDI_DEFAULTS = [
   { label: 'Keyboard', value: 'Space toggles transport · Shift-click clears cells' }
 ];
 
-const TUNEFLOW_EFFECTS = [
-  {
-    name: 'Songwriting Boost',
-    focus: 'Generate hooks, melodic riffs, and chord progressions through AI-assisted plugins.',
-    notes: 'Feed Beatloop motifs into TuneFlow params to receive instant melodic alternatives.'
-  },
-  {
-    name: 'Arrangement Sculptor',
-    focus: 'Auto-build verse/chorus structures and redistribute clips across pattern banks.',
-    notes: 'Great for populating Song Mode bars with evolving textures.'
-  },
-  {
-    name: 'Automation Designer',
-    focus: 'Draw parameter curves, dynamic filter sweeps, and modulation lanes with AI precision.',
-    notes: 'Programmatically target Tone.js volumes, pans, and plugin parameters.'
-  },
-  {
-    name: 'Mix Doctor',
-    focus: 'Balance stems, recommend chain orders, and nudge gain staging automatically.',
-    notes: 'Pair with butterDAWg Gain/Distortion plugins for hybrid processing.'
-  },
-  {
-    name: 'Transcription Guru',
-    focus: 'Convert audio phrases into MIDI or score to seed new Beatloop rows.',
-    notes: 'Drop the resulting MIDI directly into the piano roll to revoice ideas.'
-  }
-];
-
-const TUNEFLOW_WORKFLOW = [
-  { step: 'Install SDK', command: 'npm install tuneflow' },
-  { step: 'Describe bundle', command: 'bundle.json → providerId, pluginId, version, allowReset' },
-  { step: 'Author plugin', command: 'Extend TuneflowPlugin; implement params(), init(), and run().' },
-  { step: 'Export bundle', command: 'Index all plugins in index.ts and build for distribution.' },
-  { step: 'Test & debug', command: 'Use tuneflow-devkit to audition changes against Beatloop patterns.' }
-];
-
-const TUNEFLOW_LINKS = [
-  { label: 'TuneFlow Website', url: 'https://www.tuneflow.com' },
-  { label: 'Typescript SDK Docs', url: 'https://github.com/tuneflow/tuneflow' },
-  { label: 'Community Discord', url: 'https://discord.com/channels/1076012137161424906/1076012755250851860' }
-];
+const AI_MELODY_SCALES = {
+  minor:  [-12, -10, -8, -7, -5, -3, 0, 2, 3, 5, 7],
+  dorian: [-12, -10, -8, -5, -3, -1, 0, 2, 5, 7, 9],
+  pent:   [-12, -9, -7, -5, -2, 0, 3, 5, 7]
+};
   const STEPS = 16, MAX_BANKS = 16;
   // ---- Piano Roll state (per bank, per row)
   let SUBDIV = 4;              // 4 = 64th notes; try 8 or 16 for finer
@@ -1331,7 +1295,11 @@ const TUNEFLOW_LINKS = [
   const saveBtn   = document.getElementById('blSaveWav');
   const kitDetailsEl = document.getElementById('blKitDetails');
   const butterPanelEl = document.getElementById('butterFeaturePanel');
-  const tuneflowPanelEl = document.getElementById('tuneflowPanel');
+  const aiPanelEl = document.getElementById('aiAssistantPanel');
+  let aiRowSelect = null;
+  let aiDensitySlider = null;
+  let aiDensityValue = null;
+  let aiStatusEl = null;
   // --- Piano Roll UI refs (lazy) ---
   let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl, prKeysEl;
   let prPlayline = null;
@@ -1603,52 +1571,330 @@ const TUNEFLOW_LINKS = [
     `;
   }
 
-  function renderTuneflowFx(){
-    if (!tuneflowPanelEl) return;
-    const effectCards = TUNEFLOW_EFFECTS.map(effect => `
-      <article class="rounded-lg border border-white/10 bg-black/40 p-3">
-        <div class="flex items-center justify-between gap-3">
-          <h6 class="text-sm font-semibold text-white">${effect.name}</h6>
-          <span class="text-[0.65rem] uppercase tracking-wide text-white/40">${effect.focus}</span>
-        </div>
-        <p class="mt-2 text-xs text-white/70">${effect.notes}</p>
-      </article>
-    `).join('');
+  function renderAIAssistant(){
+    if (!aiPanelEl) return;
 
-    const workflowSteps = TUNEFLOW_WORKFLOW.map((item, idx) => `
-      <li class="rounded-lg border border-white/10 bg-white/5 p-3">
-        <div class="flex items-center justify-between text-sm text-white">
-          <span class="font-semibold">${idx + 1}. ${item.step}</span>
-        </div>
-        <code class="mt-2 block rounded bg-black/40 px-2 py-1 text-xs text-white/70">${item.command}</code>
-      </li>
-    `).join('');
-
-    const resourceLinks = TUNEFLOW_LINKS.map(link => `
-      <a href="${link.url}" target="_blank" rel="noopener" class="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white/70 hover:bg-white/15">${link.label}</a>
-    `).join('');
-
-    tuneflowPanelEl.innerHTML = `
+    aiPanelEl.innerHTML = `
       <header class="space-y-2">
-        <h4 class="text-base font-semibold text-white">TuneFlow AI Effects</h4>
-        <p class="text-sm text-white/60">Leverage TuneFlow\'s Typescript SDK to sprinkle AI-assisted songwriting, arrangement, automation, mixing, and transcription directly onto Beatloop patterns.</p>
+        <h4 class="text-base font-semibold text-white">Beatloop AI Playmaker</h4>
+        <p class="text-sm text-white/60">Generate grooves, evolve rows, and sketch melodic ideas without leaving the 16-step sampler.</p>
       </header>
-      <div class="mt-4 grid gap-3">${effectCards}</div>
-      <div class="mt-4">
-        <h5 class="text-xs font-semibold uppercase tracking-wide text-white/60">Build workflow</h5>
-        <ol class="mt-2 grid gap-2">${workflowSteps}</ol>
+      <div class="mt-4 space-y-3">
+        <div>
+          <label class="text-xs uppercase tracking-wide text-white/50">Target row</label>
+          <select id="aiRowSelect" class="mt-1 w-full rounded-lg bg-white/10 px-2 py-2 text-sm text-white/90"></select>
+        </div>
+        <div>
+          <label class="flex items-center justify-between text-xs uppercase tracking-wide text-white/50">
+            Density &amp; variation
+            <span id="aiDensityVal" class="text-white/60"></span>
+          </label>
+          <input id="aiDensity" type="range" min="0.15" max="1" step="0.05" value="0.6" class="w-full">
+        </div>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <button class="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-black shadow-glow" data-ai="kick">Kick Pulse</button>
+          <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="snare">Backbeat Snare</button>
+          <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="hat">Hat Texture</button>
+          <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="perc">Perc Flair</button>
+        </div>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="melody">Generate Melody</button>
+          <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="humanize">Evolve Row</button>
+          <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="clear">Clear Row</button>
+          <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="groove">Full Drum Groove</button>
+        </div>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="arrange">Auto Arrange Song</button>
+          <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="random">Spark Variation</button>
+        </div>
+        <div id="aiStatus" class="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-[0.7rem] text-white/60">Load a kit to get started.</div>
       </div>
-      <div class="mt-4 flex flex-wrap gap-2">${resourceLinks}</div>
     `;
+
+    aiRowSelect = aiPanelEl.querySelector('#aiRowSelect');
+    aiDensitySlider = aiPanelEl.querySelector('#aiDensity');
+    aiDensityValue = aiPanelEl.querySelector('#aiDensityVal');
+    aiStatusEl = aiPanelEl.querySelector('#aiStatus');
+
+    if (aiDensitySlider && aiDensityValue) {
+      const updateDensityLabel = () => {
+        const val = Math.round(parseFloat(aiDensitySlider.value || '0') * 100);
+        aiDensityValue.textContent = val + '%';
+      };
+      aiDensitySlider.addEventListener('input', updateDensityLabel);
+      updateDensityLabel();
+    }
+
+    aiPanelEl.querySelectorAll('[data-ai]').forEach(btn => {
+      btn.addEventListener('click', () => handleAIAction(btn.dataset.ai));
+    });
+
+    refreshAIPanelRows();
+  }
+
+  function setAIStatus(message) {
+    if (aiStatusEl) aiStatusEl.textContent = message;
+  }
+
+  function getSelectedAIRow() {
+    if (!aiRowSelect || !rowLabels.length) return 0;
+    const value = parseInt(aiRowSelect.value, 10);
+    if (Number.isNaN(value)) return 0;
+    return Math.max(0, Math.min(rowLabels.length - 1, value));
+  }
+
+  function getAIDensity() {
+    if (!aiDensitySlider) return 0.6;
+    const parsed = parseFloat(aiDensitySlider.value || '0.6');
+    return Math.min(1, Math.max(0.1, parsed));
+  }
+
+  function refreshAIPanelRows() {
+    if (!aiRowSelect) return;
+    const previous = aiRowSelect.value;
+    const options = rowLabels.map((label, idx) => `<option value="${idx}">${label}</option>`).join('');
+    aiRowSelect.innerHTML = options;
+    if (rowLabels.length) {
+      const fallback = previous && +previous < rowLabels.length ? previous : '0';
+      aiRowSelect.value = fallback;
+    }
+  }
+
+  function aiGuessRole(label) {
+    if (!label) return null;
+    const lower = label.toLowerCase();
+    if (/kick|bd|808|sub/.test(lower)) return 'kick';
+    if (/snare|clap|rim/.test(lower)) return 'snare';
+    if (/hat|hh|ride|shaker/.test(lower)) return 'hat';
+    if (/perc|tom|fx|stab/.test(lower)) return 'perc';
+    if (/bass|lead|synth|mel|vox|voice|pad|loop/.test(lower)) return 'melody';
+    return null;
+  }
+
+  function ensureRowPattern(bank, rowIdx) {
+    ensurePatternForBank(bank, rowLabels.length);
+    const pattern = patterns[bank];
+    if (!Array.isArray(pattern[rowIdx])) pattern[rowIdx] = Array(STEPS).fill(false);
+    return pattern[rowIdx];
+  }
+
+  function cloneBankWithPR(source, target) {
+    ensurePatternForBank(source, rowLabels.length);
+    ensurePatternForBank(target, rowLabels.length);
+    patterns[target] = (patterns[source] || []).map(row => Array.isArray(row) ? row.slice() : Array(STEPS).fill(false));
+    const srcPR = pianoRoll[source] || [];
+    pianoRoll[target] = srcPR.map(entry => {
+      if (!entry) return undefined;
+      const clone = {
+        loopSlice: { ...(entry.loopSlice || { start: 0, end: 1 }) },
+        notes: []
+      };
+      for (let p = 0; p < PITCH_ROWS; p++) {
+        const row = entry.notes?.[p];
+        clone.notes[p] = row ? row.slice() : Array(STEPS * SUBDIV).fill(null);
+      }
+      return clone;
+    });
+  }
+
+  function applyDrumPattern(rowIdx, role, density, bank = currentBank) {
+    const row = ensureRowPattern(bank, rowIdx);
+    row.fill(false);
+    const chance = (p) => Math.random() < p;
+    const hit = (step, weight = 1) => {
+      if (weight >= 1 || chance(weight)) {
+        const index = ((step % STEPS) + STEPS) % STEPS;
+        row[index] = true;
+      }
+    };
+    const dens = Math.min(1, Math.max(0.05, density));
+
+    if (role === 'kick') {
+      [0, 8].forEach(step => hit(step));
+      if (dens > 0.2) hit(4);
+      if (dens > 0.35) hit(12);
+      [2, 6, 10, 14, 15].forEach(step => hit(step, dens * 0.6));
+    } else if (role === 'snare') {
+      hit(4);
+      hit(12);
+      [6, 10, 14].forEach(step => hit(step, dens * 0.4));
+      if (dens > 0.75) hit(2, 0.4);
+    } else if (role === 'hat') {
+      for (let i = 0; i < STEPS; i++) {
+        const base = (i % 2 === 0) ? 0.7 : 0.35;
+        hit(i, base * dens + 0.1);
+      }
+    } else if (role === 'perc') {
+      [3, 7, 11, 15].forEach(step => hit(step, dens));
+      [1, 5, 9, 13].forEach(step => hit(step, dens * 0.6));
+      if (dens > 0.8) [0, 2, 6, 10].forEach(step => hit(step, 0.4));
+    }
+
+    return row;
+  }
+
+  function aiHumanizeRow(rowIdx, amount, bank = currentBank) {
+    const row = ensureRowPattern(bank, rowIdx);
+    const depth = Math.min(1, Math.max(0.05, amount));
+    for (let i = 0; i < STEPS; i++) {
+      if (row[i] && Math.random() < depth * 0.05) {
+        row[i] = false;
+      } else if (!row[i] && Math.random() < depth * 0.12) {
+        row[i] = true;
+      }
+      if (row[i] && Math.random() < depth * 0.08) {
+        const offset = Math.random() < 0.5 ? -1 : 1;
+        const next = ((i + offset) % STEPS + STEPS) % STEPS;
+        if (!row[next]) {
+          row[next] = true;
+          row[i] = false;
+        }
+      }
+    }
+    return row;
+  }
+
+  function aiGenerateMelody(rowIdx, density) {
+    const entry = ensurePR(currentBank, rowIdx);
+    const dens = Math.min(1, Math.max(0.1, density));
+    const cols = STEPS * SUBDIV;
+    const scales = Object.values(AI_MELODY_SCALES);
+    const scale = scales[Math.floor(Math.random() * scales.length)] || AI_MELODY_SCALES.minor;
+    const baseIndex = 8;
+
+    for (let p = 0; p < PITCH_ROWS; p++) {
+      entry.notes[p] = entry.notes[p] || Array(cols).fill(null);
+      entry.notes[p].fill(null);
+    }
+
+    let step = 0;
+    while (step < cols) {
+      if (Math.random() < dens + 0.1) {
+        const semi = scale[Math.floor(Math.random() * scale.length)] || 0;
+        const pitchIndex = Math.min(PITCH_ROWS - 1, Math.max(0, baseIndex + semi));
+        const length = Math.max(1, Math.round((SUBDIV * 0.5) + dens * SUBDIV * Math.random()));
+        const vol = Math.round((dens * 12) - 6 + (Math.random() * 4 - 2));
+        const pan = Math.round((Math.random() * 2 - 1) * 5);
+        for (let s = 0; s < length && (step + s) < cols; s++) {
+          entry.notes[pitchIndex][step + s] = { vol, pan };
+        }
+      }
+      const jump = Math.max(1, Math.round(SUBDIV * (0.5 - dens * 0.3))) + Math.floor(Math.random() * SUBDIV);
+      step += jump;
+    }
+
+    if (prOverlay && prOverlay.style.display !== 'none' && prRow === rowIdx) {
+      drawPianoRoll();
+    }
+  }
+
+  function aiClearRow(rowIdx) {
+    const row = ensureRowPattern(currentBank, rowIdx);
+    row.fill(false);
+    const entry = (pianoRoll[currentBank] || [])[rowIdx];
+    if (entry && Array.isArray(entry.notes)) {
+      entry.notes.forEach(line => line && line.fill(null));
+    }
+  }
+
+  function aiGenerateGroove(density) {
+    const dens = Math.min(1, Math.max(0.1, density));
+    if (!rowLabels.length) {
+      setAIStatus('Load a kit to generate a groove.');
+      return;
+    }
+    rowLabels.forEach((label, idx) => {
+      const role = aiGuessRole(label);
+      if (!role) return;
+      if (role === 'melody') {
+        aiGenerateMelody(idx, dens * 0.8);
+      } else {
+        applyDrumPattern(idx, role, dens);
+      }
+    });
+    drawGrid(rowLabels);
+    setAIStatus('Generated a groove tailored to your kit labels. Tweak density to taste.');
+  }
+
+  function aiAutoArrangeSong() {
+    if (!rowLabels.length) {
+      setAIStatus('Nothing to arrange yet — generate or program a pattern first.');
+      return;
+    }
+    cloneBankWithPR(currentBank, 0);
+    for (let b = 1; b < 4; b++) {
+      cloneBankWithPR(0, b);
+      for (let r = 0; r < rowLabels.length; r++) {
+        aiHumanizeRow(r, 0.2 + b * 0.1, b);
+      }
+    }
+    arrangement = [0, 1, 0, 2, 0, 3, 0, 1, 0, 2, 0, 3, 0, 1, 0, 2];
+    drawGrid(rowLabels);
+    drawArranger();
+    exportSongBtn.classList.toggle('hidden', !hasArrangement());
+    setAIStatus('Auto-arranged four evolving banks across 16 bars. Song mode is ready to play.');
+  }
+
+  function handleAIAction(action) {
+    const rowIdx = getSelectedAIRow();
+    const density = getAIDensity();
+
+    switch (action) {
+      case 'kick':
+        applyDrumPattern(rowIdx, 'kick', density);
+        drawGrid(rowLabels);
+        setAIStatus(`Kick pulse programmed on row ${rowLabels[rowIdx] || (rowIdx + 1)}.`);
+        break;
+      case 'snare':
+        applyDrumPattern(rowIdx, 'snare', density);
+        drawGrid(rowLabels);
+        setAIStatus(`Backbeat snare laid down on row ${rowLabels[rowIdx] || (rowIdx + 1)}.`);
+        break;
+      case 'hat':
+        applyDrumPattern(rowIdx, 'hat', density);
+        drawGrid(rowLabels);
+        setAIStatus(`Hi-hat texture sprinkled with ${Math.round(density * 100)}% density.`);
+        break;
+      case 'perc':
+        applyDrumPattern(rowIdx, 'perc', density);
+        drawGrid(rowLabels);
+        setAIStatus('Percussive embellishments added.');
+        break;
+      case 'melody':
+        aiGenerateMelody(rowIdx, density);
+        drawGrid(rowLabels);
+        setAIStatus('Melodic idea written into the piano roll.');
+        break;
+      case 'humanize':
+        aiHumanizeRow(rowIdx, density);
+        drawGrid(rowLabels);
+        setAIStatus('Row evolved with subtle variations.');
+        break;
+      case 'clear':
+        aiClearRow(rowIdx);
+        drawGrid(rowLabels);
+        setAIStatus('Selected row cleared.');
+        break;
+      case 'groove':
+        aiGenerateGroove(density);
+        break;
+      case 'arrange':
+        aiAutoArrangeSong();
+        break;
+      case 'random':
+        aiHumanizeRow(rowIdx, density * 1.2);
+        drawGrid(rowLabels);
+        setAIStatus('Sparked a quick variation. Toggle steps to refine.');
+        break;
+      default:
+        setAIStatus('Select an AI action to get started.');
+    }
   }
 
   function renderIntegrationPanels(){
     renderButterDeck();
-    renderTuneflowFx();
+    renderAIAssistant();
   }
-
-  renderIntegrationPanels();
-  renderKitDetails();
 
   function bindPRGridHandlers(){
     if (!prGridEl || prGridEl._dragBound) return;
@@ -1915,6 +2161,9 @@ let userBankBeforeSong = 0;   // remember the bank before entering Song Mode
 let songMute = false;         // true when the current bar is empty (–)
 let lastBar = -1;             // arranger playhead column
 
+  renderIntegrationPanels();
+  renderKitDetails();
+
   // ---------- Helpers ----------
   function hasAnyPR(bank,row){
     const pr = (pianoRoll[bank] && pianoRoll[bank][row]) ? pianoRoll[bank][row].notes : null;
@@ -2077,6 +2326,7 @@ let lastBar = -1;             // arranger playhead column
 
     }
     gridWrap.appendChild(table);
+    refreshAIPanelRows();
   }
 
   // ---------- Audio graph ----------
