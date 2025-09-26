@@ -45,9 +45,15 @@
   .ctrl-switch{display:inline-flex;gap:2px;background:#1f1f28;border-radius:999px;padding:2px}
   .ctrl-switch button{width:18px;height:18px;line-height:18px;border-radius:999px;font-size:.6rem;color:#bbb;background:transparent}
   .ctrl-switch button.on{background:#7c3aed;color:#fff;box-shadow:0 0 8px rgba(124,58,237,.35)}
-  
+
 /* 4-step striping + arranger cells */
 .step.alt{ background: rgba(255,255,255,.14)!important; }  /* slightly lighter every 4 cols */
+
+.row-header{position:relative;border-radius:.75rem;padding:.15rem .5rem;margin-bottom:.35rem;transition:background .12s,box-shadow .12s}
+.row-header.selected{background:rgba(124,58,237,.16);box-shadow:0 0 0 1px rgba(124,58,237,.35)}
+
+.route-item{border-radius:.75rem;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);transition:background .12s,box-shadow .12s,border-color .12s}
+.route-item.active{background:rgba(124,58,237,.12);border-color:rgba(124,58,237,.4);box-shadow:0 0 0 1px rgba(124,58,237,.35)}
 
 .arr-label{ display:flex; align-items:center; justify-content:space-between; padding:0 .5rem; font-size:.875rem; color:#fff; opacity:.9 }
 .arr-cell{ height:40px; border-radius:.5rem; background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; font-weight:600; color:#bbb }
@@ -294,7 +300,7 @@
 
       <div id="blIntegrationPanels" class="md:col-span-2 grid gap-3 lg:grid-cols-2">
         <section id="butterFeaturePanel" class="rounded-xl border border-white/10 bg-white/5 p-4">
-          <div class="text-sm text-white/60">Loading butterDAWg toolkit…</div>
+          <div class="text-sm text-white/60">Loading Beatloop routing toolkit…</div>
         </section>
         <section id="aiAssistantPanel" class="rounded-xl border border-white/10 bg-white/5 p-4">
           <div class="text-sm text-white/60">Loading Beatloop AI assistant…</div>
@@ -1187,76 +1193,23 @@ const KIT_DETAILS = {
   }
 };
 
-const BUTTER_FEATURES = [
-  {
-    title: 'Sample Sequencing & Channel Routing',
-    description: 'butterDAWg prioritises sample playback, track routing, and playlist curation—we mirror that flow so every kit lane can hit its own Tone.js mixer strip.',
-    highlights: [
-      'Instant channel routing from track context menus',
-      'Playlist-style pattern banks for sketching ideas'
-    ]
-  },
-  {
-    title: 'Audio Graph & Windowing',
-    description: 'Use butterDAWg\'s audio graph mindset in Beatloop—chain processors, pop out floating windows, and drag views exactly like the Electron prototype.',
-    highlights: [
-      'Re-arrange floating windows for mixer, playlist, and graph panes',
-      'Sketch custom node chains before committing to renders'
-    ]
-  },
-  {
-    title: 'Custom Plugin Pipeline',
-    description: 'butterDAWg proved out hot-loaded AudioWorklet plugins; Beatloop ships with the same Gain and Simple Distortion building blocks ready to automate.',
-    highlights: [
-      'Drop .bdp bundles into the plugins directory for instant access',
-      'Map sliders to live parameters via the host bridge'
-    ]
-  }
+const ROUTE_OPTIONS = [
+  { id: 'main',   label: 'Main Mix',          detail: 'Direct feed into the Beatloop master bus.' },
+  { id: 'wide',   label: 'Bus A · Wide',      detail: 'Stereo chorus bus for hats, pads, and ambience.' },
+  { id: 'crunch', label: 'Bus B · Crunch',    detail: 'Saturated bus inspired by butterDAWg\'s clip chain.' },
+  { id: 'delay',  label: 'FX Delay',          detail: 'Quarter-note feedback delay for quick ear candy.' }
 ];
 
-const BUTTER_COMMANDS = [
-  'Rename, color and icon…',
-  'Change color…',
-  'Change icon…',
-  'Auto name',
-  'Auto name clips',
-  'Track mode',
-  'Performance settings',
-  'Size',
-  'Lock to this size',
-  'Group with above track',
-  'Auto color group',
-  'Current clip source',
-  'Lock to content',
-  'Merge pattern clips',
-  'Consolidate this clip',
-  'Mute all clips',
-  'Insert one',
-  'Delete one',
-  'Move up',
-  'Move down'
-];
-
-const BUTTER_PLUGINS = [
-  {
-    name: 'Gain',
-    control: 'Level',
-    summary: 'Linear amplitude control via AudioWorkletProcessor—perfect for trimming or boosting stems.'
-  },
-  {
-    name: 'Simple Distortion',
-    control: 'Drive',
-    summary: 'Soft-clipping waveshaper built around butterDAWg\'s distortion function for grimey harmonics.'
-  }
-];
-
-const BUTTER_MIDI_DEFAULTS = [
-  { label: 'Default BPM', value: '150 BPM' },
-  { label: 'Sample Rate', value: '44.1 kHz' },
-  { label: 'Buffer Size', value: '44,100 frames' },
-  { label: 'Grid Snap', value: '20 px per step (auto halves for micro edits)' },
-  { label: 'Keyboard', value: 'Space toggles transport · Shift-click clears cells' }
-];
+let routeAssignments = [];
+let pluginSettings = [];
+let rowHeaderRefs = [];
+let selectedRow = 0;
+let rowGains = [];
+let rowDistortions = [];
+let mixBuses = null;
+let masterVolume = null;
+let butterRouteListEl = null;
+let butterPluginEl = null;
 
 const AI_MELODY_SCALES = {
   minor:  [-12, -10, -8, -7, -5, -3, 0, 2, 3, 5, 7],
@@ -1511,64 +1464,219 @@ const AI_MELODY_SCALES = {
     `;
   };
 
-  function renderButterDeck(){
-    if (!butterPanelEl) return;
-    const featureCards = BUTTER_FEATURES.map(feature => `
-      <article class="rounded-lg border border-white/10 bg-black/40 p-3">
-        <h5 class="text-sm font-semibold text-white">${feature.title}</h5>
-        <p class="mt-2 text-xs text-white/70">${feature.description}</p>
-        ${Array.isArray(feature.highlights) && feature.highlights.length ? `
-          <ul class="mt-2 list-disc space-y-1 pl-4 text-[0.7rem] text-white/60">
-            ${feature.highlights.map(item => `<li>${item}</li>`).join('')}
-          </ul>
-        ` : ''}
-      </article>
-    `).join('');
+  const DEFAULT_PLUGIN_STATE = () => ({ gain: 1, drive: 0, mix: 0 });
 
-    const commandTags = BUTTER_COMMANDS.map(cmd => `
-      <span class="rounded-full border border-white/10 bg-white/10 px-2 py-1 text-[0.65rem] text-white/70">${cmd}</span>
-    `).join('');
+  function ensurePluginState(row){
+    if (!pluginSettings[row]) pluginSettings[row] = DEFAULT_PLUGIN_STATE();
+    return pluginSettings[row];
+  }
 
-    const pluginCards = BUTTER_PLUGINS.map(plugin => `
-      <article class="rounded-lg border border-white/10 bg-black/40 p-3">
-        <div class="flex items-center justify-between">
-          <h6 class="text-sm font-semibold text-white">${plugin.name}</h6>
-          <span class="text-[0.65rem] uppercase tracking-wide text-white/40">${plugin.control}</span>
+  function ensureRouteForRow(row){
+    const current = routeAssignments[row];
+    if (ROUTE_OPTIONS.some(opt => opt.id === current)) return current;
+    routeAssignments[row] = ROUTE_OPTIONS[0].id;
+    return routeAssignments[row];
+  }
+
+  function syncRowState(rows){
+    for (let i = 0; i < rows; i++){
+      ensurePluginState(i);
+      ensureRouteForRow(i);
+    }
+    routeAssignments.length = rows;
+    pluginSettings.length = rows;
+    if (selectedRow >= rows) selectedRow = rows ? rows - 1 : 0;
+  }
+
+  function ensureMixBuses(){
+    if (mixBuses && mixBuses.main) return mixBuses;
+    if (typeof Tone === 'undefined') return null;
+    if (!masterVolume) masterVolume = new Tone.Volume(0).toDestination();
+
+    const main = new Tone.Gain(1).connect(masterVolume);
+
+    const chorus = new Tone.Chorus(4, 2.5, 0.22);
+    chorus.wet.value = 1;
+    if (typeof chorus.start === 'function') chorus.start();
+    chorus.connect(masterVolume);
+    const wide = new Tone.Gain(1).connect(chorus);
+
+    const crunchFx = new Tone.Distortion(0.35);
+    crunchFx.wet.value = 1;
+    crunchFx.connect(masterVolume);
+    const crunch = new Tone.Gain(1).connect(crunchFx);
+
+    const delayFx = new Tone.FeedbackDelay('8n', 0.25);
+    delayFx.wet.value = 0.85;
+    delayFx.connect(masterVolume);
+    const delay = new Tone.Gain(1).connect(delayFx);
+
+    mixBuses = { main, wide, crunch, delay };
+    return mixBuses;
+  }
+
+  function getRouteNode(routeId){
+    const buses = ensureMixBuses();
+    if (!buses) return null;
+    return buses[routeId] || buses.main;
+  }
+
+  function getRouteMeta(routeId){
+    return ROUTE_OPTIONS.find(opt => opt.id === routeId) || ROUTE_OPTIONS[0];
+  }
+
+  function applyPluginState(row){
+    const settings = ensurePluginState(row);
+    const gain = rowGains[row];
+    const dist = rowDistortions[row];
+    if (gain && typeof gain.gain === 'object') gain.gain.value = settings.gain;
+    if (dist){
+      dist.distortion = settings.drive;
+      dist.wet.value = settings.mix;
+    }
+  }
+
+  function setRowRoute(row, routeId){
+    const rows = routeAssignments.length;
+    if (!rows) return;
+    const idxRaw = Number(row);
+    const idx = Number.isFinite(idxRaw) ? Math.max(0, Math.min(rows - 1, idxRaw)) : 0;
+    if (!ROUTE_OPTIONS.some(opt => opt.id === routeId)) routeId = ROUTE_OPTIONS[0].id;
+    routeAssignments[idx] = routeId;
+    const vol = volumes[idx];
+    const target = getRouteNode(routeId);
+    if (vol && target){
+      try { vol.disconnect(); } catch {}
+      try { vol.connect(target); } catch {}
+    }
+    refreshButterToolkit();
+  }
+
+  function setSelectedRow(row){
+    const max = rowLabels.length ? rowLabels.length - 1 : 0;
+    const next = Math.max(0, Math.min(max, row));
+    if (selectedRow === next) return;
+    selectedRow = next;
+    if (!Array.isArray(rowHeaderRefs)) rowHeaderRefs = [];
+    rowHeaderRefs.forEach((el, idx) => {
+      if (!el) return;
+      el.classList.toggle('selected', idx === selectedRow);
+    });
+    refreshButterToolkit();
+  }
+
+  function drawRouteList(){
+    if (!butterRouteListEl) return;
+    if (!rowLabels.length){
+      butterRouteListEl.innerHTML = '<p class="text-sm text-white/60">Load a kit to unlock channel routing.</p>';
+      return;
+    }
+    butterRouteListEl.innerHTML = rowLabels.map((label, idx) => {
+      const routeId = ensureRouteForRow(idx);
+      const meta = getRouteMeta(routeId);
+      const active = idx === selectedRow ? 'active' : '';
+      const options = ROUTE_OPTIONS.map(opt => `<option value="${opt.id}" ${opt.id === routeId ? 'selected' : ''}>${opt.label}</option>`).join('');
+      return `
+        <div class="route-item ${active} flex items-center justify-between px-2 py-2 text-sm" data-route-row="${idx}">
+          <button type="button" class="flex-1 pr-2 text-left focus:outline-none" data-select-row="${idx}">
+            <div class="truncate font-semibold text-white">${label}</div>
+            <div class="text-[0.65rem] text-white/50">${meta.label}</div>
+          </button>
+          <select data-route="${idx}" class="rounded-md bg-white/10 px-2 py-1 text-xs text-white">${options}</select>
         </div>
-        <p class="mt-2 text-xs text-white/70">${plugin.summary}</p>
-      </article>
-    `).join('');
+      `;
+    }).join('');
 
-    const midiRows = BUTTER_MIDI_DEFAULTS.map(row => `
-      <div class="flex items-center justify-between gap-2 rounded-md border border-white/5 bg-black/30 px-2 py-1">
-        <span class="text-[0.65rem] font-semibold text-white/80">${row.label}</span>
-        <span class="text-[0.65rem] text-white/60">${row.value}</span>
-      </div>
-    `).join('');
+    butterRouteListEl.querySelectorAll('[data-select-row]').forEach(btn => {
+      btn.addEventListener('click', () => setSelectedRow(parseInt(btn.dataset.selectRow, 10)));
+    });
+    butterRouteListEl.querySelectorAll('select[data-route]').forEach(sel => {
+      sel.addEventListener('change', () => setRowRoute(parseInt(sel.dataset.route, 10), sel.value));
+    });
+  }
 
-    butterPanelEl.innerHTML = `
-      <header class="flex items-start justify-between gap-3">
+  function updatePluginPanel(){
+    if (!butterPluginEl) return;
+    if (!rowLabels.length){
+      butterPluginEl.innerHTML = '<p class="text-sm text-white/60">Select or load a kit to tweak plugins.</p>';
+      return;
+    }
+    const row = Math.max(0, Math.min(selectedRow, rowLabels.length - 1));
+    selectedRow = row;
+    const state = ensurePluginState(row);
+    const routeMeta = getRouteMeta(routeAssignments[row]);
+    const gainPercent = Math.round(state.gain * 100);
+    const drivePercent = Math.round(state.drive * 100);
+    const mixPercent = Math.round(state.mix * 100);
+
+    butterPluginEl.innerHTML = `
+      <div class="space-y-3">
         <div>
-          <h4 class="text-base font-semibold text-white">butterDAWg Workflow Toolkit</h4>
-          <p class="text-sm text-white/60">Feature parity, commands, and plugin references from the Electron prototype.</p>
+          <p class="text-sm font-semibold text-white">${rowLabels[row]}</p>
+          <p class="text-xs text-white/50">${routeMeta.label} · ${routeMeta.detail}</p>
         </div>
-        <span class="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-wide text-white/60">Imported</span>
-      </header>
-      <div class="mt-4 grid gap-3 lg:grid-cols-1">
-        ${featureCards}
-      </div>
-      <div class="mt-4">
-        <h5 class="text-xs font-semibold uppercase tracking-wide text-white/60">Track context commands</h5>
-        <div class="mt-2 flex flex-wrap gap-2">${commandTags}</div>
-      </div>
-      <div class="mt-4 grid gap-3 sm:grid-cols-2">
-        ${pluginCards}
-      </div>
-      <div class="mt-4">
-        <h5 class="text-xs font-semibold uppercase tracking-wide text-white/60">Session & MIDI defaults</h5>
-        <div class="mt-2 grid gap-2 sm:grid-cols-2">${midiRows}</div>
+        <div>
+          <label class="flex items-center justify-between text-xs uppercase tracking-wide text-white/50">Gain <span class="text-white/60" data-plugin-readout="gain">${gainPercent}%</span></label>
+          <input type="range" min="40" max="200" value="${gainPercent}" step="1" data-plugin="gain" class="mt-1 w-full">
+          <p class="mt-1 text-[0.65rem] text-white/50">Linear amplitude trim before the bus send.</p>
+        </div>
+        <div>
+          <label class="flex items-center justify-between text-xs uppercase tracking-wide text-white/50">Drive <span class="text-white/60" data-plugin-readout="drive">${drivePercent}%</span></label>
+          <input type="range" min="0" max="80" value="${drivePercent}" step="1" data-plugin="drive" class="mt-1 w-full">
+          <p class="mt-1 text-[0.65rem] text-white/50">butterDAWg-style waveshaper for grit.</p>
+        </div>
+        <div>
+          <label class="flex items-center justify-between text-xs uppercase tracking-wide text-white/50">Mix <span class="text-white/60" data-plugin-readout="mix">${mixPercent}%</span></label>
+          <input type="range" min="0" max="100" value="${mixPercent}" step="1" data-plugin="mix" class="mt-1 w-full">
+          <p class="mt-1 text-[0.65rem] text-white/50">Blend the distortion with the clean path.</p>
+        </div>
       </div>
     `;
+
+    butterPluginEl.querySelectorAll('input[data-plugin]').forEach(input => {
+      input.addEventListener('input', () => {
+        const kind = input.dataset.plugin;
+        const value = parseInt(input.value, 10);
+        const settings = ensurePluginState(row);
+        if (kind === 'gain') settings.gain = Math.max(0.1, value / 100);
+        if (kind === 'drive') settings.drive = Math.min(0.8, value / 100);
+        if (kind === 'mix') settings.mix = Math.min(1, value / 100);
+        applyPluginState(row);
+        const readout = butterPluginEl.querySelector(`[data-plugin-readout="${kind}"]`);
+        if (readout){
+          if (kind === 'gain') readout.textContent = Math.round(settings.gain * 100) + '%';
+          else readout.textContent = Math.round((kind === 'drive' ? settings.drive : settings.mix) * 100) + '%';
+        }
+      });
+    });
+  }
+
+  function refreshButterToolkit(){
+    drawRouteList();
+    updatePluginPanel();
+  }
+
+  function renderButterDeck(){
+    if (!butterPanelEl) return;
+    butterPanelEl.innerHTML = `
+      <header class="space-y-1">
+        <h4 class="text-base font-semibold text-white">Routing &amp; Plugin Toolkit</h4>
+        <p class="text-sm text-white/60">butterDAWg channel flows now power Beatloop\'s 16-step lanes.</p>
+      </header>
+      <div class="mt-4 space-y-4">
+        <section>
+          <h5 class="text-xs uppercase tracking-wide text-white/50">Channel routing</h5>
+          <div id="butterRouteList" class="mt-2 space-y-2"></div>
+        </section>
+        <section class="border-t border-white/10 pt-4">
+          <h5 class="text-xs uppercase tracking-wide text-white/50">Plugin rack</h5>
+          <div id="butterPluginControls" class="mt-2 space-y-3 text-sm text-white/70"></div>
+        </section>
+      </div>
+    `;
+    butterRouteListEl = butterPanelEl.querySelector('#butterRouteList');
+    butterPluginEl = butterPanelEl.querySelector('#butterPluginControls');
+    refreshButterToolkit();
   }
 
   function renderAIAssistant(){
@@ -2251,6 +2359,8 @@ let lastBar = -1;             // arranger playhead column
     rowLabels = labels.slice();
     gridWrap.innerHTML = '';
     const rows = labels.length;
+    syncRowState(rows);
+    rowHeaderRefs = Array(rows).fill(null);
 
     const table = document.createElement('div');
     table.className = 'grid gap-2';
@@ -2263,7 +2373,8 @@ let lastBar = -1;             // arranger playhead column
     for (let r=0; r<rows; r++){
       // left label + one dial w/ V/P/T switch
       const lab = document.createElement('div');
-      lab.className='flex items-start justify-between px-2 text-sm text-white/90';
+      lab.className='row-header flex items-start justify-between text-sm text-white/90 border border-transparent';
+      lab.dataset.row = r;
       lab.innerHTML = `<div class="flex flex-col gap-1 min-w-0">
   <div class="flex items-center gap-2">
     <button class="rounded bg-white/10 px-2 py-0.5 text-xs hover:bg-white/15 shrink-0" data-pr="${r}" title="Open Piano Roll">🎹</button>
@@ -2291,10 +2402,17 @@ let lastBar = -1;             // arranger playhead column
         setRowParamValue(row, kind, val);
       });
       table.appendChild(lab);
+      lab.classList.toggle('selected', r === selectedRow);
+      rowHeaderRefs[r] = lab;
       const prBtn = lab.querySelector('button[data-pr]');
       if (prBtn) prBtn.addEventListener('click', ()=> openPianoRoll(r, labels[r]));
 
-      
+      lab.addEventListener('click', (e) => {
+        if (e.target.closest('input, select, .ctrl-switch, button[data-pr]')) return;
+        setSelectedRow(r);
+      });
+
+
       // steps (with 4-step striping) OR PR preview
       if (hasAnyPR(currentBank, r)) {
         renderPRPreview(r, table);
@@ -2327,20 +2445,28 @@ let lastBar = -1;             // arranger playhead column
     }
     gridWrap.appendChild(table);
     refreshAIPanelRows();
+    refreshButterToolkit();
   }
 
   // ---------- Audio graph ----------
   async function rebuildGraph(){
     await Tone.start();
+    ensureMixBuses();
 
     // dispose old
     kitSamplers.forEach(s=>s.dispose());
     loopPlayers.forEach(p=>p.dispose());
     volumes.forEach(v=>v.dispose&&v.dispose());
     panners.forEach(p=>p.dispose&&p.dispose());
-    kitSamplers=[]; loopPlayers=[]; volumes=[]; panners=[]; pitches=[];
+    rowGains.forEach(g=>g.dispose&&g.dispose());
+    rowDistortions.forEach(d=>d.dispose&&d.dispose());
+    kitSamplers=[]; loopPlayers=[]; volumes=[]; panners=[]; pitches=[]; rowGains=[]; rowDistortions=[];
 
     const kit = KITS[currentKit];
+    if (!kit){
+      drawGrid([]);
+      return;
+    }
     const files = kit.files;
     kitRowCount = files.length;
 
@@ -2348,27 +2474,47 @@ let lastBar = -1;             // arranger playhead column
     loopSources = loopFiles.slice();
     const labels = [...kit.names, ...loopFiles.map(filenameLabel)];
     resizeAllBanks(labels.length);    // keep all banks in-sync with row count
+    syncRowState(labels.length);
 
     // kit chains (Sampler -> Pan -> Vol)
     for (let i=0;i<files.length;i++){
       await new Promise(resolve=>{
-        const vol=new Tone.Volume(0).toDestination();
+        const vol=new Tone.Volume(0);
+        const routeId = ensureRouteForRow(i);
+        const dest = getRouteNode(routeId) || Tone.Destination;
+        vol.connect(dest);
         const pan=new Tone.Panner(0).connect(vol);
-        const s=new Tone.Sampler({C3:files[i]}, ()=>resolve()).connect(pan);
-        kitSamplers[i]=s; volumes[i]=vol; panners[i]=pan; pitches[i]=0;
+        const state = ensurePluginState(i);
+        const dist=new Tone.Distortion(state.drive);
+        dist.wet.value = state.mix;
+        dist.connect(pan);
+        const gain=new Tone.Gain(state.gain).connect(dist);
+        const s=new Tone.Sampler({C3:files[i]}, ()=>resolve()).connect(gain);
+        kitSamplers[i]=s; volumes[i]=vol; panners[i]=pan; pitches[i]=0; rowGains[i]=gain; rowDistortions[i]=dist;
+        applyPluginState(i);
       });
     }
 
     // loop chains (Player -> Pan -> Vol) — wait until loaded
     for (let j=0;j<loopFiles.length;j++){
       await new Promise((resolve,reject)=>{
-        const vol=new Tone.Volume(0).toDestination();
+        const row = kitRowCount + j;
+        const vol=new Tone.Volume(0);
+        const routeId = ensureRouteForRow(row);
+        const dest = getRouteNode(routeId) || Tone.Destination;
+        vol.connect(dest);
         const pan=new Tone.Panner(0).connect(vol);
+        const state = ensurePluginState(row);
+        const dist=new Tone.Distortion(state.drive);
+        dist.wet.value = state.mix;
+        dist.connect(pan);
+        const gain=new Tone.Gain(state.gain).connect(dist);
         const p=new Tone.Player({
           url: encodeURI(loopFiles[j]), autostart:false, loop:false, fadeOut:0.01,
           onload: ()=>resolve(), onerror:(e)=>reject(e)
-        }).connect(pan);
-        loopPlayers[j]=p; const row=kitRowCount+j; volumes[row]=vol; panners[row]=pan; pitches[row]=0;
+        }).connect(gain);
+        loopPlayers[j]=p; volumes[row]=vol; panners[row]=pan; pitches[row]=0; rowGains[row]=gain; rowDistortions[row]=dist;
+        applyPluginState(row);
       });
     }
     await Tone.loaded();
