@@ -1,0 +1,63 @@
+.trackinfo {
+  width: 16rem;
+  min-width: 16rem;
+  max-width: 16rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+  /* border: black 1px solid; */
+}
+
+.trackNumber {
+  flex: 0;
+  width: 1.5rem;
+  min-width: 1.5rem;
+  max-width: 1.5rem;
+  overflow: hidden;
+  font-weight: bold;
+  text-align: center;
+  /* vertical-align: text-top; */
+  margin-right: 0.5rem;
+  /* border-left: 6px solid;
+  border-left-style: double; */
+}
+
+.controls {
+  display: flex;
+  justify-content: left;
+  align-items: center;
+  width: 12rem;
+  /* border: black 1px solid; */
+}
+
+.volume {
+  /* border: black 1px solid; */
+  margin-top: 0.2rem;
+  margin-left: 1.5rem; 
+  margin-right: 1.0rem;
+  max-width: 9.5rem;
+  min-width: 9.5rem;
+  width: 9.5rem;
+}
+
+.name {
+  width: 6rem;
+  max-width: 6rem;
+  min-width: 6rem;
+  margin-right: 0.25rem;
+  font-weight: bold;
+  /* border: black 1px solid; */
+}
+
+.secondRow {
+  display: flex;
+}
+
+.menu {
+  /* TODO: This following line is a bit of cheeting to have the popover connect at the right location */
+  transform: translateY(40%);
+}
+
+.menu:focus {
+  outline: none;
+}
