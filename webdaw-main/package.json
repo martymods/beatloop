@@ -1,0 +1,78 @@
+{
+  "name": "webdaw",
+  "version": "0.1.0",
+  "homepage": "https://ai-music.github.io/webdaw",
+  "private": true,
+  "main": "public/main.js",
+  "dependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@blueprintjs/core": "^5.7.1",
+    "@blueprintjs/icons": "^5.4.1",
+    "@blueprintjs/select": "^5.0.19",
+    "@blueprintjs/table": "^5.0.19",
+    "@popperjs/core": "^2.11.8",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/gapi": "^0.0.47",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.62",
+    "@types/react": "^18.2.39",
+    "@types/react-dom": "^18.2.17",
+    "@uiw/react-color-compact": "^2.0.5",
+    "data-structure-typed": "^1.50.2",
+    "directory-tree": "^3.5.1",
+    "electron": "^28.0.0",
+    "gapi-script": "^1.2.0",
+    "lodash": "^4.17.21",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "typescript": "^4.9.5",
+    "use-force-update": "^1.0.11",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build",
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "docs": "typedoc --out docs src",
+    "eject": "react-scripts eject",
+    "electron-dev": "electron ."
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest",
+      "plugin:prettier/recommended"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/lodash-es": "^4.17.12",
+    "autoprefixer": "^10.4.16",
+    "css-loader": "^6.8.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "gh-pages": "^6.1.0",
+    "postcss-loader": "^7.3.3",
+    "prettier": "^3.1.0",
+    "sass": "^1.69.5",
+    "sass-loader": "^13.3.2",
+    "style-loader": "^3.3.3",
+    "typedoc": "^0.25.4"
+  }
+}
