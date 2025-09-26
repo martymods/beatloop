@@ -1125,6 +1125,33 @@ uploadTrackInput.addEventListener('change', async (e) => {
 <!-- Tone.js for WebAudio sequencing -->
 <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
 <script>
+  window.ensureToneStarted = window.ensureToneStarted || (() => {
+    let pending = null;
+    return async function ensureToneStarted() {
+      if (typeof Tone === 'undefined' || typeof Tone.start !== 'function') return false;
+      if (Tone.context && Tone.context.state === 'running') return true;
+      if (!pending) {
+        pending = (async () => {
+          try {
+            await Tone.start();
+            return Tone.context && Tone.context.state === 'running';
+          } catch (err) {
+            console.warn('Tone.js context failed to start', err);
+            return false;
+          } finally {
+            pending = null;
+          }
+        })();
+      }
+      try {
+        return await pending;
+      } catch {
+        return false;
+      }
+    };
+  })();
+</script>
+<script>
 (() => {
   // ---------- Assets ----------
   const KITS = {
@@ -2418,7 +2445,7 @@ const AI_MELODY_SCALES = {
   function hideStudio(){ studio.classList.add('hidden'); }
   openBtn?.addEventListener('click', async () => {
     showStudio();
-    await Tone.start();
+    await window.ensureToneStarted?.();
     currentKit = kitSel.value;
     renderKitDetails();
     await setupMidiBrowser();
@@ -2642,7 +2669,7 @@ let lastBar = -1;             // arranger playhead column
 
   // ---------- Audio graph ----------
   async function rebuildGraph(){
-    await Tone.start();
+    await window.ensureToneStarted?.();
     ensureMixBuses();
 
     // dispose old
@@ -3368,7 +3395,7 @@ songToggle?.addEventListener('click', ()=>{
 
   exportSongBtn?.addEventListener('click', async ()=>{
     if(!hasArrangement()){ alert('Add at least one bar in Song Mode first.'); return; }
-    await Tone.start(); ensureLoop();
+    await window.ensureToneStarted?.(); ensureLoop();
     mode='song'; currentStep=0; songIdx=0;
     if(!recorder) recorder=new Tone.Recorder(); Tone.Destination.connect(recorder);
     recorder.start();
@@ -3390,7 +3417,7 @@ songToggle?.addEventListener('click', ()=>{
   });
 
 playBtn.addEventListener('click', async () => {
-  await Tone.start();
+  await window.ensureToneStarted?.();
   ensureLoop();
 
   // decide playback mode
@@ -3742,7 +3769,7 @@ stopBtn.addEventListener('click', () => {
   async function scheduleTagPlayback(url, at){
     if (!url) return;
     try {
-      await Tone.start();
+      await window.ensureToneStarted?.();
       const buses = typeof ensureMixBuses === 'function' ? ensureMixBuses() : null;
       const destination = (buses && buses.main) || Tone.Destination;
       const player = new Tone.Player({ url, autostart: false, fadeOut: 0.05 }).connect(destination);
@@ -3867,7 +3894,7 @@ setInterval(() => {
       });
       const { id } = await r.json();
       await refreshSessions();
-      await Tone.start();
+      await window.ensureToneStarted?.();
       joinSession(id);
     } catch {
       alert('Could not start session.');
@@ -3992,7 +4019,7 @@ setInterval(() => {
       currentSessionCap = payload.maxPlayers || 8;
       currentSessionId = id;
       window.currentSessionId = currentSessionId;
-      await Tone.start();
+      await window.ensureToneStarted?.();
       document.getElementById('beatloopStudio')?.classList.remove('hidden');
       renderParticipants(participants);
 
