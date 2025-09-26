@@ -1320,7 +1320,10 @@ const TUNEFLOW_LINKS = [
   const butterPanelEl = document.getElementById('butterFeaturePanel');
   const tuneflowPanelEl = document.getElementById('tuneflowPanel');
   // --- Piano Roll UI refs (lazy) ---
-  let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl; let prPlayline=null; let prWS=null;
+  let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl;
+  let prPlayline = null;
+  let prWS = null;
+  let prRow = null; // track the piano roll row currently being edited
   let _prInit = false;
   function _ensurePRRefs(){
     if (_prInit) return;
@@ -1622,39 +1625,38 @@ const TUNEFLOW_LINKS = [
   }
 
   // --- Piano Roll logic ---
-  let prRow = null; // which row we're editing
   function openPianoRoll(row, label){
-_ensurePRRefs();
-prRow = row;
-if (prTitle) prTitle.textContent = `Piano Roll — ${label}`;
-if (prSubdiv) prSubdiv.value = String(SUBDIV);
-// Waveform for LOOP rows only
-try {
-  if (prWaveEl) prWaveEl.innerHTML = '';
-  const isLoopRow = (typeof kitRowCount!=='undefined' && typeof row!=='undefined') ? (row >= kitRowCount) : false;
-  if (isLoopRow) {
-    if (typeof WaveSurfer !== 'undefined' && prWaveEl) {
-      if (prWS && typeof prWS.destroy === 'function') { try { prWS.destroy(); } catch {} prWS = null; }
-      prWS = WaveSurfer.create({
-        container: prWaveEl,
-        height: 64,
-        barWidth: 2,
-        barGap: 1,
-        waveColor: ['#ffffff22', '#7c3aed'],
-        progressColor: ['#7c3aed', '#22d3ee'],
-        cursorWidth: 0,
-      });
-      const idx = row - (typeof kitRowCount!=='undefined'?kitRowCount:0);
-      const src = (Array.isArray(loopSources) && loopSources[idx]) ? loopSources[idx] : null;
-      if (src) prWS.load(src);
-    }
-  } else {
-    if (prWS && typeof prWS.destroy === 'function') { try { prWS.destroy(); } catch {} prWS = null; }
-    if (prWaveEl) prWaveEl.innerHTML = '';
-  }
-} catch {}
-drawPianoRoll();
-if (prOverlay) prOverlay.style.display = 'block';
+    _ensurePRRefs();
+    prRow = row;
+    if (prTitle) prTitle.textContent = `Piano Roll — ${label}`;
+    if (prSubdiv) prSubdiv.value = String(SUBDIV);
+    // Waveform for LOOP rows only
+    try {
+      if (prWaveEl) prWaveEl.innerHTML = '';
+      const isLoopRow = (typeof kitRowCount!=='undefined' && typeof row!=='undefined') ? (row >= kitRowCount) : false;
+      if (isLoopRow) {
+        if (typeof WaveSurfer !== 'undefined' && prWaveEl) {
+          if (prWS && typeof prWS.destroy === 'function') { try { prWS.destroy(); } catch {} prWS = null; }
+          prWS = WaveSurfer.create({
+            container: prWaveEl,
+            height: 64,
+            barWidth: 2,
+            barGap: 1,
+            waveColor: ['#ffffff22', '#7c3aed'],
+            progressColor: ['#7c3aed', '#22d3ee'],
+            cursorWidth: 0,
+          });
+          const idx = row - (typeof kitRowCount!=='undefined'?kitRowCount:0);
+          const src = (Array.isArray(loopSources) && loopSources[idx]) ? loopSources[idx] : null;
+          if (src) prWS.load(src);
+        }
+      } else {
+        if (prWS && typeof prWS.destroy === 'function') { try { prWS.destroy(); } catch {} prWS = null; }
+        if (prWaveEl) prWaveEl.innerHTML = '';
+      }
+    } catch {}
+    drawPianoRoll();
+    if (prOverlay) prOverlay.style.display = 'block';
   }
   function closePianoRoll(){
     _ensurePRRefs();
@@ -1663,33 +1665,36 @@ if (prOverlay) prOverlay.style.display = 'block';
     prRow = null;
   }
   function prEnsurePlayline(){
-    if(!prGridEl) return;
-    if(!prPlayline){
-      prPlayline=document.createElement('div');
-      prPlayline.className='pr-playline';
+    if (!prGridEl) return;
+    if (!prPlayline){
+      prPlayline = document.createElement('div');
+      prPlayline.className = 'pr-playline';
     }
-    if(!prPlayline.parentNode) prGridEl.appendChild(prPlayline);
+    if (!prPlayline.parentNode) prGridEl.appendChild(prPlayline);
   }
 
-  function drawPianoRoll(){ _ensurePRRefs(); if (prRow == null || !prGridEl) return;
+  function drawPianoRoll(){
+    _ensurePRRefs();
+    if (prRow == null || !prGridEl) return;
     const cols = STEPS * SUBDIV;
     prGridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(16px, 1fr))`;
-    prGridEl.style.gridTemplateRows    = `repeat(${PITCH_ROWS}, 22px)`;
+    prGridEl.style.gridTemplateRows = `repeat(${PITCH_ROWS}, 22px)`;
     prGridEl.innerHTML = '';
     const roll = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow).notes;
 
-    for (let p = PITCH_ROWS-1; p >= 0; p--){
+    for (let p = PITCH_ROWS - 1; p >= 0; p--){
       for (let i = 0; i < cols; i++){
         const cell = document.createElement('div');
         cell.className = 'pr-cell';
         if (Math.floor(i / SUBDIV) % 2 === 1) cell.classList.add('alt');
         if (roll[p][i]) cell.classList.add('on');
-        cell.dataset.p = p; cell.dataset.i = i;
-prGridEl.appendChild(cell);
+        cell.dataset.p = p;
+        cell.dataset.i = i;
+        prGridEl.appendChild(cell);
       }
     }
-      prEnsurePlayline();
-}
+    prEnsurePlayline();
+  }
   // --- Robust setter for Piano Roll cells that updates the main grid preview ---
   function setPR(p, i, on){
     try { if (typeof _ensurePRRefs === 'function') _ensurePRRefs(); } catch(e) {}
