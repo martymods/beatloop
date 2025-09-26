@@ -281,6 +281,11 @@
         </div>
 
         <div class="mt-4">
+          <p class="text-xs text-white/60 mb-1">Instruments</p>
+          <div id="blInstruments" class="max-h-44 overflow-y-auto rounded-lg bg-white/5 p-2 space-y-1"></div>
+        </div>
+
+        <div class="mt-4">
           <p class="text-xs text-white/60 mb-1">MIDI Library</p>
           <div class="space-y-2 rounded-lg bg-white/5 p-2">
             <div class="flex items-center gap-2">
@@ -1166,6 +1171,100 @@ uploadTrackInput.addEventListener('change', async (e) => {
     }
   };
 
+// Your instrument one-shots
+const INSTRUMENTS = {
+  library: [
+    '/audio/instruments/448532__tedagame__c5.ogg',
+    '/audio/instruments/448533__tedagame__c6.ogg',
+    '/audio/instruments/448534__tedagame__b6.ogg',
+    '/audio/instruments/448535__tedagame__b7.ogg',
+    '/audio/instruments/448536__tedagame__b4.ogg',
+    '/audio/instruments/448537__tedagame__b5.ogg',
+    '/audio/instruments/448538__tedagame__c3.ogg',
+    '/audio/instruments/448539__tedagame__c4.ogg',
+    '/audio/instruments/448540__tedagame__c1.ogg',
+    '/audio/instruments/448541__tedagame__c2.ogg',
+    '/audio/instruments/448542__tedagame__d1.ogg',
+    '/audio/instruments/448543__tedagame__c8.ogg',
+    '/audio/instruments/448544__tedagame__c1.ogg',
+    '/audio/instruments/448545__tedagame__c7.ogg',
+    '/audio/instruments/448546__tedagame__c3.ogg',
+    '/audio/instruments/448547__tedagame__c2.ogg',
+    '/audio/instruments/448548__tedagame__c5.ogg',
+    '/audio/instruments/448549__tedagame__c4.ogg',
+    '/audio/instruments/448550__tedagame__c7.ogg',
+    '/audio/instruments/448551__tedagame__c6.ogg',
+    '/audio/instruments/448552__tedagame__g4.ogg',
+    '/audio/instruments/448553__tedagame__g5.ogg',
+    '/audio/instruments/448554__tedagame__g6.ogg',
+    '/audio/instruments/448555__tedagame__g7.ogg',
+    '/audio/instruments/448556__tedagame__g7.ogg',
+    '/audio/instruments/448557__tedagame__g1.ogg',
+    '/audio/instruments/448558__tedagame__g2.ogg',
+    '/audio/instruments/448559__tedagame__g3.ogg',
+    '/audio/instruments/448560__tedagame__a5.ogg',
+    '/audio/instruments/448561__tedagame__a4.ogg',
+    '/audio/instruments/448562__tedagame__a3.ogg',
+    '/audio/instruments/448563__tedagame__a2.ogg',
+    '/audio/instruments/448564__tedagame__b1.ogg',
+    '/audio/instruments/448565__tedagame__b0.ogg',
+    '/audio/instruments/448566__tedagame__a7.ogg',
+    '/audio/instruments/448567__tedagame__a6.ogg',
+    '/audio/instruments/448568__tedagame__b3.ogg',
+    '/audio/instruments/448569__tedagame__b2.ogg',
+    '/audio/instruments/448570__tedagame__a3.ogg',
+    '/audio/instruments/448571__tedagame__a2.ogg',
+    '/audio/instruments/448572__tedagame__a1.ogg',
+    '/audio/instruments/448573__tedagame__a0.ogg',
+    '/audio/instruments/448574__tedagame__a7.ogg',
+    '/audio/instruments/448575__tedagame__a6.ogg',
+    '/audio/instruments/448576__tedagame__a5.ogg',
+    '/audio/instruments/448577__tedagame__a4.ogg',
+    '/audio/instruments/448578__tedagame__a1.ogg',
+    '/audio/instruments/448579__tedagame__a0.ogg',
+    '/audio/instruments/448580__tedagame__f7.ogg',
+    '/audio/instruments/448581__tedagame__f1.ogg',
+    '/audio/instruments/448582__tedagame__f5.ogg',
+    '/audio/instruments/448583__tedagame__f6.ogg',
+    '/audio/instruments/448584__tedagame__f3.ogg',
+    '/audio/instruments/448585__tedagame__f4.ogg',
+    '/audio/instruments/448586__tedagame__f1.ogg',
+    '/audio/instruments/448587__tedagame__f2.ogg',
+    '/audio/instruments/448588__tedagame__f2.ogg',
+    '/audio/instruments/448589__tedagame__f3.ogg',
+    '/audio/instruments/448590__tedagame__g2.ogg',
+    '/audio/instruments/448591__tedagame__g1.ogg',
+    '/audio/instruments/448592__tedagame__g4.ogg',
+    '/audio/instruments/448593__tedagame__g3.ogg',
+    '/audio/instruments/448594__tedagame__f5.ogg',
+    '/audio/instruments/448595__tedagame__f4.ogg',
+    '/audio/instruments/448596__tedagame__f7.ogg',
+    '/audio/instruments/448597__tedagame__f6.ogg',
+    '/audio/instruments/448598__tedagame__g6.ogg',
+    '/audio/instruments/448599__tedagame__g5.ogg',
+    '/audio/instruments/448600__tedagame__d2.ogg',
+    '/audio/instruments/448601__tedagame__d3.ogg',
+    '/audio/instruments/448602__tedagame__d4.ogg',
+    '/audio/instruments/448603__tedagame__d5.ogg',
+    '/audio/instruments/448604__tedagame__d6.ogg',
+    '/audio/instruments/448605__tedagame__d7.ogg',
+    '/audio/instruments/448606__tedagame__d1.ogg',
+    '/audio/instruments/448607__tedagame__d2.ogg',
+    '/audio/instruments/448608__tedagame__d3.ogg',
+    '/audio/instruments/448609__tedagame__d4.ogg',
+    '/audio/instruments/448610__tedagame__e7.ogg',
+    '/audio/instruments/448611__tedagame__e6.ogg',
+    '/audio/instruments/448612__tedagame__e5.ogg',
+    '/audio/instruments/448613__tedagame__e4.ogg',
+    '/audio/instruments/448614__tedagame__e3.ogg',
+    '/audio/instruments/448615__tedagame__e2.ogg',
+    '/audio/instruments/448616__tedagame__e1.ogg',
+    '/audio/instruments/448617__tedagame__d7.ogg',
+    '/audio/instruments/448618__tedagame__d6.ogg',
+    '/audio/instruments/448619__tedagame__d5.ogg',
+  ]
+};
+
 // Your loop files
 const LOOPS = {
   library: [
@@ -1258,6 +1357,7 @@ const AI_MELODY_SCALES = {
   const clearBtn  = document.getElementById('blClear');
   const kitSel    = document.getElementById('blKit');
   const loopsWrap = document.getElementById('blLoops');
+  const instrumentsWrap = document.getElementById('blInstruments');
   const saveBtn   = document.getElementById('blSaveWav');
   const midiSearchInput = document.getElementById('midiSearch');
   const midiRandomBtn = document.getElementById('midiRandom');
@@ -2314,6 +2414,7 @@ const AI_MELODY_SCALES = {
     await setupMidiBrowser();
     await rebuildGraph();
     renderLoopPicker();
+    renderInstrumentPicker();
     drawArranger();
   });
   closeBtn?.addEventListener('click', hideStudio);
@@ -2332,6 +2433,7 @@ const AI_MELODY_SCALES = {
   let kitSamplers=[], loopPlayers=[];
   let loopSources=[];
   const selectedLoops = new Set();
+  const selectedInstruments = new Set();
   const MIDI_INDEX_URL = '/audio/music/midi-index.json';
   let midiIndex = [];
   let midiIndexLoaded = false;
@@ -2551,8 +2653,13 @@ let lastBar = -1;             // arranger playhead column
     kitRowCount = files.length;
 
     const loopFiles = Array.from(selectedLoops);
-    loopSources = loopFiles.slice();
-    const labels = [...kit.names, ...loopFiles.map(filenameLabel)];
+    const instrumentFiles = Array.from(selectedInstruments);
+    const extraEntries = [
+      ...loopFiles.map(file => ({ type: 'loop', file })),
+      ...instrumentFiles.map(file => ({ type: 'instrument', file })),
+    ];
+    loopSources = extraEntries.map(entry => entry.file);
+    const labels = [...kit.names, ...extraEntries.map(entry => filenameLabel(entry.file))];
     resizeAllBanks(labels.length);    // keep all banks in-sync with row count
     syncRowState(labels.length);
 
@@ -2576,7 +2683,7 @@ let lastBar = -1;             // arranger playhead column
     }
 
     // loop chains (Player -> Pan -> Vol) — wait until loaded
-    for (let j=0;j<loopFiles.length;j++){
+    for (let j=0;j<extraEntries.length;j++){
       await new Promise((resolve,reject)=>{
         const row = kitRowCount + j;
         const vol=new Tone.Volume(0);
@@ -2590,7 +2697,7 @@ let lastBar = -1;             // arranger playhead column
         dist.connect(pan);
         const gain=new Tone.Gain(state.gain).connect(dist);
         const p=new Tone.Player({
-          url: encodeURI(loopFiles[j]), autostart:false, loop:false, fadeOut:0.01,
+          url: encodeURI(extraEntries[j].file), autostart:false, loop:false, fadeOut:0.01,
           onload: ()=>resolve(), onerror:(e)=>reject(e)
         }).connect(gain);
         loopPlayers[j]=p; volumes[row]=vol; panners[row]=pan; pitches[row]=0; rowGains[row]=gain; rowDistortions[row]=dist;
@@ -2603,31 +2710,39 @@ let lastBar = -1;             // arranger playhead column
     paintPlayhead(0);
   }
 
-  // ---------- Loops picker ----------
-  function renderLoopPicker(){
-    if (!loopsWrap) return;
-    loopsWrap.innerHTML = '';
-    Object.entries(LOOPS).forEach(([pack, files]) => {
+  // ---------- Sample pickers (Loops & Instruments) ----------
+  function renderAssetPicker(target, library, selectedSet){
+    if (!target) return;
+    target.innerHTML = '';
+    Object.entries(library).forEach(([pack, files]) => {
       const head = document.createElement('p');
       head.className = 'text-xs text-white/60 mt-2 mb-1';
       head.textContent = pack[0].toUpperCase() + pack.slice(1);
-      loopsWrap.appendChild(head);
+      target.appendChild(head);
 
       files.forEach(fp => {
         const row = document.createElement('label');
         row.className = 'flex items-center justify-between rounded-md bg-white/5 px-2 py-1 text-sm hover:bg-white/10';
         row.innerHTML =
           `<span class="truncate mr-2">${filenameLabel(fp)}</span>
-           <input type="checkbox" data-file="${fp}" ${selectedLoops.has(fp) ? 'checked' : ''}>`;
+           <input type="checkbox" data-file="${fp}" ${selectedSet.has(fp) ? 'checked' : ''}>`;
         row.querySelector('input').addEventListener('change', async (e) => {
           const f = e.target.dataset.file;
-          if (e.target.checked) selectedLoops.add(f);
-          else selectedLoops.delete(f);
-          await rebuildGraph();  // update rows instantly
+          if (e.target.checked) selectedSet.add(f);
+          else selectedSet.delete(f);
+          await rebuildGraph();
         });
-        loopsWrap.appendChild(row);
+        target.appendChild(row);
       });
     });
+  }
+
+  function renderLoopPicker(){
+    renderAssetPicker(loopsWrap, LOOPS, selectedLoops);
+  }
+
+  function renderInstrumentPicker(){
+    renderAssetPicker(instrumentsWrap, INSTRUMENTS, selectedInstruments);
   }
 
   // ---------- MIDI Browser ----------
