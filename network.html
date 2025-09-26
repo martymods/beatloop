@@ -1115,6 +1115,23 @@ const LOOPS = {
   const kitSel    = document.getElementById('blKit');
   const loopsWrap = document.getElementById('blLoops');
   const saveBtn   = document.getElementById('blSaveWav');
+
+  const normalizeTempo = (value) => {
+    const tempo = Number(value);
+    if (!Number.isFinite(tempo)) return null;
+    return Math.min(180, Math.max(60, Math.round(tempo)));
+  };
+
+  const applyTempoLocally = (value) => {
+    const tempo = normalizeTempo(value);
+    if (tempo === null) return null;
+    if (bpmRange) bpmRange.value = tempo;
+    if (bpmVal) bpmVal.textContent = tempo;
+    if (window.Tone && Tone.Transport) {
+      try { Tone.Transport.bpm.value = tempo; } catch (err) { console.error('Tone tempo update failed', err); }
+    }
+    return tempo;
+  };
   // --- Piano Roll UI refs (lazy) ---
   let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl; let prPlayline=null; let prWS=null;
   let _prInit = false;
@@ -1404,18 +1421,6 @@ const patternSel= document.getElementById('blPattern');
   const arrangerWrap  = document.getElementById('arrangerWrap');
   const arrGrid       = document.getElementById('arrGrid');
 
-  function showStudio(){ studio.classList.remove('hidden'); }
-  function hideStudio(){ studio.classList.add('hidden'); }
-  openBtn?.addEventListener('click', async () => {
-    showStudio();
-    await Tone.start();
-    currentKit = kitSel.value;
-    await rebuildGraph();
-    renderLoopPicker();
-    drawArranger();
-  });
-  closeBtn?.addEventListener('click', hideStudio);
-
   // ---------- State ----------
   let currentKit = 'trap';
   let kitRowCount = 0;
@@ -1430,6 +1435,86 @@ const patternSel= document.getElementById('blPattern');
   let kitSamplers=[], loopPlayers=[];
   let loopSources=[];
   const selectedLoops = new Set();
+
+  let pendingGridSnapshot = null;
+
+  function ensurePatternRowData(bank, row){
+    const existing = (patterns[bank] || []).length;
+    const labelRows = Array.isArray(rowLabels) ? rowLabels.length : 0;
+    const needed = Math.max(existing, labelRows, row + 1);
+    ensurePatternForBank(bank, needed);
+    return patterns[bank][row];
+  }
+
+  function setStepState(row, col, on, { emit = false } = {}){
+    if (col < 0 || col >= STEPS) return;
+    const bank = currentBank;
+    const rowData = ensurePatternRowData(bank, row);
+    if (!rowData) return;
+    rowData[col] = !!on;
+    const cell = gridWrap?.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
+    if (cell) cell.classList.toggle('on', !!on);
+    if (emit && currentSessionId && socket) {
+      try {
+        socket.emit('grid:update', { sessionId: currentSessionId, row, col, on: !!on });
+      } catch (err) {
+        console.error('grid:update emit failed', err);
+      }
+    }
+  }
+
+  function queueGridSnapshot(map){
+    pendingGridSnapshot = map && typeof map === 'object' ? { ...map } : {};
+    applyGridSnapshotIfReady();
+  }
+
+  function applyGridSnapshotIfReady(){
+    if (pendingGridSnapshot === null) return;
+    const rows = Array.isArray(rowLabels) ? rowLabels.length : 0;
+    if (!rows) return;
+    const bank = currentBank;
+    ensurePatternForBank(bank, rows);
+    for (let r = 0; r < rows; r++){
+      const rowData = ensurePatternRowData(bank, r);
+      if (rowData) rowData.fill(false);
+    }
+    for (const [key, value] of Object.entries(pendingGridSnapshot)){
+      if (!value) continue;
+      const [rStr, cStr] = key.split('-');
+      const r = Number(rStr);
+      const c = Number(cStr);
+      if (!Number.isInteger(r) || !Number.isInteger(c)) continue;
+      if (r < 0 || r >= rows || c < 0 || c >= STEPS) continue;
+      const rowData = ensurePatternRowData(bank, r);
+      if (rowData) rowData[c] = true;
+    }
+    drawGrid(rowLabels);
+    pendingGridSnapshot = null;
+  }
+
+  function showStudio(){ studio.classList.remove('hidden'); }
+  function hideStudio(){ studio.classList.add('hidden'); }
+
+  let bootStudioPromise = null;
+  async function bootStudioIfNeeded(){
+    showStudio();
+    if (bootStudioPromise) return bootStudioPromise;
+    bootStudioPromise = (async () => {
+      try { await Tone.start(); } catch (err) { console.error('Tone start failed', err); }
+      currentKit = kitSel.value;
+      await rebuildGraph();
+      renderLoopPicker();
+      drawArranger();
+    })();
+    try {
+      await bootStudioPromise;
+    } finally {
+      bootStudioPromise = null;
+    }
+  }
+
+  openBtn?.addEventListener('click', bootStudioIfNeeded);
+  closeBtn?.addEventListener('click', hideStudio);
 
   // transport
   let loop = null, currentStep = 0, lastStep = -1, recorder = null;
@@ -1586,13 +1671,9 @@ let lastBar = -1;             // arranger playhead column
           cell.addEventListener('click', (e) => {
             const rr = +e.currentTarget.dataset.r;
             const cc = +e.currentTarget.dataset.c;
-
-            const p = patterns[currentBank] || (patterns[currentBank] = []);
-            if (!Array.isArray(p[rr])) p[rr] = Array(STEPS).fill(false);
-            if (typeof p[rr][cc] !== 'boolean') p[rr][cc] = false;
-
-            p[rr][cc] = !p[rr][cc];
-            e.currentTarget.classList.toggle('on', p[rr][cc]);
+            const rowData = ensurePatternRowData(currentBank, rr);
+            const next = !(rowData && rowData[cc]);
+            setStepState(rr, cc, next, { emit: !!(currentSessionId && socket) });
           });
 
           table.appendChild(cell);
@@ -1649,6 +1730,7 @@ let lastBar = -1;             // arranger playhead column
 
     drawGrid(labels);
     paintPlayhead(0);
+    applyGridSnapshotIfReady();
   }
 
   // ---------- Loops picker ----------
@@ -1826,9 +1908,8 @@ currentStep = (currentStep + 1) % STEPS;
   }
 
   // ---------- Controls ----------
-  bpmRange.addEventListener('input', () => {
-    bpmVal.textContent = bpmRange.value;
-    Tone.Transport.bpm.value = +bpmRange.value; // live
+  bpmRange?.addEventListener('input', () => {
+    applyTempoLocally(bpmRange.value);
   });
 
   patternSel?.addEventListener('change', ()=>{
@@ -1916,7 +1997,7 @@ songToggle?.addEventListener('click', ()=>{
     mode='song'; currentStep=0; songIdx=0;
     if(!recorder) recorder=new Tone.Recorder(); Tone.Destination.connect(recorder);
     recorder.start();
-    Tone.Transport.bpm.value=+bpmRange.value;
+    applyTempoLocally(bpmRange?.value);
     loop.start(0);
     if(Tone.Transport.state!=='started') Tone.Transport.start('+0.03');
 
@@ -1953,7 +2034,7 @@ playBtn.addEventListener('click', async () => {
   if (!recorder) recorder = new Tone.Recorder();
   Tone.Destination.connect(recorder);
 
-  Tone.Transport.bpm.value = +bpmRange.value;
+  applyTempoLocally(bpmRange?.value);
   loop.start(0);
 
   if (Tone.Transport.state !== 'started') {
@@ -1976,7 +2057,13 @@ stopBtn.addEventListener('click', () => {
 
 
   clearBtn.addEventListener('click', () => {
-    const pat = activePattern(); pat.forEach(row => row.fill(false));
+    const pat = activePattern();
+    pat.forEach((row, r) => {
+      row.forEach((val, c) => {
+        if (val) setStepState(r, c, false, { emit: !!(currentSessionId && socket) });
+      });
+      row.fill(false);
+    });
     drawGrid(rowLabels);
   });
 
@@ -2312,16 +2399,12 @@ setInterval(() => {
       currentSessionCap = payload.maxPlayers || 8;
       currentSessionId = id;
       window.currentSessionId = currentSessionId;
-      document.getElementById('beatloopStudio')?.classList.remove('hidden');
+      queueGridSnapshot(payload?.grid?.map || {});
+      await bootStudioIfNeeded();
       renderParticipants(participants);
 
-        if (typeof payload.tempo === 'number') {
-        const bpmEl = document.getElementById('blBpm');
-        if (bpmEl) {
-          bpmEl.value = payload.tempo;
-          const valEl = document.getElementById('blBpmVal');
-          if (valEl) valEl.textContent = payload.tempo;
-        }
+      if (typeof payload.tempo === 'number') {
+        applyTempoLocally(payload.tempo);
       }
 
       // (re)connect socket
@@ -2331,12 +2414,10 @@ setInterval(() => {
 
       // tempo + grid + roster updates
       socket.on('tempo:update', ({ tempo }) => {
-        const bpm = document.getElementById('blBpm');
-        if (bpm) { bpm.value = tempo; document.getElementById('blBpmVal').textContent = tempo; }
+        applyTempoLocally(tempo);
       });
       socket.on('grid:update', ({ row, col, on }) => {
-        const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
-        if (cell) cell.classList.toggle('on', !!on);
+        setStepState(row, col, !!on, { emit: false });
       });
       socket.on('participants', ({ list }) => renderParticipants(list));
       socket.on('presence:update', ({ roster }) => renderParticipants(roster));
@@ -2354,24 +2435,11 @@ setInterval(() => {
       const tempoSlider = document.getElementById('blBpm');
       if (tempoSlider){
         tempoSlider.oninput = (e) => {
-          const t = +e.target.value;
-          document.getElementById('blBpmVal').textContent = t;
-          if (currentSessionId && socket) socket.emit('tempo:set', { sessionId: currentSessionId, tempo: t });
+          const applied = applyTempoLocally(e.target.value);
+          if (applied !== null && currentSessionId && socket) {
+            socket.emit('tempo:set', { sessionId: currentSessionId, tempo: applied });
+          }
         };
-      }
-
-      // grid click → broadcast
-      const grid = document.getElementById('blGrid');
-      if (grid && !grid._socketBound){
-        grid.addEventListener('click', (e) => {
-          const cell = e.target.closest('.step');
-          if (!cell || !currentSessionId || !socket) return;
-          const row = +cell.dataset.r, col = +cell.dataset.c;
-          const on  = !cell.classList.contains('on');
-          cell.classList.toggle('on', on);
-          socket.emit('grid:update', { sessionId: currentSessionId, row, col, on });
-        });
-        grid._socketBound = true;
       }
 
       // leave on tab close or Close button
