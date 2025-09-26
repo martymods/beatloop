@@ -27,6 +27,19 @@ if (!MONGODB_URI) {
 }
 
 const SESSION_EMPTY_TTL_MS = 3 * 60 * 1000;
+const SESSION_MAX_LIFETIME_MS = 12 * 60 * 60 * 1000; // 12-hour hard cutoff for stale sessions
+const PLAYER_COLOR_PALETTE = [
+  '#f97316',
+  '#22d3ee',
+  '#a855f7',
+  '#facc15',
+  '#34d399',
+  '#fb7185',
+  '#60a5fa',
+  '#f472b6',
+  '#4ade80',
+  '#fbbf24'
+];
 const IMAGE_MIME_EXT = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -69,6 +82,10 @@ const SessionSchema = new mongoose.Schema({
       cols: 16,
       map: {} // { "row-col": 0/1 }
     }
+  },
+  playerColors: {
+    type: Object,
+    default: {}
   }
 });
 
@@ -129,9 +146,47 @@ async function userSummary(u) {
   return { id: u._id, name: u.name, email: u.email, avatar: u.avatarUrl, tagUrl: u.tagUrl, joinedAt: u.createdAt };
 }
 
+function ensureGridShape(sessionDoc) {
+  if (!sessionDoc.grid || typeof sessionDoc.grid !== 'object') {
+    sessionDoc.grid = { rows: 8, cols: 16, map: {} };
+  }
+  if (!sessionDoc.grid.map || typeof sessionDoc.grid.map !== 'object') {
+    sessionDoc.grid.map = {};
+  }
+  return sessionDoc.grid;
+}
+
+function ensurePlayerColors(sessionDoc, userId) {
+  if (!sessionDoc.playerColors || typeof sessionDoc.playerColors !== 'object') {
+    sessionDoc.playerColors = {};
+  }
+  const key = String(userId);
+  if (sessionDoc.playerColors[key]) return sessionDoc.playerColors[key];
+  const used = new Set(Object.values(sessionDoc.playerColors || {}));
+  let color = PLAYER_COLOR_PALETTE.find(c => !used.has(c));
+  if (!color) {
+    color = `#${crypto.randomBytes(3).toString('hex')}`;
+  }
+  sessionDoc.playerColors[key] = color;
+  if (typeof sessionDoc.markModified === 'function') {
+    sessionDoc.markModified('playerColors');
+  }
+  return color;
+}
+
 async function rosterFor(sessionDoc) {
-  const users = await User.find({ _id: { $in: sessionDoc.participants } }).select('name email avatarUrl tagUrl createdAt');
-  return users.map(u => ({ id: u._id, name: u.name, email: u.email, avatar: u.avatarUrl, tagUrl: u.tagUrl, joinedAt: u.createdAt }));
+  const ids = (sessionDoc.participants || []).map(id => new mongoose.Types.ObjectId(id));
+  if (!ids.length) return [];
+  const users = await User.find({ _id: { $in: ids } }).select('name email avatarUrl tagUrl createdAt');
+  return users.map(u => ({
+    id: u._id,
+    name: u.name,
+    email: u.email,
+    avatar: u.avatarUrl,
+    tagUrl: u.tagUrl,
+    joinedAt: u.createdAt,
+    color: sessionDoc.playerColors?.[String(u._id)] || null
+  }));
 }
 
 /* ============================ AUTH ============================ */
@@ -209,7 +264,36 @@ app.post('/api/presence/ping', auth, async (req, res) => {
 /* ========================= Sound tag upload ========================= */
 const tagDir = path.join(uploadsRoot, 'tags');
 fs.mkdirSync(tagDir, { recursive: true });
-const tagUpload = multer({ dest: tagDir });
+const TAG_ALLOWED_MIME = new Set([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/ogg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/webm',
+  'audio/flac',
+  'audio/aac'
+]);
+
+const tagStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, tagDir),
+  filename: (_req, file, cb) => {
+    const base = crypto.randomBytes(8).toString('hex');
+    const ext = (path.extname(file.originalname) || '').toLowerCase() || '.ogg';
+    cb(null, `${Date.now()}-${base}${ext}`);
+  }
+});
+
+const tagUpload = multer({
+  storage: tagStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file?.mimetype || !TAG_ALLOWED_MIME.has(file.mimetype)) {
+      return cb(new Error('tag must be an audio file (mp3, wav, ogg, webm, flac)'));
+    }
+    cb(null, true);
+  }
+});
 
 const avatarDir = path.join(uploadsRoot, 'avatars');
 fs.mkdirSync(avatarDir, { recursive: true });
@@ -255,25 +339,35 @@ function resolveUploadPath(url, folder) {
   }
 }
 
-app.post('/api/users/tag', auth, tagUpload.single('tag'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'missing file' });
-  const full = req.file.path;
-  try {
-    const meta = await parseFile(full);
-    const duration = meta.format.duration || 0;
-    if (duration > 3.25) {
-      fs.unlinkSync(full);
-      return res.status(400).json({ error: 'tag must be 3 seconds or less' });
+app.post('/api/users/tag', auth, (req, res) => {
+  tagUpload.single('tag')(req, res, async (err) => {
+    if (err) {
+      const message = err.message || 'upload failed';
+      return res.status(400).json({ error: message });
     }
-    const url = `${PUBLIC_BASE_URL}/uploads/tags/${path.basename(full)}`;
-    req.user.tagUrl = url;
-    req.user.tagDurationSec = Math.round(duration * 1000) / 1000;
-    await req.user.save();
-    res.json({ ok: true, tagUrl: url, duration: req.user.tagDurationSec });
-  } catch {
-    fs.unlinkSync(full);
-    res.status(500).json({ error: 'could not parse audio' });
-  }
+    if (!req.file) return res.status(400).json({ error: 'missing file' });
+    const full = req.file.path;
+    try {
+      const meta = await parseFile(full);
+      const duration = meta.format.duration || 0;
+      if (duration > 3.05) {
+        await fs.promises.unlink(full).catch(() => {});
+        return res.status(400).json({ error: 'tag must be 3 seconds or less' });
+      }
+
+      const previous = resolveUploadPath(req.user.tagUrl, 'tags');
+      if (previous) fs.promises.unlink(previous).catch(() => {});
+
+      const url = `${PUBLIC_BASE_URL}/uploads/tags/${path.basename(full)}`;
+      req.user.tagUrl = url;
+      req.user.tagDurationSec = Math.round(duration * 1000) / 1000;
+      await req.user.save();
+      res.json({ ok: true, tagUrl: url, duration: req.user.tagDurationSec });
+    } catch (ex) {
+      await fs.promises.unlink(full).catch(() => {});
+      res.status(500).json({ error: 'could not process audio tag' });
+    }
+  });
 });
 
 app.post('/api/users/avatar', auth, (req, res) => {
@@ -304,7 +398,8 @@ app.post('/api/users/avatar', auth, (req, res) => {
 /* ============================ Sessions API ============================ */
 app.get('/api/sessions', async (_req, res) => {
   await reapStaleSessions({ emit: false });
-  const sessions = await Session.find({ isActive: true }).sort({ createdAt: -1 }).lean();
+  const sessionsRaw = await Session.find({ isActive: true }).sort({ createdAt: -1 }).lean();
+  const sessions = sessionsRaw.filter(s => Array.isArray(s.participants) ? s.participants.length > 0 : false);
   // include host info + name + counts for the feed
   const hostIds = sessions.map(s => s.hostUserId).filter(Boolean);
   const hosts = await User.find({ _id: { $in: hostIds } }).select('name avatarUrl');
@@ -323,12 +418,14 @@ app.get('/api/sessions', async (_req, res) => {
 
 app.post('/api/sessions', auth, async (req, res) => {
   const { tempo = 92, maxPlayers = 8, name = '' } = req.body || {};
+  const hostId = String(req.user._id);
   const session = await Session.create({
     name: (name || '').trim() || undefined,
     hostUserId: req.user._id,
     tempo,
     maxPlayers,
-    participants: [req.user._id]
+    participants: [req.user._id],
+    playerColors: { [hostId]: PLAYER_COLOR_PALETTE[0] }
   });
   res.json({ id: session._id.toString() });
 });
@@ -336,6 +433,7 @@ app.post('/api/sessions', auth, async (req, res) => {
 app.post('/api/sessions/:id/join', auth, async (req, res) => {
   const s = await Session.findById(req.params.id);
   if (!s || !s.isActive) return res.status(404).json({ error: 'session not found' });
+  ensureGridShape(s);
   if (!Array.isArray(s.participants)) s.participants = [];
 
   if (s.participants.length === 0 && s.lastEmptyAt) {
@@ -347,7 +445,12 @@ app.post('/api/sessions/:id/join', auth, async (req, res) => {
     }
   }
 
-  const already = s.participants.find(p => String(p) === String(req.user._id));
+  const userKey = String(req.user._id);
+  const beforeColor = s.playerColors?.[userKey];
+  const assignedColor = ensurePlayerColors(s, req.user._id);
+  const already = s.participants.find(p => String(p) === userKey);
+  let changed = false;
+  if (!beforeColor && assignedColor) changed = true;
 
   if (s.participants.length >= s.maxPlayers && !already) {
     return res.status(409).json({ error: 'session full' });
@@ -356,11 +459,24 @@ app.post('/api/sessions/:id/join', auth, async (req, res) => {
     s.participants.push(req.user._id);
     s.lastEmptyAt = undefined;
     s.isActive = true;
-    await s.save();
+    changed = true;
   }
+  if (changed) await s.save();
   const participants = await rosterFor(s);
   const { rows = 8, cols = 16, map = {} } = s.grid || {};
-  const plainMap = Object.fromEntries(Object.entries(map || {}).map(([k, v]) => [k, v]));
+  const plainMap = {};
+  for (const [key, value] of Object.entries(map || {})) {
+    if (!value) continue;
+    if (typeof value === 'object') {
+      plainMap[key] = {
+        on: true,
+        user: value.user ? String(value.user) : null,
+        color: value.color || (value.user ? s.playerColors?.[String(value.user)] || null : null)
+      };
+    } else {
+      plainMap[key] = { on: !!value, user: null, color: null };
+    }
+  }
   res.json({
     ok: true,
     tempo: s.tempo,
@@ -454,12 +570,19 @@ io.on('connection', (socket) => {
   socket.on('session:join', async ({ sessionId }) => {
     const s = await Session.findById(sessionId);
     if (!s || !s.isActive) return;
+    ensureGridShape(s);
+    const userId = String(socket.data.user._id);
+    const hadColor = !!(s.playerColors && s.playerColors[userId]);
+    const color = ensurePlayerColors(s, socket.data.user._id);
     // ensure db has this user in participants (handles socket reconnect edge)
-    if (!s.participants.find(p => String(p) === String(socket.data.user._id))) {
+    let changed = false;
+    if (!s.participants.find(p => String(p) === userId)) {
       s.participants.push(socket.data.user._id);
       s.lastEmptyAt = undefined;
-      await s.save();
+      changed = true;
     }
+    if (!hadColor && color) changed = true;
+    if (changed) await s.save();
     socket.join(`session:${sessionId}`);
     await broadcastRoster(sessionId);
 
@@ -497,11 +620,23 @@ io.on('connection', (socket) => {
   socket.on('grid:update', async ({ sessionId, row, col, on }) => {
     const s = await Session.findById(sessionId);
     if (!s) return;
+    ensureGridShape(s);
     const key = `${row}-${col}`;
-    if (on) s.grid.map[key] = 1; else delete s.grid.map[key];
+    const color = ensurePlayerColors(s, socket.data.user._id);
+    if (on) {
+      s.grid.map[key] = { user: socket.data.user._id, color };
+    } else {
+      delete s.grid.map[key];
+    }
     s.markModified('grid');
     await s.save();
-    socket.to(`session:${sessionId}`).emit('grid:update', { row, col, on });
+    io.to(`session:${sessionId}`).emit('grid:update', {
+      row,
+      col,
+      on,
+      userId: String(socket.data.user._id),
+      color
+    });
   });
 
   // host-only guard on server (also guarded by REST)
@@ -518,21 +653,89 @@ io.on('connection', (socket) => {
 /* ============================ Reaper (3 min) ============================ */
 async function reapStaleSessions({ emit = true } = {}) {
   const now = Date.now();
-  const stale = await Session.find({ isActive: true, participants: { $size: 0 } });
-  let closed = 0;
-  for (const s of stale) {
-    const lastEmpty = s.lastEmptyAt ? new Date(s.lastEmptyAt).getTime() : NaN;
-    if (Number.isNaN(lastEmpty)) {
-      s.lastEmptyAt = new Date(now);
-      await s.save();
-      continue;
+  const sessions = await Session.find({ isActive: true });
+  if (!sessions.length) return 0;
+
+  const participantIds = new Set();
+  sessions.forEach(s => {
+    if (Array.isArray(s.participants)) {
+      s.participants.forEach(id => participantIds.add(String(id)));
     }
-    if (now - lastEmpty >= SESSION_EMPTY_TTL_MS) {
+  });
+
+  let validIds = new Set();
+  if (participantIds.size) {
+    const rows = await User.find({ _id: { $in: Array.from(participantIds) } }).select('_id');
+    validIds = new Set(rows.map(r => String(r._id)));
+  }
+
+  let closed = 0;
+  for (const s of sessions) {
+    ensureGridShape(s);
+    if (!Array.isArray(s.participants)) s.participants = [];
+    const filtered = s.participants.filter(id => validIds.has(String(id)));
+    let changed = filtered.length !== s.participants.length;
+    if (changed) {
+      const keep = new Set(filtered.map(id => String(id)));
+      s.participants = filtered;
+      if (s.playerColors && typeof s.playerColors === 'object') {
+        let removed = false;
+        for (const key of Object.keys(s.playerColors)) {
+          if (!keep.has(key)) { delete s.playerColors[key]; removed = true; }
+        }
+        if (removed) s.markModified('playerColors');
+      }
+    }
+
+    const room = io.sockets.adapter.rooms.get(`session:${s._id}`) || null;
+    const connected = room ? room.size : 0;
+    const lifetime = now - new Date(s.createdAt).getTime();
+
+    if (connected === 0 && s.participants.length === 0) {
+      if (!s.lastEmptyAt) {
+        s.lastEmptyAt = new Date(now);
+        changed = true;
+      }
+      const lastEmpty = s.lastEmptyAt ? new Date(s.lastEmptyAt).getTime() : NaN;
+      if (!Number.isNaN(lastEmpty) && (now - lastEmpty >= SESSION_EMPTY_TTL_MS || lifetime >= SESSION_MAX_LIFETIME_MS)) {
+        s.isActive = false;
+        changed = true;
+        await s.save();
+        closed += 1;
+        if (emit) io.to(`session:${s._id}`).emit('session:ended', {});
+        continue;
+      }
+    } else if (connected === 0) {
+      if (!s.lastEmptyAt) {
+        s.lastEmptyAt = new Date(now);
+        changed = true;
+      }
+      const lastEmpty = s.lastEmptyAt ? new Date(s.lastEmptyAt).getTime() : NaN;
+      if (!Number.isNaN(lastEmpty) && (now - lastEmpty >= SESSION_EMPTY_TTL_MS || lifetime >= SESSION_MAX_LIFETIME_MS)) {
+        s.isActive = false;
+        s.participants = [];
+        changed = true;
+        await s.save();
+        closed += 1;
+        if (emit) io.to(`session:${s._id}`).emit('session:ended', {});
+        continue;
+      }
+    } else if (s.lastEmptyAt) {
+      s.lastEmptyAt = undefined;
+      changed = true;
+    }
+
+    if (lifetime >= SESSION_MAX_LIFETIME_MS && connected === 0) {
       s.isActive = false;
+      s.participants = [];
+      changed = true;
       await s.save();
       closed += 1;
       if (emit) io.to(`session:${s._id}`).emit('session:ended', {});
+      continue;
     }
+
+    if (changed) await s.save();
   }
   return closed;
 }

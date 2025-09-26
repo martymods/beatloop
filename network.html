@@ -32,8 +32,19 @@
 
 <style>
   /* Beatloop Studio helpers */
-  .step{transition:background .08s,box-shadow .08s,transform .08s}
-  .step.on{background:rgba(124,58,237,.7)!important;box-shadow:0 0 0 1px rgba(124,58,237,.5),0 6px 18px rgba(124,58,237,.35)}
+  .step{
+    --step-off: rgba(56,189,248,.12);
+    --step-off-hover: rgba(56,189,248,.18);
+    --step-off-alt: rgba(56,189,248,.20);
+    --step-on: rgba(124,58,237,.7);
+    --step-border: rgba(124,58,237,.5);
+    --step-glow: rgba(124,58,237,.35);
+    transition:background .08s,box-shadow .08s,transform .08s;
+    background: var(--step-off) !important;
+  }
+  .step:hover{ background: var(--step-off-hover) !important; }
+  .step.alt{ background: var(--step-off-alt) !important; }
+  .step.on{ background: var(--step-on) !important; box-shadow:0 0 0 1px var(--step-border),0 6px 18px var(--step-glow); }
   .step.playhead{box-shadow:inset 0 0 12px rgba(255,255,255,.65),0 0 12px rgba(255,255,255,.35)}
 
   /* single dial */
@@ -65,11 +76,7 @@
   #blLoops{ -webkit-overflow-scrolling: touch; }
 
 
-/* Better visibility for inactive steps */
-.step{ background: rgba(56,189,248,.12) !important; }           /* cyan-400 @ ~12% */
-.step:hover{ background: rgba(56,189,248,.18) !important; }
-.step.alt{ background: rgba(56,189,248,.20) !important; }       /* alt stripe */
-.step.on{ background: rgba(124,58,237,.7) !important; }         /* keep purple for ON */
+/* Step colors are controlled via CSS variables on .step (see above) */
 
 </style>
 
@@ -509,11 +516,14 @@ function ensureLoggedIn() {
 
   // ✅ make it globally available
   currentUser = { ...u, avatar: sanitizeAvatar(u.avatar) };
+  recordCurrentUserId(currentUser);
+  if (currentUserId) currentUserColor = userColors.get(String(currentUserId)) || currentUserColor;
   try {
     localStorage.setItem('user', JSON.stringify(currentUser));
   } catch (err) {
     console.warn('Unable to persist sanitized user profile', err);
   }
+  refreshStepOwnerColors();
 }
 
 
@@ -3489,6 +3499,9 @@ stopBtn.addEventListener('click', () => {
     <input id="profName" class="w-full rounded-md bg-white/10 px-2 py-1 mb-3" placeholder="Your name">
     <label class="block text-xs text-white/60 mb-1">Profile photo</label>
     <input id="profAvatar" type="file" accept="image/*" class="w-full text-xs mb-4">
+    <label class="block text-xs text-white/60 mb-1">Brand sound tag (max 3s)</label>
+    <input id="profTag" type="file" accept="audio/*" class="w-full text-xs">
+    <p id="profTagInfo" class="mt-1 text-[11px] text-white/40">No tag uploaded.</p>
     <div class="flex justify-end gap-2">
       <button id="profCancel" class="rounded-md bg-white/10 px-3 py-1.5">Cancel</button>
       <button id="profSave" class="rounded-md bg-primary px-3 py-1.5 font-semibold">Save</button>
@@ -3502,8 +3515,42 @@ stopBtn.addEventListener('click', () => {
     if (e.target.matches('a[href="#profile"], button#openProfile, .open-profile')){
       e.preventDefault();
       const u = JSON.parse(localStorage.getItem('user')||'{}');
-      document.getElementById('profName').value = u?.name || '';
-      document.getElementById('profileOverlay').classList.remove('hidden');
+      const overlay = document.getElementById('profileOverlay');
+      const nameInput = document.getElementById('profName');
+      const avatarInput = document.getElementById('profAvatar');
+      const tagInput = document.getElementById('profTag');
+      const tagInfo = document.getElementById('profTagInfo');
+      if (nameInput) nameInput.value = u?.name || '';
+      if (avatarInput) avatarInput.value = '';
+      if (tagInput) tagInput.value = '';
+      if (tagInfo) {
+        tagInfo.innerHTML = '';
+        const current = u?.tagUrl;
+        if (current) {
+          const label = document.createElement('span');
+          label.textContent = 'Current tag:';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.dataset.tagPreview = current;
+          btn.className = 'ml-2 rounded bg-white/10 px-2 py-0.5 text-[11px] hover:bg-white/15';
+          btn.textContent = 'Preview';
+          tagInfo.appendChild(label);
+          tagInfo.appendChild(btn);
+        } else {
+          tagInfo.textContent = 'No tag uploaded.';
+        }
+      }
+      overlay?.classList.remove('hidden');
+    }
+    if (e.target.matches('[data-tag-preview]')){
+      const url = e.target.dataset.tagPreview;
+      if (url) {
+        try {
+          const audio = new Audio(url);
+          audio.volume = 0.85;
+          audio.play().catch(()=>{});
+        } catch {}
+      }
     }
     if (e.target.id === 'profCancel' || e.target.id==='profileOverlay'){
       document.getElementById('profileOverlay').classList.add('hidden');
@@ -3511,21 +3558,31 @@ stopBtn.addEventListener('click', () => {
   }, true);
 
   document.getElementById('profSave').onclick = async ()=>{
+    const apiBase = window.API_BASE || localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
     const name = document.getElementById('profName').value.trim();
-    const file = document.getElementById('profAvatar').files[0];
+    const avatarFile = document.getElementById('profAvatar').files[0];
+    const tagFile = document.getElementById('profTag').files[0];
     // update name
     if (name){
-      await fetch(API_BASE + '/api/users/profile', { method:'PUT', headers: {'Content-Type':'application/json', ...AUTH.hdr()}, body: JSON.stringify({ name }) }).catch(()=>{});
+      await fetch(apiBase + '/api/users/profile', { method:'PUT', headers: {'Content-Type':'application/json', ...AUTH.hdr()}, body: JSON.stringify({ name }) }).catch(()=>{});
     }
     // upload avatar
-    if (file){
-      const fd = new FormData(); fd.append('avatar', file);
-      await fetch(API_BASE + '/api/users/avatar', { method:'POST', headers: { ...AUTH.hdr() }, body: fd }).catch(()=>{});
+    if (avatarFile){
+      const fd = new FormData(); fd.append('avatar', avatarFile);
+      await fetch(apiBase + '/api/users/avatar', { method:'POST', headers: { ...AUTH.hdr() }, body: fd }).catch(()=>{});
+    }
+    if (tagFile){
+      const fdTag = new FormData(); fdTag.append('tag', tagFile);
+      const tagRes = await fetch(apiBase + '/api/users/tag', { method:'POST', headers: { ...AUTH.hdr() }, body: fdTag });
+      if (!tagRes.ok) {
+        const err = await tagRes.json().catch(()=>null);
+        alert((err && err.error) || 'Could not upload sound tag.');
+      }
     }
     // refresh local user
     try {
-      const r = await fetch(API_BASE + '/api/users/me', { headers: { ...AUTH.hdr() }});
-           if (r.ok){
+      const r = await fetch(apiBase + '/api/users/me', { headers: { ...AUTH.hdr() }});
+      if (r.ok){
         const payload = await r.json().catch(() => null);
         const updated = (payload && payload.user) ? payload.user : payload;
         if (updated) {
@@ -3536,7 +3593,15 @@ stopBtn.addEventListener('click', () => {
     } catch {}
     document.getElementById('profileOverlay').classList.add('hidden');
     // also refresh session roster if we are inside a session
-    try { if (currentSessionId) { const d = await (await fetch(`${API_BASE}/api/sessions/${currentSessionId}`, { headers:{...AUTH.hdr()} })).json(); renderRoster(d.roster||[]); } } catch {}
+    try {
+      if (currentSessionId) {
+        const rosterResp = await fetch(`${apiBase}/api/sessions/${currentSessionId}`, { headers:{...AUTH.hdr()} });
+        if (rosterResp.ok) {
+          const d = await rosterResp.json();
+          renderRoster(d.roster||[]);
+        }
+      }
+    } catch {}
   };
 </script>
 
@@ -3561,6 +3626,134 @@ stopBtn.addEventListener('click', () => {
     set(t){ this.token = t; localStorage.setItem('jwt', t); },
     hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
   };
+
+  const sessionGridState = new Map();
+  const userColors = new Map();
+  let socket = null;
+  let currentSessionId = null;
+  let currentSessionCap = 8;
+  let currentUserColor = null;
+  let sessionCleanupFns = [];
+  let currentUserId = null;
+
+  try {
+    const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
+    if (storedUser) currentUserId = storedUser.id || storedUser._id || null;
+  } catch {}
+
+  function recordCurrentUserId(u){
+    if (!u) return;
+    const id = u.id || u._id || null;
+    if (id) currentUserId = String(id);
+  }
+
+  function hexToRgb(hex){
+    if (!hex) return null;
+    let value = String(hex).trim();
+    if (value.startsWith('#')) value = value.slice(1);
+    if (value.length === 3) value = value.split('').map(ch => ch + ch).join('');
+    if (value.length !== 6) return null;
+    const num = Number.parseInt(value, 16);
+    if (Number.isNaN(num)) return null;
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+  }
+
+  function applyStepColor(cell, color){
+    if (!cell) return;
+    if (color){
+      const rgb = hexToRgb(color);
+      if (rgb){
+        cell.dataset.color = color;
+        cell.style.setProperty('--step-on', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.75)`);
+        cell.style.setProperty('--step-border', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.55)`);
+        cell.style.setProperty('--step-glow', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.35)`);
+        return;
+      }
+    }
+    cell.removeAttribute('data-color');
+    cell.style.removeProperty('--step-on');
+    cell.style.removeProperty('--step-border');
+    cell.style.removeProperty('--step-glow');
+  }
+
+  function updatePatternCell(row, col, on){
+    try {
+      const bank = typeof currentBank !== 'undefined' ? currentBank : 0;
+      const pat = patterns[bank] || (patterns[bank] = []);
+      if (!Array.isArray(pat[row])) pat[row] = Array(STEPS).fill(false);
+      pat[row][col] = !!on;
+    } catch {}
+  }
+
+  function applySessionStep(row, col, on, color, userId){
+    const key = `${row}-${col}`;
+    updatePatternCell(row, col, on);
+    const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
+    if (cell) {
+      cell.classList.toggle('on', !!on);
+      if (on) {
+        const targetColor = color || (userId ? userColors.get(String(userId)) : null) || currentUserColor;
+        applyStepColor(cell, targetColor || null);
+        if (userId) cell.dataset.owner = String(userId);
+      } else {
+        applyStepColor(cell, null);
+        delete cell.dataset.owner;
+      }
+    }
+    if (on) {
+      sessionGridState.set(key, { userId: userId ? String(userId) : null, color: color || null });
+    } else {
+      sessionGridState.delete(key);
+    }
+  }
+
+  function refreshStepOwnerColors(){
+    sessionGridState.forEach((info, key) => {
+      const [r, c] = key.split('-').map(Number);
+      const cell = document.querySelector(`.step[data-r="${r}"][data-c="${c}"]`);
+      if (!cell || !cell.classList.contains('on')) return;
+      const color = info.color || (info.userId ? userColors.get(info.userId) : null);
+      applyStepColor(cell, color || null);
+    });
+  }
+
+  function resetSessionGridVisuals(){
+    sessionGridState.clear();
+    document.querySelectorAll('#blGrid .step').forEach(cell => {
+      cell.classList.remove('on');
+      applyStepColor(cell, null);
+      delete cell.dataset.owner;
+    });
+    try {
+      const bank = typeof currentBank !== 'undefined' ? currentBank : 0;
+      if (Array.isArray(patterns[bank])) {
+        patterns[bank].forEach(row => { if (Array.isArray(row)) row.fill(false); });
+      }
+    } catch {}
+  }
+
+  function runSessionCleanup(){
+    sessionCleanupFns.forEach(fn => { try { fn(); } catch {} });
+    sessionCleanupFns = [];
+  }
+
+  async function scheduleTagPlayback(url, at){
+    if (!url) return;
+    try {
+      await Tone.start();
+      const buses = typeof ensureMixBuses === 'function' ? ensureMixBuses() : null;
+      const destination = (buses && buses.main) || Tone.Destination;
+      const player = new Tone.Player({ url, autostart: false, fadeOut: 0.05 }).connect(destination);
+      player.volume.value = -6;
+      const startIn = Math.max(0, ((at || Date.now()) - Date.now()) / 1000);
+      player.start(`+${startIn}`);
+      const dispose = () => { try { player.dispose(); } catch {} };
+      player.onstop = dispose;
+      setTimeout(dispose, 4000);
+    } catch (err) {
+      console.warn('Unable to play sound tag', err);
+    }
+  }
 
 /* ---------- Unified login gate (works with API JWT and legacy local users) ---------- */
 (() => {
@@ -3626,7 +3819,8 @@ stopBtn.addEventListener('click', () => {
       const { sessions=[] } = await r.json();
       const wrap = document.getElementById('sessionsList'); if (!wrap) return;
       wrap.innerHTML = '';
-      sessions.forEach(s => {
+      const freshSessions = sessions.filter(s => (s.participants || 0) > 0 && (s.openSec || 0) < (12 * 60 * 60));
+      freshSessions.forEach(s => {
         const row = document.createElement('div');
         row.className = 'flex items-center justify-between rounded-lg bg-white/5 px-3 py-2';
         const host = s.host || {};
@@ -3723,19 +3917,39 @@ setInterval(() => {
         const safeAvatar = sanitizeAvatar(p.avatar);
         const img = document.createElement('img');
         img.src = safeAvatar;
-        img.className = 'h-7 w-7 rounded-full ring-1 ring-white/20';
+        img.className = 'h-7 w-7 rounded-full';
         img.title = p.name || p.email || 'user';
         img.onclick = () => openProfileCard(p);
+        if (p.color) {
+          img.style.boxShadow = `0 0 0 2px ${p.color}`;
+        } else {
+          img.style.boxShadow = '0 0 0 1px rgba(255,255,255,.2)';
+        }
         rosterList.appendChild(img);
       });
     }
+    userColors.clear();
+    (list||[]).forEach(p => {
+      if (p && p.id) userColors.set(String(p.id), p.color || null);
+    });
+    if (currentUserId) {
+      currentUserColor = userColors.get(String(currentUserId)) || null;
+    } else if (currentUser && currentUser.email) {
+      const match = (list||[]).find(p => p && p.email === currentUser.email);
+      if (match && match.id) {
+        recordCurrentUserId(match);
+        currentUserColor = userColors.get(String(match.id)) || null;
+      }
+    }
+    refreshStepOwnerColors();
     strip.innerHTML = '';
     (list||[]).forEach(p => {
       const btn = document.createElement('button');
       btn.className = 'relative shrink-0';
       const safeAvatar = sanitizeAvatar(p.avatar);
+      const ringStyle = p.color ? `style="box-shadow:0 0 0 2px ${p.color}"` : 'style="box-shadow:0 0 0 1px rgba(255,255,255,.2)"';
       btn.innerHTML = `
-        <img src="${safeAvatar}" class="h-8 w-8 rounded-full ring-1 ring-white/20" alt="">
+        <img src="${safeAvatar}" class="h-8 w-8 rounded-full" ${ringStyle} alt="">
         <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-white/70">${p.name || 'user'}</span>`;
       btn.onclick = () => openProfileCard(p);
       strip.appendChild(btn);
@@ -3749,6 +3963,8 @@ setInterval(() => {
   window.updateCurrentUserFromProfile = (u) => {
     if (!u) return;
     currentUser = { ...u, avatar: sanitizeAvatar(u.avatar) };
+    recordCurrentUserId(u);
+    currentUserColor = currentUserId ? userColors.get(String(currentUserId)) || null : currentUserColor;
     if (composerAvatarEl) {
       composerAvatarEl.src = sanitizeAvatar(u.avatar);
       composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar; };
@@ -3758,16 +3974,17 @@ setInterval(() => {
     } catch (err) {
       console.warn('Unable to persist sanitized user profile', err);
     }
+    refreshStepOwnerColors();
   };
 
   // --- Join, sockets, leave-on-close, grid sync ---
-  let socket = null, currentSessionId = null, currentSessionCap = 8;
   window.currentSessionId = null;
 
   async function joinSession(id){
     try {
+      runSessionCleanup();
       const r = await fetch(API + `/api/sessions/${id}/join`, { method:'POST', headers:{ ...AUTH.hdr() }});
-      if (!r.ok) return alert('Session full or unavailable.');
+      if (!r.ok) { alert('Session full or unavailable.'); return; }
       const payload = await r.json();
       const participants = payload.participants || [];
       currentSessionCap = payload.maxPlayers || 8;
@@ -3777,7 +3994,7 @@ setInterval(() => {
       document.getElementById('beatloopStudio')?.classList.remove('hidden');
       renderParticipants(participants);
 
-        if (typeof payload.tempo === 'number') {
+      if (typeof payload.tempo === 'number') {
         const bpmEl = document.getElementById('blBpm');
         if (bpmEl) {
           bpmEl.value = payload.tempo;
@@ -3786,33 +4003,85 @@ setInterval(() => {
         }
       }
 
-      // (re)connect socket
-      if (socket) try { socket.disconnect(); } catch {}
+      const gridPayload = payload.grid || {};
+      const rows = gridPayload.rows || (Array.isArray(rowLabels) ? rowLabels.length : 0);
+      if (typeof ensurePatternForBank === 'function') {
+        ensurePatternForBank(typeof currentBank !== 'undefined' ? currentBank : 0, rows);
+      }
+      if (Array.isArray(patterns[currentBank])) {
+        patterns[currentBank].forEach(row => { if (Array.isArray(row)) row.fill(false); });
+      }
+      if (typeof drawGrid === 'function' && Array.isArray(rowLabels) && rowLabels.length) {
+        drawGrid(rowLabels);
+      }
+      resetSessionGridVisuals();
+      if (gridPayload.map && typeof gridPayload.map === 'object') {
+        Object.entries(gridPayload.map).forEach(([key, info]) => {
+          const [rowStr, colStr] = key.split('-');
+          const row = Number(rowStr);
+          const col = Number(colStr);
+          if (!Number.isFinite(row) || !Number.isFinite(col)) return;
+          const entry = (info && typeof info === 'object') ? info : { on: !!info };
+          if (entry.on === false) return;
+          const owner = entry.user ? String(entry.user) : null;
+          applySessionStep(row, col, true, entry.color || null, owner);
+        });
+      }
+      refreshStepOwnerColors();
+
+      if (socket) {
+        try { socket.removeAllListeners(); socket.disconnect(); } catch {}
+      }
       socket = io(API, { auth: { token: AUTH.token }});
       socket.emit('session:join', { sessionId: id });
 
-      // tempo + grid + roster updates
-      socket.on('tempo:update', ({ tempo }) => {
+      const tempoHandler = ({ tempo }) => {
         const bpm = document.getElementById('blBpm');
         if (bpm) { bpm.value = tempo; document.getElementById('blBpmVal').textContent = tempo; }
-      });
-      socket.on('grid:update', ({ row, col, on }) => {
-        const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
-        if (cell) cell.classList.toggle('on', !!on);
-      });
+      };
+      const gridHandler = ({ row, col, on, color, userId }) => {
+        applySessionStep(row, col, on, color || null, userId || null);
+      };
+      socket.on('tempo:update', tempoHandler);
+      socket.on('grid:update', gridHandler);
       socket.on('participants', ({ list }) => renderParticipants(list));
       socket.on('presence:update', ({ roster }) => renderParticipants(roster));
       socket.on('user:joined', ({ roster }) => renderParticipants(roster));
       socket.on('user:left',    ({ roster }) => renderParticipants(roster));
-      socket.on('session:ended', () => {
-        alert('This session has ended.');
+      const leave = async (silent = false) => {
+        const activeSession = currentSessionId;
+        if (!activeSession) return;
+        runSessionCleanup();
+        try { socket && socket.emit('session:leave', { sessionId: activeSession }); } catch {}
+        if (socket) {
+          try { socket.removeAllListeners(); socket.disconnect(); } catch {}
+          socket = null;
+        }
+        const leaveReq = fetch(API + `/api/sessions/${activeSession}/leave`, { method:'POST', headers:{ ...AUTH.hdr() } });
+        if (!silent) {
+          try { await leaveReq; } catch {}
+        } else {
+          leaveReq.catch(()=>{});
+        }
         currentSessionId = null;
         window.currentSessionId = null;
         currentSessionCap = 8;
+        resetSessionGridVisuals();
+        const tempoSlider = document.getElementById('blBpm');
+        if (tempoSlider) tempoSlider.oninput = null;
         document.getElementById('beatloopStudio')?.classList.add('hidden');
-      });
+        refreshSessions();
+      };
 
-      // host-only tempo control emission (server enforces host)
+      const tagHandler = ({ url, at }) => scheduleTagPlayback(url, at);
+      socket.on('tag:play', tagHandler);
+
+      const endedHandler = async () => {
+        alert('This session has ended.');
+        await leave(true);
+      };
+      socket.on('session:ended', endedHandler);
+
       const tempoSlider = document.getElementById('blBpm');
       if (tempoSlider){
         tempoSlider.oninput = (e) => {
@@ -3820,38 +4089,42 @@ setInterval(() => {
           document.getElementById('blBpmVal').textContent = t;
           if (currentSessionId && socket) socket.emit('tempo:set', { sessionId: currentSessionId, tempo: t });
         };
+        sessionCleanupFns.push(() => { const slider = document.getElementById('blBpm'); if (slider) slider.oninput = null; });
       }
 
-      // grid click → broadcast
       const grid = document.getElementById('blGrid');
       if (grid && !grid._socketBound){
         grid.addEventListener('click', (e) => {
           const cell = e.target.closest('.step');
           if (!cell || !currentSessionId || !socket) return;
-          const row = +cell.dataset.r, col = +cell.dataset.c;
-          const on  = !cell.classList.contains('on');
-          cell.classList.toggle('on', on);
+          const row = +cell.dataset.r;
+          const col = +cell.dataset.c;
+          const on = cell.classList.contains('on');
+          const owner = currentUserId ? String(currentUserId) : (currentUser && currentUser.id ? String(currentUser.id) : null);
+          const color = currentUserColor || (owner ? userColors.get(owner) : null) || null;
+          applySessionStep(row, col, on, color, owner);
           socket.emit('grid:update', { sessionId: currentSessionId, row, col, on });
         });
         grid._socketBound = true;
       }
 
-      // leave on tab close or Close button
-      const leave = async () => {
-        const activeSession = currentSessionId;
-        if (!activeSession) return;
-        try { socket && socket.emit('session:leave', { sessionId: activeSession }); } catch {}
-        try { await fetch(API + `/api/sessions/${activeSession}/leave`, { method:'POST', headers:{ ...AUTH.hdr() } }); } catch {}
-        currentSessionId = null;
-        window.currentSessionId = null;
-        currentSessionCap = 8;
-        document.getElementById('beatloopStudio')?.classList.add('hidden');
-      };
-window.addEventListener('beforeunload', leave, { once:true });
-document.addEventListener('visibilitychange', () => { if (document.hidden) leave(); }, { passive:true });
+      const handleBeforeUnload = () => { leave(true); };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      sessionCleanupFns.push(() => window.removeEventListener('beforeunload', handleBeforeUnload));
 
-      document.getElementById('blClose')?.addEventListener('click', leave, { once:true });
-
+      const closeBtn = document.getElementById('blClose');
+      if (closeBtn){
+        const handleClose = (event) => {
+          event.preventDefault();
+          leave();
+        };
+        closeBtn.addEventListener('click', handleClose);
+        sessionCleanupFns.push(() => closeBtn.removeEventListener('click', handleClose));
+      }
+      sessionCleanupFns.push(() => { socket && socket.off('tempo:update', tempoHandler); });
+      sessionCleanupFns.push(() => { socket && socket.off('grid:update', gridHandler); });
+      sessionCleanupFns.push(() => { socket && socket.off('tag:play', tagHandler); });
+      sessionCleanupFns.push(() => { socket && socket.off('session:ended', endedHandler); });
     } catch {
       alert('Could not join session');
     }
