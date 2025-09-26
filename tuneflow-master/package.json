@@ -1,0 +1,83 @@
+{
+  "name": "tuneflow",
+  "version": "0.40.6",
+  "description": "Programmable, extensible music composition & arrangement",
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "gts lint",
+    "lint:fix": "eslint --fix --ext .js,.ts",
+    "lint-staged": "lint-staged",
+    "lint-staged:ts": "eslint --ext .js,.ts",
+    "lint:tsc": "vue-tsc --noEmit --skipLibCheck",
+    "prepare": "husky install",
+    "test": "jest",
+    "build": "vite build --config vite.config.ts;vite build --config vite.server.config.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/andantei/tuneflow.git"
+  },
+  "keywords": [
+    "music",
+    "arrangement",
+    "programmable",
+    "plugin"
+  ],
+  "author": "Matthew Zeng",
+  "license": "MIT",
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm run lint-staged;npm run lint:tsc;npm run build;git add dist/index.js;git add dist/index.server.js;git add build/dist/*;"
+    }
+  },
+  "lint-staged": {
+    "**/*.{js,ts}": [
+      "git add",
+      "prettier --write",
+      "git add",
+      "eslint --ext .js,.ts",
+      "npm run lint-staged:ts --"
+    ]
+  },
+  "peerDependencies": {
+    "@tonejs/midi": "^2.0.27",
+    "binary-search-bounds": "^2.0.5",
+    "lodash.clonedeep": "^4.5.0",
+    "nanoid": "^3.3.2",
+    "underscore": "^1.13.2",
+    "vue": "*"
+  },
+  "devDependencies": {
+    "@types/jest": "^28.1.1",
+    "@types/lodash.clonedeep": "^4.5.0",
+    "@types/underscore": "^1.11.4",
+    "@typescript-eslint/eslint-plugin": "^4.1.0",
+    "@typescript-eslint/parser": "^4.1.0",
+    "@vue/cli-plugin-eslint": "^5.0.0-0",
+    "@vue/eslint-config-prettier": "^6.0.0",
+    "@vue/eslint-config-typescript": "^7.0.0",
+    "@vue/test-utils": "^2.0.0-0",
+    "eslint": "^7.25.0",
+    "eslint-config-prettier": "^8.0.0",
+    "eslint-plugin-import": "^2.24.2",
+    "eslint-plugin-jest": "^24.3.6",
+    "eslint-plugin-markdown": "^2.0.0",
+    "eslint-plugin-no-explicit-type-exports": "^0.12.0",
+    "eslint-plugin-prettier": "^3.1.0",
+    "eslint-plugin-vue": "^7.1.0",
+    "flatted": "^3.2.5",
+    "husky": "^7.0.2",
+    "jest": "^28.1.1",
+    "jest-html-reporter": "^3.4.1",
+    "jest-junit": "^13.0.0",
+    "jest-mocha-reporter": "^1.0.1",
+    "lint-staged": "^11.1.2",
+    "prettier": "^2.4.1",
+    "semver": "^7.3.5",
+    "ts-jest": "^28.0.5",
+    "ts-node": "^10.4.0",
+    "typescript": "^4.4.3",
+    "vite": "^3.2.1",
+    "vue-tsc": "^1.0.9"
+  }
+}
