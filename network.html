@@ -1326,7 +1326,7 @@ const TUNEFLOW_LINKS = [
   let prRow = null; // track the piano roll row currently being edited
   let _prInit = false;
   // --- Piano Roll logic ---
-  function openPianoRoll(row, label){
+  const openPianoRoll = (row, label) => {
     _ensurePRRefs();
     prRow = row;
     if (prTitle) prTitle.textContent = `Piano Roll — ${label}`;
@@ -1358,7 +1358,7 @@ const TUNEFLOW_LINKS = [
     } catch {}
     drawPianoRoll();
     if (prOverlay) prOverlay.style.display = 'block';
-  }
+  };
   function closePianoRoll(){
     _ensurePRRefs();
     if (prOverlay) prOverlay.style.display = 'none';
