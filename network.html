@@ -3511,6 +3511,12 @@ stopBtn.addEventListener('click', () => {
 
 
 <script>
+  const AUTH = window.AUTH || (window.AUTH = {
+    token: localStorage.getItem('jwt') || '',
+    set(t){ this.token = t; localStorage.setItem('jwt', t); },
+    hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
+  });
+
   document.addEventListener('click', (e)=>{
     if (e.target.matches('a[href="#profile"], button#openProfile, .open-profile')){
       e.preventDefault();
@@ -3621,11 +3627,7 @@ stopBtn.addEventListener('click', () => {
               localStorage.getItem('beatloop_api') ||
               'https://beatloop-api.onrender.com';
 
-  const AUTH = window.AUTH || {
-    token: localStorage.getItem('jwt') || '',
-    set(t){ this.token = t; localStorage.setItem('jwt', t); },
-    hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
-  };
+  const AUTH = window.AUTH;
 
   const sessionGridState = new Map();
   const userColors = new Map();
