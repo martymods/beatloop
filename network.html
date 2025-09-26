@@ -320,6 +320,25 @@
     // Defaults (leave fallbackAvatar as-is)
     const fallbackAvatar = '/img/avatar-default.svg';
 
+    function sanitizeAvatar(url) {
+      if (!url) return fallbackAvatar;
+      if (typeof url !== 'string') return fallbackAvatar;
+      if (url.startsWith('data:')) return url;
+      try {
+        const parsed = new URL(url, window.location.origin);
+        if (/localhost|127\.0\.0\.1/i.test(parsed.hostname)) return fallbackAvatar;
+        if (parsed.protocol === 'http:' && window.location.protocol === 'https:') {
+          parsed.protocol = 'https:';
+        }
+        if (parsed.origin === window.location.origin) {
+          return parsed.pathname + parsed.search + parsed.hash;
+        }
+        return parsed.href;
+      } catch (err) {
+        return fallbackAvatar;
+      }
+    }
+
     // REPLACE your DEFAULT_TRACK_COVER with this:
     const DEFAULT_TRACK_COVER = (function () {
       const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="128" height="128" rx="18" fill="url(#g)"/><g fill="#fff"><circle cx="46" cy="86" r="12"/><path d="M82 24v56.6a12 12 0 1 1-4-8.6V34l-26 6v36.6a12 12 0 1 1-4-8.6V36z"/></g></svg>';
@@ -431,7 +450,7 @@
       if (!email) return null
       const users = getJSON('users', '{}')
       const user = users[email] || null
-      if (user && !user.avatar) user.avatar = fallbackAvatar
+      if (user) user.avatar = sanitizeAvatar(user.avatar)
       return user
     }
 function ensureLoggedIn() {
@@ -452,7 +471,12 @@ function ensureLoggedIn() {
   if (!u) { window.location.href = 'login.html'; return; }
 
   // ✅ make it globally available
-  currentUser = u;
+  currentUser = { ...u, avatar: sanitizeAvatar(u.avatar) };
+  try {
+    localStorage.setItem('user', JSON.stringify(currentUser));
+  } catch (err) {
+    console.warn('Unable to persist sanitized user profile', err);
+  }
 }
 
 
@@ -499,7 +523,7 @@ const feedEl = document.getElementById('feed');
         const row = document.createElement('div')
         row.className = 'flex items-start gap-2 mb-2'
         const avatar = document.createElement('img')
-        avatar.src = c.avatar || fallbackAvatar
+        avatar.src = sanitizeAvatar(c.avatar)
         avatar.onerror = () => { avatar.src = fallbackAvatar }
         avatar.alt = 'avatar'
         avatar.className = 'h-6 w-6 rounded-full ring-1 ring-white/10 object-cover'
@@ -517,7 +541,7 @@ const feedEl = document.getElementById('feed');
         listContainer.appendChild(row)
         if (duration) {
           const pin = document.createElement('img')
-          pin.src = c.avatar || fallbackAvatar
+          pin.src = sanitizeAvatar(c.avatar)
           pin.onerror = () => { pin.src = fallbackAvatar }
           pin.alt = 'marker'
           pin.className = 'absolute -translate-x-1/2 top-0 h-6 w-6 rounded-full ring-1 ring-white/10 object-cover pointer-events-none'
@@ -531,6 +555,7 @@ const feedEl = document.getElementById('feed');
     // ---------- Build a feed card
 function createPost(track) {
   const me = currentUser || (function(){ try { return JSON.parse(localStorage.getItem('user')||'null') } catch{} return null })() || {};
+  const meAvatar = sanitizeAvatar(me.avatar);
   const stats = getStats(track.id)
   const card = document.createElement('article')
   card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
@@ -538,7 +563,7 @@ function createPost(track) {
   const header = document.createElement('div')
   header.className = 'flex gap-3'
   const avatar = document.createElement('img')
-  avatar.src = me.avatar || fallbackAvatar
+  avatar.src = meAvatar
   avatar.onerror = () => { avatar.src = fallbackAvatar }
   avatar.alt = 'avatar'
   avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
@@ -696,7 +721,7 @@ function createPost(track) {
           text,
           time,
           user: currentUser.email,
-          avatar: currentUser.avatar || fallbackAvatar
+          avatar: sanitizeAvatar(currentUser.avatar)
         })
         input.value = ''
         renderAll()
@@ -792,7 +817,7 @@ function createPost(track) {
         const row = document.createElement('div')
         row.className = 'flex items-center gap-3'
         const av = document.createElement('img')
-        av.src = u.avatar || fallbackAvatar
+        av.src = sanitizeAvatar(u.avatar)
         av.onerror = () => { av.src = fallbackAvatar }
         av.className = 'h-8 w-8 rounded-full ring-1 ring-white/10 object-cover'
         const info = document.createElement('div')
@@ -1035,7 +1060,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
 
       // Set composer avatar
       if (composerAvatarEl) {
-        composerAvatarEl.src = (currentUser && currentUser.avatar) ? currentUser.avatar : fallbackAvatar
+        composerAvatarEl.src = sanitizeAvatar(currentUser && currentUser.avatar)
         composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar }
       }
       // Render suggestions / trends / leaderboard for both mobile & desktop blocks
@@ -1312,8 +1337,11 @@ const TUNEFLOW_LINKS = [
       SUBDIV = +prSubdiv.value || 4;
       drawPianoRoll();
     });
-    
-      const renderKitDetails = () => {
+
+    _prInit = true;
+  }
+
+  const renderKitDetails = () => {
     if (!kitDetailsEl || !kitSel) return;
     const kitId = kitSel.value;
     const kit = KITS[kitId];
@@ -2496,7 +2524,7 @@ stopBtn.addEventListener('click', () => {
         row.className = 'flex items-center justify-between rounded-lg bg-white/5 px-3 py-2';
         const host = s.host || {};
         const hostName = host.name || 'host';
-        const hostAvatar = host.avatar || '/img/avatar-default.svg';
+        const hostAvatar = sanitizeAvatar(host.avatar);
         const cap = s.maxPlayers || 8;
         row.innerHTML = `
           <div class="flex items-center gap-2 text-sm">
@@ -2552,13 +2580,14 @@ setInterval(() => {
   function openProfileCard(p){
     const existing = document.getElementById('profileFly');
     if (existing) existing.remove();
+    const safeAvatar = sanitizeAvatar(p.avatar);
     const fly = document.createElement('div');
     fly.id = 'profileFly';
     fly.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200]';
     fly.innerHTML = `
       <div class="rounded-2xl bg-[#16161c] ring-1 ring-white/10 p-6 w-[320px]">
         <div class="flex items-center gap-3">
-          <img src="${(p.avatar || '/img/avatar-default.svg')}" class="h-12 w-12 rounded-full ring-1 ring-white/20" alt="">
+          <img src="${safeAvatar}" class="h-12 w-12 rounded-full ring-1 ring-white/20" alt="">
           <div>
             <div class="text-lg font-semibold">${p.name || 'user'}</div>
             <div class="text-white/50 text-xs">${p.email || ''}</div>
@@ -2583,8 +2612,9 @@ setInterval(() => {
     if (rosterList) {
       rosterList.innerHTML = '';
       (list||[]).slice(0,8).forEach(p => {
+        const safeAvatar = sanitizeAvatar(p.avatar);
         const img = document.createElement('img');
-        img.src = p.avatar || '/img/avatar-default.svg';
+        img.src = safeAvatar;
         img.className = 'h-7 w-7 rounded-full ring-1 ring-white/20';
         img.title = p.name || p.email || 'user';
         img.onclick = () => openProfileCard(p);
@@ -2595,8 +2625,9 @@ setInterval(() => {
     (list||[]).forEach(p => {
       const btn = document.createElement('button');
       btn.className = 'relative shrink-0';
+      const safeAvatar = sanitizeAvatar(p.avatar);
       btn.innerHTML = `
-        <img src="${(p.avatar || '/img/avatar-default.svg')}" class="h-8 w-8 rounded-full ring-1 ring-white/20" alt="">
+        <img src="${safeAvatar}" class="h-8 w-8 rounded-full ring-1 ring-white/20" alt="">
         <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-white/70">${p.name || 'user'}</span>`;
       btn.onclick = () => openProfileCard(p);
       strip.appendChild(btn);
@@ -2609,10 +2640,15 @@ setInterval(() => {
   window.renderRoster = renderRoster;
   window.updateCurrentUserFromProfile = (u) => {
     if (!u) return;
-    currentUser = u;
+    currentUser = { ...u, avatar: sanitizeAvatar(u.avatar) };
     if (composerAvatarEl) {
-      composerAvatarEl.src = u.avatar || fallbackAvatar;
+      composerAvatarEl.src = sanitizeAvatar(u.avatar);
       composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar; };
+    }
+    try {
+      localStorage.setItem('user', JSON.stringify(currentUser));
+    } catch (err) {
+      console.warn('Unable to persist sanitized user profile', err);
     }
   };
 
