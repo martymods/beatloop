@@ -251,7 +251,9 @@
           <select id="blKit" class="w-full rounded-lg bg-white/10 px-2 py-2 text-sm">
             <option value="trap">Trap Kit</option>
             <option value="boom">Boom Bap</option>
+            <option value="fl">FL Default (butterDAWg)</option>
           </select>
+          <div id="blKitDetails" class="mt-3 space-y-2 text-xs text-white/70"></div>
         </div>
 
         <div class="mt-4">
@@ -276,6 +278,16 @@
       <div id="blGridWrap" class="rounded-xl border border-white/10 bg-white/5 p-3 overflow-x-auto" style="touch-action: pan-x;">
         <div id="blGrid" class="min-w-[720px]"></div>
       </div>
+
+      <div id="blIntegrationPanels" class="md:col-span-2 grid gap-3 lg:grid-cols-2">
+        <section id="butterFeaturePanel" class="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div class="text-sm text-white/60">Loading butterDAWg toolkit…</div>
+        </section>
+        <section id="tuneflowPanel" class="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div class="text-sm text-white/60">Loading TuneFlow AI effects…</div>
+        </section>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1062,6 +1074,38 @@ uploadTrackInput.addEventListener('change', async (e) => {
         '/audio/kits/boom/hat.wav',
         '/audio/kits/boom/perc.wav'
       ]
+          },
+    fl: {
+      names: [
+        'FL Kick 1',
+        'FL Kick 2',
+        'FL Kick 3',
+        'FL Kick 5',
+        'FL Kick 6',
+        'FL Kick 7',
+        'FL Kick 7 Alt',
+        'FL Kick 8',
+        'Rawstyle Kick',
+        'Normal Kick',
+        'Bass Drum 3',
+        'TR-909 Kick',
+        'FL Drum Loop 3'
+      ],
+      files: [
+        '/audio/kits/fl-default/kick1.wav',
+        '/audio/kits/fl-default/kick2.wav',
+        '/audio/kits/fl-default/kick3.wav',
+        '/audio/kits/fl-default/kick5.wav',
+        '/audio/kits/fl-default/kick6.wav',
+        '/audio/kits/fl-default/kick7.wav',
+        '/audio/kits/fl-default/kick7-1.wav',
+        '/audio/kits/fl-default/kick8.wav',
+        '/audio/kits/fl-default/rawstyle_kick.wav',
+        '/audio/kits/fl-default/normal.wav',
+        '/audio/kits/fl-default/bassdrum3.wav',
+        '/audio/kits/fl-default/roland909.wav',
+        '/audio/kits/fl-default/drum_loop_3.wav'
+      ]
     }
   };
 
@@ -1084,7 +1128,139 @@ const LOOPS = {
   ]
 };
 
+const KIT_DETAILS = {
+  trap: {
+    label: 'Trap Kit',
+    source: 'Beatloop Core',
+    description: '808-driven staples for modern trap drums with a clean C3 mapping for pads.',
+    midi: 'C3–G3 finger drumming · Velocity sensitive in Tone.js Sampler'
+  },
+  boom: {
+    label: 'Boom Bap Kit',
+    source: 'Beatloop Core',
+    description: 'Crate-digging boom bap palette tuned for swung head-nod grooves.',
+    midi: 'C3–F3 per row · Perfect for 16-pad grid controllers'
+  },
+  fl: {
+    label: 'FL Default Kit',
+    source: 'butterDAWg /files/samples',
+    description: 'Legacy FL-style kicks and a loop captured from butterDAWg to give Beatloop the classic starter kit.',
+    midi: 'Rows 1–13 map to C3–C4 · Drum loop row is ideal for resampling'
+  }
+};
 
+const BUTTER_FEATURES = [
+  {
+    title: 'Sample Sequencing & Channel Routing',
+    description: 'butterDAWg prioritises sample playback, track routing, and playlist curation—we mirror that flow so every kit lane can hit its own Tone.js mixer strip.',
+    highlights: [
+      'Instant channel routing from track context menus',
+      'Playlist-style pattern banks for sketching ideas'
+    ]
+  },
+  {
+    title: 'Audio Graph & Windowing',
+    description: 'Use butterDAWg\'s audio graph mindset in Beatloop—chain processors, pop out floating windows, and drag views exactly like the Electron prototype.',
+    highlights: [
+      'Re-arrange floating windows for mixer, playlist, and graph panes',
+      'Sketch custom node chains before committing to renders'
+    ]
+  },
+  {
+    title: 'Custom Plugin Pipeline',
+    description: 'butterDAWg proved out hot-loaded AudioWorklet plugins; Beatloop ships with the same Gain and Simple Distortion building blocks ready to automate.',
+    highlights: [
+      'Drop .bdp bundles into the plugins directory for instant access',
+      'Map sliders to live parameters via the host bridge'
+    ]
+  }
+];
+
+const BUTTER_COMMANDS = [
+  'Rename, color and icon…',
+  'Change color…',
+  'Change icon…',
+  'Auto name',
+  'Auto name clips',
+  'Track mode',
+  'Performance settings',
+  'Size',
+  'Lock to this size',
+  'Group with above track',
+  'Auto color group',
+  'Current clip source',
+  'Lock to content',
+  'Merge pattern clips',
+  'Consolidate this clip',
+  'Mute all clips',
+  'Insert one',
+  'Delete one',
+  'Move up',
+  'Move down'
+];
+
+const BUTTER_PLUGINS = [
+  {
+    name: 'Gain',
+    control: 'Level',
+    summary: 'Linear amplitude control via AudioWorkletProcessor—perfect for trimming or boosting stems.'
+  },
+  {
+    name: 'Simple Distortion',
+    control: 'Drive',
+    summary: 'Soft-clipping waveshaper built around butterDAWg\'s distortion function for grimey harmonics.'
+  }
+];
+
+const BUTTER_MIDI_DEFAULTS = [
+  { label: 'Default BPM', value: '150 BPM' },
+  { label: 'Sample Rate', value: '44.1 kHz' },
+  { label: 'Buffer Size', value: '44,100 frames' },
+  { label: 'Grid Snap', value: '20 px per step (auto halves for micro edits)' },
+  { label: 'Keyboard', value: 'Space toggles transport · Shift-click clears cells' }
+];
+
+const TUNEFLOW_EFFECTS = [
+  {
+    name: 'Songwriting Boost',
+    focus: 'Generate hooks, melodic riffs, and chord progressions through AI-assisted plugins.',
+    notes: 'Feed Beatloop motifs into TuneFlow params to receive instant melodic alternatives.'
+  },
+  {
+    name: 'Arrangement Sculptor',
+    focus: 'Auto-build verse/chorus structures and redistribute clips across pattern banks.',
+    notes: 'Great for populating Song Mode bars with evolving textures.'
+  },
+  {
+    name: 'Automation Designer',
+    focus: 'Draw parameter curves, dynamic filter sweeps, and modulation lanes with AI precision.',
+    notes: 'Programmatically target Tone.js volumes, pans, and plugin parameters.'
+  },
+  {
+    name: 'Mix Doctor',
+    focus: 'Balance stems, recommend chain orders, and nudge gain staging automatically.',
+    notes: 'Pair with butterDAWg Gain/Distortion plugins for hybrid processing.'
+  },
+  {
+    name: 'Transcription Guru',
+    focus: 'Convert audio phrases into MIDI or score to seed new Beatloop rows.',
+    notes: 'Drop the resulting MIDI directly into the piano roll to revoice ideas.'
+  }
+];
+
+const TUNEFLOW_WORKFLOW = [
+  { step: 'Install SDK', command: 'npm install tuneflow' },
+  { step: 'Describe bundle', command: 'bundle.json → providerId, pluginId, version, allowReset' },
+  { step: 'Author plugin', command: 'Extend TuneflowPlugin; implement params(), init(), and run().' },
+  { step: 'Export bundle', command: 'Index all plugins in index.ts and build for distribution.' },
+  { step: 'Test & debug', command: 'Use tuneflow-devkit to audition changes against Beatloop patterns.' }
+];
+
+const TUNEFLOW_LINKS = [
+  { label: 'TuneFlow Website', url: 'https://www.tuneflow.com' },
+  { label: 'Typescript SDK Docs', url: 'https://github.com/tuneflow/tuneflow' },
+  { label: 'Community Discord', url: 'https://discord.com/channels/1076012137161424906/1076012755250851860' }
+];
   const STEPS = 16, MAX_BANKS = 16;
   // ---- Piano Roll state (per bank, per row)
   let SUBDIV = 4;              // 4 = 64th notes; try 8 or 16 for finer
@@ -1115,23 +1291,9 @@ const LOOPS = {
   const kitSel    = document.getElementById('blKit');
   const loopsWrap = document.getElementById('blLoops');
   const saveBtn   = document.getElementById('blSaveWav');
-
-  const normalizeTempo = (value) => {
-    const tempo = Number(value);
-    if (!Number.isFinite(tempo)) return null;
-    return Math.min(180, Math.max(60, Math.round(tempo)));
-  };
-
-  const applyTempoLocally = (value) => {
-    const tempo = normalizeTempo(value);
-    if (tempo === null) return null;
-    if (bpmRange) bpmRange.value = tempo;
-    if (bpmVal) bpmVal.textContent = tempo;
-    if (window.Tone && Tone.Transport) {
-      try { Tone.Transport.bpm.value = tempo; } catch (err) { console.error('Tone tempo update failed', err); }
-    }
-    return tempo;
-  };
+  const kitDetailsEl = document.getElementById('blKitDetails');
+  const butterPanelEl = document.getElementById('butterFeaturePanel');
+  const tuneflowPanelEl = document.getElementById('tuneflowPanel');
   // --- Piano Roll UI refs (lazy) ---
   let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl; let prPlayline=null; let prWS=null;
   let _prInit = false;
@@ -1151,6 +1313,142 @@ const LOOPS = {
       drawPianoRoll();
     });
     
+      const renderKitDetails = () => {
+    if (!kitDetailsEl || !kitSel) return;
+    const kitId = kitSel.value;
+    const kit = KITS[kitId];
+    const meta = KIT_DETAILS[kitId] || {};
+    if (!kit) {
+      kitDetailsEl.innerHTML = '<p class="text-xs text-white/60">Kit not found.</p>';
+      return;
+    }
+    const list = kit.names.map((name, idx) => `
+      <div class="flex items-center justify-between gap-3">
+        <span class="text-white/40">${String(idx + 1).padStart(2, '0')}</span>
+        <span class="truncate">${name}</span>
+      </div>
+    `).join('');
+    kitDetailsEl.innerHTML = `
+      <div class="rounded-lg border border-white/10 bg-black/40 p-3">
+        <div class="flex items-center justify-between text-[0.7rem]">
+          <span class="font-semibold text-white">${meta.label || kitId}</span>
+          <span class="uppercase tracking-wide text-[0.6rem] text-white/40">${meta.source || ''}</span>
+        </div>
+        ${meta.description ? `<p class="mt-2 text-[0.7rem] text-white/60">${meta.description}</p>` : ''}
+        <div class="mt-3 grid gap-1 font-mono text-[0.7rem] text-white/70">
+          ${list}
+        </div>
+        ${meta.midi ? `<p class="mt-3 text-[0.6rem] uppercase tracking-wide text-white/40">${meta.midi}</p>` : ''}
+      </div>
+    `;
+  };
+
+  function renderButterDeck(){
+    if (!butterPanelEl) return;
+    const featureCards = BUTTER_FEATURES.map(feature => `
+      <article class="rounded-lg border border-white/10 bg-black/40 p-3">
+        <h5 class="text-sm font-semibold text-white">${feature.title}</h5>
+        <p class="mt-2 text-xs text-white/70">${feature.description}</p>
+        ${Array.isArray(feature.highlights) && feature.highlights.length ? `
+          <ul class="mt-2 list-disc space-y-1 pl-4 text-[0.7rem] text-white/60">
+            ${feature.highlights.map(item => `<li>${item}</li>`).join('')}
+          </ul>
+        ` : ''}
+      </article>
+    `).join('');
+
+    const commandTags = BUTTER_COMMANDS.map(cmd => `
+      <span class="rounded-full border border-white/10 bg-white/10 px-2 py-1 text-[0.65rem] text-white/70">${cmd}</span>
+    `).join('');
+
+    const pluginCards = BUTTER_PLUGINS.map(plugin => `
+      <article class="rounded-lg border border-white/10 bg-black/40 p-3">
+        <div class="flex items-center justify-between">
+          <h6 class="text-sm font-semibold text-white">${plugin.name}</h6>
+          <span class="text-[0.65rem] uppercase tracking-wide text-white/40">${plugin.control}</span>
+        </div>
+        <p class="mt-2 text-xs text-white/70">${plugin.summary}</p>
+      </article>
+    `).join('');
+
+    const midiRows = BUTTER_MIDI_DEFAULTS.map(row => `
+      <div class="flex items-center justify-between gap-2 rounded-md border border-white/5 bg-black/30 px-2 py-1">
+        <span class="text-[0.65rem] font-semibold text-white/80">${row.label}</span>
+        <span class="text-[0.65rem] text-white/60">${row.value}</span>
+      </div>
+    `).join('');
+
+    butterPanelEl.innerHTML = `
+      <header class="flex items-start justify-between gap-3">
+        <div>
+          <h4 class="text-base font-semibold text-white">butterDAWg Workflow Toolkit</h4>
+          <p class="text-sm text-white/60">Feature parity, commands, and plugin references from the Electron prototype.</p>
+        </div>
+        <span class="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-wide text-white/60">Imported</span>
+      </header>
+      <div class="mt-4 grid gap-3 lg:grid-cols-1">
+        ${featureCards}
+      </div>
+      <div class="mt-4">
+        <h5 class="text-xs font-semibold uppercase tracking-wide text-white/60">Track context commands</h5>
+        <div class="mt-2 flex flex-wrap gap-2">${commandTags}</div>
+      </div>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        ${pluginCards}
+      </div>
+      <div class="mt-4">
+        <h5 class="text-xs font-semibold uppercase tracking-wide text-white/60">Session & MIDI defaults</h5>
+        <div class="mt-2 grid gap-2 sm:grid-cols-2">${midiRows}</div>
+      </div>
+    `;
+  }
+
+  function renderTuneflowFx(){
+    if (!tuneflowPanelEl) return;
+    const effectCards = TUNEFLOW_EFFECTS.map(effect => `
+      <article class="rounded-lg border border-white/10 bg-black/40 p-3">
+        <div class="flex items-center justify-between gap-3">
+          <h6 class="text-sm font-semibold text-white">${effect.name}</h6>
+          <span class="text-[0.65rem] uppercase tracking-wide text-white/40">${effect.focus}</span>
+        </div>
+        <p class="mt-2 text-xs text-white/70">${effect.notes}</p>
+      </article>
+    `).join('');
+
+    const workflowSteps = TUNEFLOW_WORKFLOW.map((item, idx) => `
+      <li class="rounded-lg border border-white/10 bg-white/5 p-3">
+        <div class="flex items-center justify-between text-sm text-white">
+          <span class="font-semibold">${idx + 1}. ${item.step}</span>
+        </div>
+        <code class="mt-2 block rounded bg-black/40 px-2 py-1 text-xs text-white/70">${item.command}</code>
+      </li>
+    `).join('');
+
+    const resourceLinks = TUNEFLOW_LINKS.map(link => `
+      <a href="${link.url}" target="_blank" rel="noopener" class="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white/70 hover:bg-white/15">${link.label}</a>
+    `).join('');
+
+    tuneflowPanelEl.innerHTML = `
+      <header class="space-y-2">
+        <h4 class="text-base font-semibold text-white">TuneFlow AI Effects</h4>
+        <p class="text-sm text-white/60">Leverage TuneFlow\'s Typescript SDK to sprinkle AI-assisted songwriting, arrangement, automation, mixing, and transcription directly onto Beatloop patterns.</p>
+      </header>
+      <div class="mt-4 grid gap-3">${effectCards}</div>
+      <div class="mt-4">
+        <h5 class="text-xs font-semibold uppercase tracking-wide text-white/60">Build workflow</h5>
+        <ol class="mt-2 grid gap-2">${workflowSteps}</ol>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-2">${resourceLinks}</div>
+    `;
+  }
+
+  function renderIntegrationPanels(){
+    renderButterDeck();
+    renderTuneflowFx();
+  }
+
+  renderIntegrationPanels();
+  renderKitDetails();
 
     // Global drag-to-paint handlers (fix for left-drag painting) + LOOP CLIP edge-resizing
     // - For Kit rows: paint cells normally (drag to add/erase)
@@ -1421,6 +1719,19 @@ const patternSel= document.getElementById('blPattern');
   const arrangerWrap  = document.getElementById('arrangerWrap');
   const arrGrid       = document.getElementById('arrGrid');
 
+  function showStudio(){ studio.classList.remove('hidden'); }
+  function hideStudio(){ studio.classList.add('hidden'); }
+  openBtn?.addEventListener('click', async () => {
+    showStudio();
+    await Tone.start();
+    currentKit = kitSel.value;
+    renderKitDetails();
+    await rebuildGraph();
+    renderLoopPicker();
+    drawArranger();
+  });
+  closeBtn?.addEventListener('click', hideStudio);
+
   // ---------- State ----------
   let currentKit = 'trap';
   let kitRowCount = 0;
@@ -1435,86 +1746,6 @@ const patternSel= document.getElementById('blPattern');
   let kitSamplers=[], loopPlayers=[];
   let loopSources=[];
   const selectedLoops = new Set();
-
-  let pendingGridSnapshot = null;
-
-  function ensurePatternRowData(bank, row){
-    const existing = (patterns[bank] || []).length;
-    const labelRows = Array.isArray(rowLabels) ? rowLabels.length : 0;
-    const needed = Math.max(existing, labelRows, row + 1);
-    ensurePatternForBank(bank, needed);
-    return patterns[bank][row];
-  }
-
-  function setStepState(row, col, on, { emit = false } = {}){
-    if (col < 0 || col >= STEPS) return;
-    const bank = currentBank;
-    const rowData = ensurePatternRowData(bank, row);
-    if (!rowData) return;
-    rowData[col] = !!on;
-    const cell = gridWrap?.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
-    if (cell) cell.classList.toggle('on', !!on);
-    if (emit && currentSessionId && socket) {
-      try {
-        socket.emit('grid:update', { sessionId: currentSessionId, row, col, on: !!on });
-      } catch (err) {
-        console.error('grid:update emit failed', err);
-      }
-    }
-  }
-
-  function queueGridSnapshot(map){
-    pendingGridSnapshot = map && typeof map === 'object' ? { ...map } : {};
-    applyGridSnapshotIfReady();
-  }
-
-  function applyGridSnapshotIfReady(){
-    if (pendingGridSnapshot === null) return;
-    const rows = Array.isArray(rowLabels) ? rowLabels.length : 0;
-    if (!rows) return;
-    const bank = currentBank;
-    ensurePatternForBank(bank, rows);
-    for (let r = 0; r < rows; r++){
-      const rowData = ensurePatternRowData(bank, r);
-      if (rowData) rowData.fill(false);
-    }
-    for (const [key, value] of Object.entries(pendingGridSnapshot)){
-      if (!value) continue;
-      const [rStr, cStr] = key.split('-');
-      const r = Number(rStr);
-      const c = Number(cStr);
-      if (!Number.isInteger(r) || !Number.isInteger(c)) continue;
-      if (r < 0 || r >= rows || c < 0 || c >= STEPS) continue;
-      const rowData = ensurePatternRowData(bank, r);
-      if (rowData) rowData[c] = true;
-    }
-    drawGrid(rowLabels);
-    pendingGridSnapshot = null;
-  }
-
-  function showStudio(){ studio.classList.remove('hidden'); }
-  function hideStudio(){ studio.classList.add('hidden'); }
-
-  let bootStudioPromise = null;
-  async function bootStudioIfNeeded(){
-    showStudio();
-    if (bootStudioPromise) return bootStudioPromise;
-    bootStudioPromise = (async () => {
-      try { await Tone.start(); } catch (err) { console.error('Tone start failed', err); }
-      currentKit = kitSel.value;
-      await rebuildGraph();
-      renderLoopPicker();
-      drawArranger();
-    })();
-    try {
-      await bootStudioPromise;
-    } finally {
-      bootStudioPromise = null;
-    }
-  }
-
-  openBtn?.addEventListener('click', bootStudioIfNeeded);
-  closeBtn?.addEventListener('click', hideStudio);
 
   // transport
   let loop = null, currentStep = 0, lastStep = -1, recorder = null;
@@ -1671,9 +1902,13 @@ let lastBar = -1;             // arranger playhead column
           cell.addEventListener('click', (e) => {
             const rr = +e.currentTarget.dataset.r;
             const cc = +e.currentTarget.dataset.c;
-            const rowData = ensurePatternRowData(currentBank, rr);
-            const next = !(rowData && rowData[cc]);
-            setStepState(rr, cc, next, { emit: !!(currentSessionId && socket) });
+
+            const p = patterns[currentBank] || (patterns[currentBank] = []);
+            if (!Array.isArray(p[rr])) p[rr] = Array(STEPS).fill(false);
+            if (typeof p[rr][cc] !== 'boolean') p[rr][cc] = false;
+
+            p[rr][cc] = !p[rr][cc];
+            e.currentTarget.classList.toggle('on', p[rr][cc]);
           });
 
           table.appendChild(cell);
@@ -1730,7 +1965,6 @@ let lastBar = -1;             // arranger playhead column
 
     drawGrid(labels);
     paintPlayhead(0);
-    applyGridSnapshotIfReady();
   }
 
   // ---------- Loops picker ----------
@@ -1908,8 +2142,9 @@ currentStep = (currentStep + 1) % STEPS;
   }
 
   // ---------- Controls ----------
-  bpmRange?.addEventListener('input', () => {
-    applyTempoLocally(bpmRange.value);
+  bpmRange.addEventListener('input', () => {
+    bpmVal.textContent = bpmRange.value;
+    Tone.Transport.bpm.value = +bpmRange.value; // live
   });
 
   patternSel?.addEventListener('change', ()=>{
@@ -1997,7 +2232,7 @@ songToggle?.addEventListener('click', ()=>{
     mode='song'; currentStep=0; songIdx=0;
     if(!recorder) recorder=new Tone.Recorder(); Tone.Destination.connect(recorder);
     recorder.start();
-    applyTempoLocally(bpmRange?.value);
+    Tone.Transport.bpm.value=+bpmRange.value;
     loop.start(0);
     if(Tone.Transport.state!=='started') Tone.Transport.start('+0.03');
 
@@ -2034,7 +2269,7 @@ playBtn.addEventListener('click', async () => {
   if (!recorder) recorder = new Tone.Recorder();
   Tone.Destination.connect(recorder);
 
-  applyTempoLocally(bpmRange?.value);
+  Tone.Transport.bpm.value = +bpmRange.value;
   loop.start(0);
 
   if (Tone.Transport.state !== 'started') {
@@ -2057,18 +2292,13 @@ stopBtn.addEventListener('click', () => {
 
 
   clearBtn.addEventListener('click', () => {
-    const pat = activePattern();
-    pat.forEach((row, r) => {
-      row.forEach((val, c) => {
-        if (val) setStepState(r, c, false, { emit: !!(currentSessionId && socket) });
-      });
-      row.fill(false);
-    });
+    const pat = activePattern(); pat.forEach(row => row.fill(false));
     drawGrid(rowLabels);
   });
 
   kitSel.addEventListener('change', async () => {
     currentKit = kitSel.value;
+    renderKitDetails();
     await rebuildGraph();
   });
 
@@ -2399,12 +2629,16 @@ setInterval(() => {
       currentSessionCap = payload.maxPlayers || 8;
       currentSessionId = id;
       window.currentSessionId = currentSessionId;
-      queueGridSnapshot(payload?.grid?.map || {});
-      await bootStudioIfNeeded();
+      document.getElementById('beatloopStudio')?.classList.remove('hidden');
       renderParticipants(participants);
 
-      if (typeof payload.tempo === 'number') {
-        applyTempoLocally(payload.tempo);
+        if (typeof payload.tempo === 'number') {
+        const bpmEl = document.getElementById('blBpm');
+        if (bpmEl) {
+          bpmEl.value = payload.tempo;
+          const valEl = document.getElementById('blBpmVal');
+          if (valEl) valEl.textContent = payload.tempo;
+        }
       }
 
       // (re)connect socket
@@ -2414,10 +2648,12 @@ setInterval(() => {
 
       // tempo + grid + roster updates
       socket.on('tempo:update', ({ tempo }) => {
-        applyTempoLocally(tempo);
+        const bpm = document.getElementById('blBpm');
+        if (bpm) { bpm.value = tempo; document.getElementById('blBpmVal').textContent = tempo; }
       });
       socket.on('grid:update', ({ row, col, on }) => {
-        setStepState(row, col, !!on, { emit: false });
+        const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
+        if (cell) cell.classList.toggle('on', !!on);
       });
       socket.on('participants', ({ list }) => renderParticipants(list));
       socket.on('presence:update', ({ roster }) => renderParticipants(roster));
@@ -2435,11 +2671,24 @@ setInterval(() => {
       const tempoSlider = document.getElementById('blBpm');
       if (tempoSlider){
         tempoSlider.oninput = (e) => {
-          const applied = applyTempoLocally(e.target.value);
-          if (applied !== null && currentSessionId && socket) {
-            socket.emit('tempo:set', { sessionId: currentSessionId, tempo: applied });
-          }
+          const t = +e.target.value;
+          document.getElementById('blBpmVal').textContent = t;
+          if (currentSessionId && socket) socket.emit('tempo:set', { sessionId: currentSessionId, tempo: t });
         };
+      }
+
+      // grid click → broadcast
+      const grid = document.getElementById('blGrid');
+      if (grid && !grid._socketBound){
+        grid.addEventListener('click', (e) => {
+          const cell = e.target.closest('.step');
+          if (!cell || !currentSessionId || !socket) return;
+          const row = +cell.dataset.r, col = +cell.dataset.c;
+          const on  = !cell.classList.contains('on');
+          cell.classList.toggle('on', on);
+          socket.emit('grid:update', { sessionId: currentSessionId, row, col, on });
+        });
+        grid._socketBound = true;
       }
 
       // leave on tab close or Close button
@@ -2469,3 +2718,4 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) leave
 
 })();
 </script>
+
