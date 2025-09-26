@@ -280,6 +280,19 @@
           <div id="blLoops" class="max-h-44 overflow-y-auto rounded-lg bg-white/5 p-2 space-y-1"></div>
         </div>
 
+        <div class="mt-4">
+          <p class="text-xs text-white/60 mb-1">MIDI Library</p>
+          <div class="space-y-2 rounded-lg bg-white/5 p-2">
+            <div class="flex items-center gap-2">
+              <input id="midiSearch" type="search" placeholder="Search MIDI files" class="flex-1 rounded-md border border-white/10 bg-[#15151f] px-2 py-1 text-xs text-white focus:outline-none focus:ring-2 focus:ring-primary/40" />
+              <button id="midiRandom" class="rounded-md bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/15">Random</button>
+            </div>
+            <div id="midiStatus" class="text-[0.65rem] text-white/50">Load a MIDI file to guide Beatloop AI melodies.</div>
+            <div id="midiFavorites" class="space-y-1"></div>
+            <div id="midiResults" class="max-h-48 overflow-y-auto space-y-1 pr-1"></div>
+          </div>
+        </div>
+
         <p class="mt-4 text-xs text-white/50">Tip: click steps to toggle. Each row = a sound.</p>
       </div>
 
@@ -1246,6 +1259,11 @@ const AI_MELODY_SCALES = {
   const kitSel    = document.getElementById('blKit');
   const loopsWrap = document.getElementById('blLoops');
   const saveBtn   = document.getElementById('blSaveWav');
+  const midiSearchInput = document.getElementById('midiSearch');
+  const midiRandomBtn = document.getElementById('midiRandom');
+  const midiStatusEl = document.getElementById('midiStatus');
+  const midiFavoritesEl = document.getElementById('midiFavorites');
+  const midiResultsEl = document.getElementById('midiResults');
   const kitDetailsEl = document.getElementById('blKitDetails');
   const butterPanelEl = document.getElementById('butterFeaturePanel');
   const aiPanelEl = document.getElementById('aiAssistantPanel');
@@ -1253,6 +1271,7 @@ const AI_MELODY_SCALES = {
   let aiDensitySlider = null;
   let aiDensityValue = null;
   let aiStatusEl = null;
+  let aiMidiContextEl = null;
   // --- Piano Roll UI refs (lazy) ---
   let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl, prKeysEl;
   let prPlayline = null;
@@ -1687,6 +1706,7 @@ const AI_MELODY_SCALES = {
         <h4 class="text-base font-semibold text-white">Beatloop AI Playmaker</h4>
         <p class="text-sm text-white/60">Generate grooves, evolve rows, and sketch melodic ideas without leaving the 16-step sampler.</p>
       </header>
+      <p id="aiMidiContext" class="text-xs text-white/50">Load a MIDI file from the left column to seed melodic ideas.</p>
       <div class="mt-4 space-y-3">
         <div>
           <label class="text-xs uppercase tracking-wide text-white/50">Target row</label>
@@ -1723,6 +1743,7 @@ const AI_MELODY_SCALES = {
     aiDensitySlider = aiPanelEl.querySelector('#aiDensity');
     aiDensityValue = aiPanelEl.querySelector('#aiDensityVal');
     aiStatusEl = aiPanelEl.querySelector('#aiStatus');
+    aiMidiContextEl = aiPanelEl.querySelector('#aiMidiContext');
 
     if (aiDensitySlider && aiDensityValue) {
       const updateDensityLabel = () => {
@@ -1738,10 +1759,24 @@ const AI_MELODY_SCALES = {
     });
 
     refreshAIPanelRows();
+    updateAIMidiContext();
   }
 
   function setAIStatus(message) {
     if (aiStatusEl) aiStatusEl.textContent = message;
+  }
+
+  function updateAIMidiContext() {
+    if (!aiMidiContextEl) return;
+    if (currentMidiProfile) {
+      const noteCount = (currentMidiProfile.pattern && currentMidiProfile.pattern.length) || (currentMidiProfile.events && currentMidiProfile.events.length) || 0;
+      const folders = Array.isArray(currentMidiProfile.meta?.folders) && currentMidiProfile.meta.folders.length
+        ? ` · ${currentMidiProfile.meta.folders.join(' / ')}`
+        : '';
+      aiMidiContextEl.textContent = `Inspiration: ${currentMidiProfile.displayName || currentMidiProfile.meta?.name || 'MIDI'} (${noteCount} notes${folders}).`;
+    } else {
+      aiMidiContextEl.textContent = 'Load a MIDI file from the left column to guide melodic ideas.';
+    }
   }
 
   function getSelectedAIRow() {
@@ -1863,17 +1898,53 @@ const AI_MELODY_SCALES = {
   }
 
   function aiGenerateMelody(rowIdx, density) {
+    ensurePatternForBank(currentBank, rowLabels.length);
     const entry = ensurePR(currentBank, rowIdx);
     const dens = Math.min(1, Math.max(0.1, density));
     const cols = STEPS * SUBDIV;
-    const scales = Object.values(AI_MELODY_SCALES);
-    const scale = scales[Math.floor(Math.random() * scales.length)] || AI_MELODY_SCALES.minor;
-    const baseIndex = 8;
 
     for (let p = 0; p < PITCH_ROWS; p++) {
       entry.notes[p] = entry.notes[p] || Array(cols).fill(null);
       entry.notes[p].fill(null);
     }
+
+    let seededFromMidi = false;
+    if (currentMidiProfile && Array.isArray(currentMidiProfile.pattern) && currentMidiProfile.pattern.length) {
+      const keepChance = Math.min(1, dens + 0.25);
+      const jitter = Math.max(0, Math.round(SUBDIV * 0.5));
+      currentMidiProfile.pattern.forEach(note => {
+        if (!note) return;
+        if (Math.random() > keepChance) return;
+        const pitchJitter = Math.random() < 0.2 ? (Math.random() < 0.5 ? -1 : 1) : 0;
+        const pitchIndex = Math.max(0, Math.min(PITCH_ROWS - 1, note.pitchIndex + pitchJitter));
+        let start = note.start;
+        if (jitter > 0) {
+          const offset = Math.round((Math.random() - 0.5) * jitter);
+          start = Math.max(0, Math.min(cols - 1, start + offset));
+        }
+        const length = Math.max(1, Math.min(cols - start, Math.round(note.length * (0.8 + Math.random() * 0.4))));
+        const vol = Math.round(((note.velocity || 80) / 127) * 12 - 6 + (Math.random() * 4 - 2));
+        const pan = Math.round((Math.random() * 2 - 1) * 5);
+        for (let s = 0; s < length && (start + s) < cols; s++) {
+          entry.notes[pitchIndex][start + s] = { vol, pan };
+        }
+        seededFromMidi = true;
+      });
+      if (seededFromMidi) {
+        patterns[currentBank][rowIdx] = Array(STEPS).fill(false);
+        if (prOverlay && prOverlay.style.display !== 'none' && prRow === rowIdx) {
+          drawPianoRoll();
+        }
+        return;
+      }
+    }
+
+    const scaleSource = (currentMidiProfile && Array.isArray(currentMidiProfile.scale) && currentMidiProfile.scale.length)
+      ? currentMidiProfile.scale
+      : null;
+    const scales = scaleSource ? [scaleSource] : Object.values(AI_MELODY_SCALES);
+    const scale = scaleSource || (scales[Math.floor(Math.random() * scales.length)] || AI_MELODY_SCALES.minor);
+    const baseIndex = 8 + (currentMidiProfile?.shift || 0);
 
     let step = 0;
     while (step < cols) {
@@ -2240,6 +2311,7 @@ const AI_MELODY_SCALES = {
     await Tone.start();
     currentKit = kitSel.value;
     renderKitDetails();
+    await setupMidiBrowser();
     await rebuildGraph();
     renderLoopPicker();
     drawArranger();
@@ -2260,6 +2332,14 @@ const AI_MELODY_SCALES = {
   let kitSamplers=[], loopPlayers=[];
   let loopSources=[];
   const selectedLoops = new Set();
+  const MIDI_INDEX_URL = '/audio/music/midi-index.json';
+  let midiIndex = [];
+  let midiIndexLoaded = false;
+  let midiFiltered = [];
+  let midiFavorites = new Set();
+  const midiCache = new Map();
+  let midiSelectedPath = null;
+  let currentMidiProfile = null;
 
   // transport
   let loop = null, currentStep = 0, lastStep = -1, recorder = null;
@@ -2548,6 +2628,385 @@ let lastBar = -1;             // arranger playhead column
         loopsWrap.appendChild(row);
       });
     });
+  }
+
+  // ---------- MIDI Browser ----------
+  let midiBrowserInitialized = false;
+
+  function loadMidiFavorites(){
+    try {
+      const raw = JSON.parse(localStorage.getItem('beatloop_midi_favorites') || '[]');
+      if (Array.isArray(raw)) midiFavorites = new Set(raw);
+    } catch {
+      midiFavorites = new Set();
+    }
+  }
+
+  function saveMidiFavorites(){
+    try { localStorage.setItem('beatloop_midi_favorites', JSON.stringify(Array.from(midiFavorites))); }
+    catch {}
+  }
+
+  function setMidiStatus(text){
+    if (midiStatusEl) midiStatusEl.textContent = text;
+  }
+
+  async function ensureMidiIndex(){
+    if (midiIndexLoaded) return midiIndex;
+    try {
+      const res = await fetch(MIDI_INDEX_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const payload = await res.json();
+      const files = Array.isArray(payload?.files) ? payload.files : [];
+      midiIndex = files.map(file => {
+        const displayName = (file.name || file.file || '').replace(/\s+/g, ' ').trim();
+        const folders = Array.isArray(file.folders) ? file.folders : [];
+        const search = `${displayName} ${file.file || ''} ${folders.join(' ')}`.toLowerCase();
+        return { ...file, displayName, folders, search };
+      });
+      midiIndexLoaded = true;
+      return midiIndex;
+    } catch (err) {
+      setMidiStatus(`Unable to load MIDI index (${err.message}).`);
+      throw err;
+    }
+  }
+
+  function createMidiRow(item){
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 rounded-md bg-white/5 px-2 py-1 text-xs text-white/80 transition hover:bg-white/10';
+    if (midiSelectedPath === item.path) {
+      row.classList.add('ring-1', 'ring-primary/60', 'bg-primary/10', 'text-white');
+    }
+    row.dataset.path = item.path;
+
+    const favBtn = document.createElement('button');
+    favBtn.type = 'button';
+    favBtn.className = 'text-sm text-white/50 transition hover:text-primary';
+    const isFav = midiFavorites.has(item.path);
+    favBtn.textContent = isFav ? '★' : '☆';
+    favBtn.setAttribute('aria-label', isFav ? 'Remove favorite MIDI' : 'Favorite MIDI');
+    favBtn.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      toggleMidiFavorite(item.path);
+    });
+
+    const info = document.createElement('div');
+    info.className = 'min-w-0 flex-1';
+    const title = document.createElement('p');
+    title.className = 'truncate';
+    title.textContent = item.displayName || item.file || 'MIDI file';
+    const subtitle = document.createElement('p');
+    subtitle.className = 'truncate text-[0.65rem] text-white/40';
+    subtitle.textContent = item.folders && item.folders.length ? item.folders.join(' / ') : '—';
+    info.appendChild(title);
+    info.appendChild(subtitle);
+
+    const selectBtn = document.createElement('button');
+    selectBtn.type = 'button';
+    selectBtn.className = 'rounded-md px-2 py-1 text-xs font-semibold transition';
+    if (midiSelectedPath === item.path) {
+      selectBtn.classList.add('bg-primary/20', 'text-primary');
+      selectBtn.textContent = 'Loaded';
+    } else {
+      selectBtn.classList.add('bg-white/10', 'text-white', 'hover:bg-white/20');
+      selectBtn.textContent = 'Load';
+    }
+    selectBtn.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      handleMidiSelect(item);
+    });
+
+    row.appendChild(favBtn);
+    row.appendChild(info);
+    row.appendChild(selectBtn);
+    row.addEventListener('click', () => handleMidiSelect(item));
+
+    return row;
+  }
+
+  function renderMidiFavoritesList(list, hasTerm){
+    if (!midiFavoritesEl) return;
+    midiFavoritesEl.innerHTML = '';
+    if (!midiFavorites.size) {
+      midiFavoritesEl.innerHTML = '<p class="px-1 text-[0.65rem] text-white/40">Tap ★ to save go-to MIDI progressions.</p>';
+      return;
+    }
+    const header = document.createElement('p');
+    header.className = 'px-1 text-[0.65rem] uppercase tracking-wide text-white/40';
+    header.textContent = 'Favorites';
+    midiFavoritesEl.appendChild(header);
+    if (!list.length) {
+      const msg = document.createElement('p');
+      msg.className = 'px-1 text-[0.65rem] text-white/40';
+      msg.textContent = hasTerm ? 'No favorites match this search.' : 'Favorites will appear here.';
+      midiFavoritesEl.appendChild(msg);
+      return;
+    }
+    list.slice(0, 80).forEach(item => midiFavoritesEl.appendChild(createMidiRow(item)));
+  }
+
+  function renderMidiResultsList(list){
+    if (!midiResultsEl) return;
+    midiResultsEl.innerHTML = '';
+    if (!list.length) {
+      midiResultsEl.innerHTML = '<p class="px-1 text-[0.65rem] text-white/40">No MIDI files match your search.</p>';
+      return;
+    }
+    const limit = 200;
+    list.slice(0, limit).forEach(item => midiResultsEl.appendChild(createMidiRow(item)));
+    if (list.length > limit) {
+      const note = document.createElement('p');
+      note.className = 'px-1 text-[0.65rem] text-white/40';
+      note.textContent = `Showing ${limit} of ${list.length} results. Narrow your search for more.`;
+      midiResultsEl.appendChild(note);
+    }
+  }
+
+  async function refreshMidiLists(){
+    try {
+      await ensureMidiIndex();
+    } catch {
+      return;
+    }
+    const term = (midiSearchInput?.value || '').trim().toLowerCase();
+    const hasTerm = term.length > 0;
+    midiFiltered = midiIndex.filter(item => !hasTerm || item.search.includes(term));
+    const favMatches = midiFiltered.filter(item => midiFavorites.has(item.path));
+    const otherMatches = midiFiltered.filter(item => !midiFavorites.has(item.path));
+    renderMidiFavoritesList(favMatches, hasTerm);
+    renderMidiResultsList(otherMatches);
+    if (!midiIndex.length) {
+      setMidiStatus('No MIDI files found in the library.');
+    } else if (!midiFiltered.length) {
+      setMidiStatus(hasTerm ? `No MIDI matches for "${term}".` : 'No MIDI matches found.');
+    } else {
+      const shown = Math.min(otherMatches.length, 200) + favMatches.length;
+      const context = hasTerm ? ` for "${term}"` : '';
+      setMidiStatus(`Showing ${shown} of ${midiFiltered.length} MIDI files${context}.`);
+    }
+  }
+
+  function toggleMidiFavorite(path){
+    if (!path) return;
+    if (midiFavorites.has(path)) midiFavorites.delete(path);
+    else midiFavorites.add(path);
+    saveMidiFavorites();
+    refreshMidiLists();
+  }
+
+  async function handleMidiSelect(item){
+    if (!item) return;
+    midiSelectedPath = item.path;
+    refreshMidiLists();
+    try {
+      setMidiStatus(`Loading ${item.displayName || item.file}…`);
+      const profile = await loadMidiProfile(item);
+      currentMidiProfile = profile;
+      updateAIMidiContext();
+      setAIStatus(`MIDI inspiration loaded: ${profile.displayName}. Generate Melody to adapt it.`);
+      setMidiStatus(`Loaded ${profile.displayName}. Use "Generate Melody" for an AI remix.`);
+    } catch (err) {
+      setMidiStatus(`Failed to load MIDI (${err.message}).`);
+    } finally {
+      refreshMidiLists();
+    }
+  }
+
+  async function loadMidiProfile(item){
+    if (!item?.path) throw new Error('No MIDI path provided');
+    if (midiCache.has(item.path)) return midiCache.get(item.path);
+    const res = await fetch(item.path);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buffer = await res.arrayBuffer();
+    const profile = parseMidiBuffer(buffer, item);
+    midiCache.set(item.path, profile);
+    return profile;
+  }
+
+  function parseMidiBuffer(buffer, meta = {}){
+    const view = new DataView(buffer);
+    let ptr = 0;
+
+    const readString = (len) => {
+      let out = '';
+      for (let i = 0; i < len; i++) out += String.fromCharCode(view.getUint8(ptr++));
+      return out;
+    };
+    const readUint16 = () => { const val = view.getUint16(ptr); ptr += 2; return val; };
+    const readUint32 = () => { const val = view.getUint32(ptr); ptr += 4; return val; };
+    const readVar = () => {
+      let value = 0;
+      while (true) {
+        const byte = view.getUint8(ptr++);
+        value = (value << 7) | (byte & 0x7f);
+        if ((byte & 0x80) === 0) break;
+      }
+      return value;
+    };
+
+    if (readString(4) !== 'MThd') throw new Error('Invalid MIDI file');
+    const headerLen = readUint32();
+    const headerStart = ptr;
+    /* const format = */ readUint16();
+    const tracks = readUint16();
+    let division = readUint16();
+    ptr = headerStart + headerLen;
+    if (!division) division = 480;
+
+    const events = [];
+
+    for (let t = 0; t < tracks && ptr < view.byteLength; t++) {
+      const chunkId = readString(4);
+      const chunkLen = readUint32();
+      if (chunkId !== 'MTrk') {
+        ptr += chunkLen;
+        continue;
+      }
+      const trackEnd = ptr + chunkLen;
+      let tick = 0;
+      let runningStatus = null;
+      const active = new Map();
+      while (ptr < trackEnd) {
+        const delta = readVar();
+        tick += delta;
+        if (ptr >= trackEnd) break;
+        let status = view.getUint8(ptr);
+        if (status & 0x80) {
+          runningStatus = status;
+          ptr++;
+        } else {
+          status = runningStatus;
+        }
+        if (status == null) break;
+
+        if (status === 0xFF) {
+          if (ptr >= trackEnd) break;
+          /* meta type */ ptr++;
+          const len = readVar();
+          ptr += len;
+          continue;
+        }
+        if (status === 0xF0 || status === 0xF7) {
+          const len = readVar();
+          ptr += len;
+          continue;
+        }
+
+        const command = status >> 4;
+        const channel = status & 0x0f;
+        if (ptr >= trackEnd) break;
+        const note = view.getUint8(ptr++);
+        let velocity = null;
+        if (command !== 0xC && command !== 0xD) {
+          if (ptr >= trackEnd) break;
+          velocity = view.getUint8(ptr++);
+        }
+
+        const key = `${channel}:${note}`;
+        if (command === 0x9 && velocity && velocity > 0) {
+          active.set(key, { start: tick, velocity });
+        } else if (command === 0x8 || (command === 0x9 && (!velocity || velocity === 0))) {
+          const info = active.get(key);
+          if (info) {
+            const duration = Math.max(1, tick - info.start);
+            events.push({ pitch: note, start: info.start, duration, velocity: info.velocity || 0 });
+            active.delete(key);
+          }
+        }
+      }
+      ptr = trackEnd;
+    }
+
+    if (!events.length) {
+      return {
+        meta,
+        events: [],
+        pattern: [],
+        totalTicks: 0,
+        division,
+        displayName: meta.displayName || meta.name || meta.file,
+        scale: AI_MELODY_SCALES.minor,
+        shift: 0,
+      };
+    }
+
+    const totalTicks = events.reduce((max, ev) => Math.max(max, ev.start + ev.duration), 0) || 1;
+    const pitches = events.map(ev => ev.pitch);
+    const avgPitch = pitches.reduce((sum, val) => sum + val, 0) / pitches.length;
+    const sorted = pitches.slice().sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] || avgPitch || 60;
+    const baseIndex = 8;
+    const targetIndex = 9;
+    const shift = Math.round(targetIndex - (baseIndex + (median - 60)));
+
+    const pitchClasses = new Array(12).fill(0);
+    pitches.forEach(p => { pitchClasses[((p % 12) + 12) % 12]++; });
+    let rootPc = 0;
+    let rootCount = 0;
+    pitchClasses.forEach((count, idx) => { if (count > rootCount) { rootCount = count; rootPc = idx; } });
+
+    let bestScale = AI_MELODY_SCALES.minor;
+    let bestScore = -Infinity;
+    Object.values(AI_MELODY_SCALES).forEach(scale => {
+      const shifted = scale.map(semi => ((semi + rootPc) % 12 + 12) % 12);
+      const coverage = shifted.reduce((acc, pc) => acc + pitchClasses[pc], 0) / (pitches.length || 1);
+      if (coverage > bestScore) {
+        bestScore = coverage;
+        bestScale = scale.map(semi => semi + (rootPc - 0));
+      }
+    });
+
+    const cols = STEPS * SUBDIV;
+    const pattern = events.map(ev => {
+      const basePitchIndex = baseIndex + (ev.pitch - 60);
+      const pitchIndex = Math.max(0, Math.min(PITCH_ROWS - 1, basePitchIndex + shift));
+      const start = Math.max(0, Math.min(cols - 1, Math.round((ev.start / totalTicks) * (cols - 1))));
+      const length = Math.max(1, Math.min(cols - start, Math.round((ev.duration / totalTicks) * cols)));
+      const velocity = ev.velocity || 80;
+      return { pitchIndex, start, length, velocity };
+    });
+
+    return {
+      meta,
+      events,
+      pattern,
+      totalTicks,
+      division,
+      displayName: meta.displayName || meta.name || meta.file,
+      scale: bestScale,
+      shift,
+      pitchClasses,
+    };
+  }
+
+  async function setupMidiBrowser(){
+    if (!midiSearchInput || !midiResultsEl || midiBrowserInitialized) {
+      if (midiBrowserInitialized) refreshMidiLists();
+      return;
+    }
+    midiBrowserInitialized = true;
+    loadMidiFavorites();
+    midiSearchInput.addEventListener('input', () => { refreshMidiLists(); });
+    midiRandomBtn?.addEventListener('click', async () => {
+      try {
+        await ensureMidiIndex();
+        if (!midiFiltered.length) await refreshMidiLists();
+        const pool = midiFiltered.length ? midiFiltered : midiIndex;
+        if (!pool.length) return;
+        const item = pool[Math.floor(Math.random() * pool.length)];
+        handleMidiSelect(item);
+      } catch (err) {
+        setMidiStatus(`Unable to choose a random MIDI (${err.message}).`);
+      }
+    });
+    try {
+      await ensureMidiIndex();
+      setMidiStatus(`${midiIndex.length} MIDI files ready. Search or pick one to inspire melodies.`);
+    } catch {
+      // status already set in ensureMidiIndex
+    }
+    await refreshMidiLists();
   }
 
   // ---------- Arranger (Song Mode) ----------
