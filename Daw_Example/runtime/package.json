@@ -1,0 +1,32 @@
+{
+  "name": "@opendaw/lib-runtime",
+  "version": "0.0.28",
+  "license": "LGPL-3.0-or-later",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint \"**/*.ts\"",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@opendaw/lib-std": "^0.0.28"
+  },
+  "devDependencies": {
+    "@opendaw/eslint-config": "^0.0.19",
+    "@opendaw/typescript-config": "^0.0.20"
+  },
+  "gitHead": "498716ab88a9a6bba7f8e1c034703cdc749ef8b0"
+}
