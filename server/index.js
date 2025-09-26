@@ -359,7 +359,15 @@ app.post('/api/sessions/:id/join', auth, async (req, res) => {
     await s.save();
   }
   const participants = await rosterFor(s);
-  res.json({ ok: true, tempo: s.tempo, participants, maxPlayers: s.maxPlayers });
+  const { rows = 8, cols = 16, map = {} } = s.grid || {};
+  const plainMap = Object.fromEntries(Object.entries(map || {}).map(([k, v]) => [k, v]));
+  res.json({
+    ok: true,
+    tempo: s.tempo,
+    participants,
+    maxPlayers: s.maxPlayers,
+    grid: { rows, cols, map: plainMap }
+  });
 });
 
 app.get('/api/sessions/:id', auth, async (req, res) => {
