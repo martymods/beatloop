@@ -28,6 +28,37 @@
     .glass { background: rgba(18, 18, 24, .55); backdrop-filter: blur(10px); }
     /* add glow used by buttons */
     .shadow-glow{box-shadow:0 0 0 2px rgba(124,58,237,.25),0 5px 25px rgba(124,58,237,.35)}
+
+    body.studio-embed {
+      background: #0c0c12;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body.studio-embed > header,
+    body.studio-embed #networkShell,
+    body.studio-embed #scrollTop {
+      display: none !important;
+    }
+    body.studio-embed #beatloopStudio {
+      position: static !important;
+      display: block !important;
+      inset: auto !important;
+      padding: 1.5rem 0;
+    }
+    body.studio-embed #beatloopStudio > .absolute {
+      display: none !important;
+    }
+    body.studio-embed #beatloopStudio > .relative {
+      position: static;
+      width: min(1100px, 100%);
+      max-height: none;
+      height: auto;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+    body.studio-embed #blClose {
+      display: none !important;
+    }
   </style>
 
 <style>
@@ -133,7 +164,7 @@
   </header>
 
   <!-- Main content wrapper (3-column layout) -->
-  <div class="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-6 flex-1">
+  <div id="networkShell" class="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-6 flex-1">
     <!-- Left navigation -->
     <aside class="hidden lg:block col-span-3">
       <nav class="sticky top-6 space-y-2 text-white/80">
@@ -1099,6 +1130,15 @@ uploadTrackInput.addEventListener('change', async (e) => {
 
     // ---------- Init
     document.addEventListener('DOMContentLoaded', async () => {
+      if (isStudioEmbed) {
+        try {
+          await launchStudio();
+        } catch (err) {
+          console.error('Beatloop Studio embed initialisation failed', err);
+        }
+        return;
+      }
+
       ensureLoggedIn()
 
       // migrate any legacy data: URLs out of localStorage
@@ -1153,6 +1193,20 @@ uploadTrackInput.addEventListener('change', async (e) => {
 </script>
 <script>
 (() => {
+  const params = new URLSearchParams(window.location.search);
+  const embedParam = (params.get('embed') || '').toLowerCase();
+  const studioParam = (params.get('studio') || '').toLowerCase();
+  const hash = (window.location.hash || '').toLowerCase();
+  const isStudioEmbed = embedParam === 'studio' ||
+                        studioParam === '1' ||
+                        studioParam === 'true' ||
+                        studioParam === 'embed' ||
+                        hash.includes('studio-embed');
+  window.IS_STUDIO_EMBED = isStudioEmbed;
+  if (isStudioEmbed && document.body) {
+    document.body.classList.add('studio-embed');
+  }
+
   // ---------- Assets ----------
   const KITS = {
     trap: {
@@ -2441,19 +2495,28 @@ const AI_MELODY_SCALES = {
   const arrangerWrap  = document.getElementById('arrangerWrap');
   const arrGrid       = document.getElementById('arrGrid');
 
-  function showStudio(){ studio.classList.remove('hidden'); }
-  function hideStudio(){ studio.classList.add('hidden'); }
-  openBtn?.addEventListener('click', async () => {
+  if (window.IS_STUDIO_EMBED && studio) {
+    studio.classList.remove('hidden');
+  }
+
+  function showStudio(){ studio?.classList.remove('hidden'); }
+  function hideStudio(){ if (isStudioEmbed) return; studio?.classList.add('hidden'); }
+  async function launchStudio(){
     showStudio();
-    await window.ensureToneStarted?.();
-    currentKit = kitSel.value;
+    try {
+      await window.ensureToneStarted?.();
+    } catch (err) {
+      console.warn('Tone.js failed to start', err);
+    }
+    if (kitSel && kitSel.value) currentKit = kitSel.value;
     renderKitDetails();
-    await setupMidiBrowser();
-    await rebuildGraph();
+    try { await setupMidiBrowser(); } catch (err) { console.warn('MIDI browser init failed', err); }
+    try { await rebuildGraph(); } catch (err) { console.error('Beatloop Studio graph build failed', err); }
     renderLoopPicker();
     renderInstrumentPicker();
     drawArranger();
-  });
+  }
+  openBtn?.addEventListener('click', launchStudio);
   closeBtn?.addEventListener('click', hideStudio);
 
   // ---------- State ----------
@@ -3649,6 +3712,7 @@ stopBtn.addEventListener('click', () => {
    ========================================================= */
 
 (() => {
+  if (window.IS_STUDIO_EMBED) return;
   // --- API + auth helpers (reuse existing globals when present) ---
   const API = (window.API_BASE && String(window.API_BASE)) ||
               localStorage.getItem('beatloop_api') ||
