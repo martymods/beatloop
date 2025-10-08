@@ -415,11 +415,13 @@
 
       // When served from beatloop.co we need to call the deployed API instead of the
       // marketing site's origin, otherwise /api/* routes 404.
-      if (/\.beatloop\.co$/i.test(host)) {
+      const onBeatloopDomain = /\.beatloop\.co$/i.test(host)
+
+      if (onBeatloopDomain) {
         candidates.add('https://beatloop-api.onrender.com')
       }
 
-      if (origin && origin.startsWith('http')) {
+      if (!onBeatloopDomain && origin && origin.startsWith('http')) {
         candidates.add(normalizeBase(origin))
       }
 
