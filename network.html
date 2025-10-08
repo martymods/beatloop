@@ -382,6 +382,23 @@
       Your UI/logic remains intact (comments with avatar pins, leaderboard, trends, etc.).
     */
 
+    // ---------- API base helpers ----------
+    const storedApiOverride = (() => {
+      try { return localStorage.getItem('beatloop_api'); } catch { return null; }
+    })();
+    const derivedApiBase = (() => {
+      try {
+        const origin = window.location.origin;
+        const host = window.location.hostname || '';
+        if (origin && origin.startsWith('http') && host.endsWith('beatloop.co')) {
+          return origin.replace(/\/$/, '');
+        }
+      } catch {}
+      return 'https://beatloop-api.onrender.com';
+    })();
+    const API_BASE_DEFAULT = storedApiOverride || derivedApiBase;
+    window.API_BASE = API_BASE_DEFAULT;
+
     // ---------- Predefined tracks
     const TRACKS = [
       { id: 'reggae-trap',   title: 'Reggae Trap',       artist: 'Slim Pattie',           bpm: 92, url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
@@ -925,7 +942,8 @@ async function updateLeaderboard() {
   if (!listEl) return;
   listEl.innerHTML = '';
   try {
-    const r = await fetch((window.API_BASE || 'https://beatloop-api.onrender.com') + '/api/leaderboard', {
+    const apiBase = window.API_BASE || API_BASE_DEFAULT;
+    const r = await fetch(apiBase + '/api/leaderboard', {
       headers: { ...AUTH.hdr() }
     });
     if (!r.ok) throw 0;
@@ -973,7 +991,7 @@ async function updateLeaderboard() {
 uploadTrackInput.addEventListener('change', async (e) => {
   const file = e.target.files[0]
   if (!file) return
-  const API = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com'
+  const API = window.API_BASE || API_BASE_DEFAULT
   const token = localStorage.getItem('jwt') || ''
   const idLocal = 'custom-' + Date.now()
 
@@ -1130,6 +1148,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
 
     // ---------- Init
     document.addEventListener('DOMContentLoaded', async () => {
+      const isStudioEmbed = Boolean(window.IS_STUDIO_EMBED);
       if (isStudioEmbed) {
         try {
           await launchStudio();
@@ -2500,7 +2519,7 @@ const AI_MELODY_SCALES = {
   }
 
   function showStudio(){ studio?.classList.remove('hidden'); }
-  function hideStudio(){ if (isStudioEmbed) return; studio?.classList.add('hidden'); }
+  function hideStudio(){ if (window.IS_STUDIO_EMBED) return; studio?.classList.add('hidden'); }
   async function launchStudio(){
     showStudio();
     try {
@@ -3654,7 +3673,7 @@ stopBtn.addEventListener('click', () => {
   }, true);
 
   document.getElementById('profSave').onclick = async ()=>{
-    const apiBase = window.API_BASE || localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
+    const apiBase = window.API_BASE || API_BASE_DEFAULT;
     const name = document.getElementById('profName').value.trim();
     const avatarFile = document.getElementById('profAvatar').files[0];
     const tagFile = document.getElementById('profTag').files[0];
@@ -3714,9 +3733,7 @@ stopBtn.addEventListener('click', () => {
 (() => {
   if (window.IS_STUDIO_EMBED) return;
   // --- API + auth helpers (reuse existing globals when present) ---
-  const API = (window.API_BASE && String(window.API_BASE)) ||
-              localStorage.getItem('beatloop_api') ||
-              'https://beatloop-api.onrender.com';
+  const API = window.API_BASE || API_BASE_DEFAULT;
 
   const AUTH = window.AUTH;
 
@@ -3850,7 +3867,7 @@ stopBtn.addEventListener('click', () => {
 
 /* ---------- Unified login gate (works with API JWT and legacy local users) ---------- */
 (() => {
-  const API_BASE = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
+  const API_BASE = window.API_BASE || API_BASE_DEFAULT;
 
   // Try to read the “new” user object
   let user = null;
@@ -3938,7 +3955,7 @@ stopBtn.addEventListener('click', () => {
   setInterval(refreshSessions, 5000);
   // Attempt stale session cleanup every minute (no-op if endpoint doesn’t exist)
 setInterval(() => {
-  fetch((localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com') + '/api/sessions/cleanup', {
+  fetch((window.API_BASE || API_BASE_DEFAULT) + '/api/sessions/cleanup', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('jwt') || '') }
   }).catch(()=>{});
