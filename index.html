@@ -390,9 +390,45 @@
   <script>
     // ---------- Minimal Config
     const API_FALLBACKS = [
+      // Preferred public API host
+      'https://beatloop-api.onrender.com',
       // Add your Render API origin here if you host APIs separately
       // 'https://your-api.onrender.com'
     ]
+
+    function normalizeBase(url) {
+      return typeof url === 'string' ? url.replace(/\/$/, '') : null
+    }
+
+    function buildApiCandidates() {
+      const candidates = new Set()
+
+      const stored = (() => {
+        try { return localStorage.getItem('beatloop_api') } catch { return null }
+      })()
+      const meta = document.querySelector('meta[name="beatloop-api-base"]')?.content
+      const origin = window.location.origin
+      const host = window.location.hostname || ''
+
+      if (stored) candidates.add(normalizeBase(stored))
+      if (meta) candidates.add(normalizeBase(meta))
+
+      // When served from beatloop.co we need to call the deployed API instead of the
+      // marketing site's origin, otherwise /api/* routes 404.
+      if (/\.beatloop\.co$/i.test(host)) {
+        candidates.add('https://beatloop-api.onrender.com')
+      }
+
+      if (origin && origin.startsWith('http')) {
+        candidates.add(normalizeBase(origin))
+      }
+
+      API_FALLBACKS.forEach(url => {
+        if (url) candidates.add(normalizeBase(url))
+      })
+
+      return Array.from(candidates).filter(Boolean)
+    }
 
     // ---------- Demo Tracks
     const TRACKS = [
@@ -668,10 +704,11 @@ function setupSubscribe() {
     }
 
     async function discoverApiBase() {
-      const candidates = [location.origin, ...API_FALLBACKS]
+      const candidates = buildApiCandidates()
       for (const base of candidates) {
         try {
           await fetch(base + '/api/health', { mode: 'no-cors' })
+          window.API_BASE = base
           return base
         } catch {}
       }
