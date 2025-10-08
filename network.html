@@ -537,6 +537,11 @@
 
     // ---------- Current user
     let currentUser = null
+    let currentUserId = window.currentUserId || null
+    let currentUserColor = window.currentUserColor || null
+    window.currentUserId = currentUserId
+    window.currentUserColor = currentUserColor
+    window.userColors = window.userColors || new Map()
     function loadCurrentUser() {
       const email = localStorage.getItem('current_user')
       if (!email) return null
@@ -564,14 +569,23 @@ function ensureLoggedIn() {
 
   // ✅ make it globally available
   currentUser = { ...u, avatar: sanitizeAvatar(u.avatar) };
-  recordCurrentUserId(currentUser);
-  if (currentUserId) currentUserColor = userColors.get(String(currentUserId)) || currentUserColor;
+  if (typeof window.recordCurrentUserId === 'function') {
+    window.recordCurrentUserId(currentUser);
+  }
+  const activeUserId = window.currentUserId;
+  const colors = window.userColors;
+  if (activeUserId && colors instanceof Map) {
+    currentUserColor = colors.get(String(activeUserId)) || currentUserColor;
+    window.currentUserColor = currentUserColor;
+  }
   try {
     localStorage.setItem('user', JSON.stringify(currentUser));
   } catch (err) {
     console.warn('Unable to persist sanitized user profile', err);
   }
-  refreshStepOwnerColors();
+  if (typeof window.refreshStepOwnerColors === 'function') {
+    window.refreshStepOwnerColors();
+  }
 }
 
 
@@ -3738,24 +3752,32 @@ stopBtn.addEventListener('click', () => {
   const AUTH = window.AUTH;
 
   const sessionGridState = new Map();
-  const userColors = new Map();
+  const userColors = window.userColors instanceof Map ? window.userColors : new Map();
+  window.userColors = userColors;
   let socket = null;
   let currentSessionId = null;
   let currentSessionCap = 8;
-  let currentUserColor = null;
+  currentUserColor = window.currentUserColor || currentUserColor || null;
   let sessionCleanupFns = [];
-  let currentUserId = null;
+  currentUserId = window.currentUserId || currentUserId || null;
 
   try {
     const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
-    if (storedUser) currentUserId = storedUser.id || storedUser._id || null;
+    if (storedUser) {
+      currentUserId = storedUser.id || storedUser._id || null;
+      window.currentUserId = currentUserId;
+    }
   } catch {}
 
   function recordCurrentUserId(u){
     if (!u) return;
     const id = u.id || u._id || null;
-    if (id) currentUserId = String(id);
+    if (id) {
+      currentUserId = String(id);
+      window.currentUserId = currentUserId;
+    }
   }
+  window.recordCurrentUserId = recordCurrentUserId;
 
   function hexToRgb(hex){
     if (!hex) return null;
@@ -3826,6 +3848,7 @@ stopBtn.addEventListener('click', () => {
       applyStepColor(cell, color || null);
     });
   }
+  window.refreshStepOwnerColors = refreshStepOwnerColors;
 
   function resetSessionGridVisuals(){
     sessionGridState.clear();
@@ -4044,11 +4067,13 @@ setInterval(() => {
     });
     if (currentUserId) {
       currentUserColor = userColors.get(String(currentUserId)) || null;
+      window.currentUserColor = currentUserColor;
     } else if (currentUser && currentUser.email) {
       const match = (list||[]).find(p => p && p.email === currentUser.email);
       if (match && match.id) {
         recordCurrentUserId(match);
         currentUserColor = userColors.get(String(match.id)) || null;
+        window.currentUserColor = currentUserColor;
       }
     }
     refreshStepOwnerColors();
@@ -4074,7 +4099,10 @@ setInterval(() => {
     if (!u) return;
     currentUser = { ...u, avatar: sanitizeAvatar(u.avatar) };
     recordCurrentUserId(u);
-    currentUserColor = currentUserId ? userColors.get(String(currentUserId)) || null : currentUserColor;
+    if (currentUserId) {
+      currentUserColor = userColors.get(String(currentUserId)) || null;
+      window.currentUserColor = currentUserColor;
+    }
     if (composerAvatarEl) {
       composerAvatarEl.src = sanitizeAvatar(u.avatar);
       composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar; };
