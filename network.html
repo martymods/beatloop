@@ -390,7 +390,21 @@
       try {
         const origin = window.location.origin;
         const host = window.location.hostname || '';
-        if (origin && origin.startsWith('http') && host.endsWith('beatloop.co')) {
+
+        // Allow a meta tag to explicitly set the API host when embedding Beatloop.
+        const metaApi = document.querySelector('meta[name="beatloop-api-base"]')?.content;
+        if (metaApi) {
+          return metaApi.replace(/\/$/, '');
+        }
+
+        if (origin && origin.startsWith('http')) {
+          // On the production domain the REST API lives on a separate host. When the
+          // site is served from beatloop.co we should keep using the deployed API
+          // backend instead of the marketing site origin to avoid 404s on /api/*.
+          if (/\.beatloop\.co$/i.test(host)) {
+            return 'https://beatloop-api.onrender.com';
+          }
+
           return origin.replace(/\/$/, '');
         }
       } catch {}
