@@ -127,6 +127,11 @@ const uploadsRoot = path.join(process.cwd(), 'uploads');
 fs.mkdirSync(uploadsRoot, { recursive: true });
 app.use('/uploads', express.static(uploadsRoot));
 
+/* ---- Health check ---- */
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime(), db: mongoose.connection.readyState });
+});
+
 /* ============================ HELPERS ============================ */
 function sign(user) {
   return jwt.sign({ uid: user._id }, JWT_SECRET, { expiresIn: '30d' });
