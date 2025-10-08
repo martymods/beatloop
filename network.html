@@ -3651,8 +3651,13 @@ stopBtn.addEventListener('click', () => {
   const AUTH = window.AUTH || (window.AUTH = {
     token: localStorage.getItem('jwt') || '',
     set(t){ this.token = t; localStorage.setItem('jwt', t); },
-    hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
+    hdr(){ return hasAuthToken(this.token) ? { 'Authorization': 'Bearer ' + this.token } : {}; }
   });
+
+  function hasAuthToken(value){
+    const token = typeof value === 'string' ? value.trim() : '';
+    return token.length > 0 && token !== 'undefined' && token !== 'null';
+  }
 
   document.addEventListener('click', (e)=>{
     if (e.target.matches('a[href="#profile"], button#openProfile, .open-profile')){
@@ -3925,7 +3930,7 @@ stopBtn.addEventListener('click', () => {
   // If we have a token later, great; if not, we still allow the page to load.
   // Hydrate user non-blocking if JWT exists but user is stale/missing fields.
   const token = localStorage.getItem('jwt');
-  if (token && (!user.name || !user.email)) {
+  if (hasAuthToken(token) && (!user.name || !user.email)) {
     fetch(API_BASE + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => d?.user && localStorage.setItem('user', JSON.stringify(d.user)))
@@ -3933,12 +3938,14 @@ stopBtn.addEventListener('click', () => {
   }
 
   // Presence heartbeat (safe even without token)
-  setInterval(() => {
-    fetch(API_BASE + '/api/presence/ping', {
-      method: 'POST',
-      headers: token ? { Authorization: 'Bearer ' + token } : {}
-    }).catch(()=>{});
-  }, 15000);
+  if (hasAuthToken(token)) {
+    setInterval(() => {
+      fetch(API_BASE + '/api/presence/ping', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token }
+      }).catch(()=>{});
+    }, 15000);
+  }
 })();
 
   // --- Build the Sessions card (prepends to #feed) ---
@@ -3962,7 +3969,7 @@ stopBtn.addEventListener('click', () => {
   // --- Helpers to fetch + paint the sessions list ---
   async function refreshSessions(){
     try{
-      const r = await fetch(API + '/api/sessions');
+      const r = await fetch(API + '/api/sessions', { headers: { ...AUTH.hdr() }});
       const { sessions=[] } = await r.json();
       const wrap = document.getElementById('sessionsList'); if (!wrap) return;
       wrap.innerHTML = '';
@@ -4002,6 +4009,11 @@ setInterval(() => {
   // --- Start Session (optional name) ---
   document.getElementById('btnNewSession')?.addEventListener('click', async () => {
     try {
+      if (!hasAuthToken(AUTH.token)) {
+        alert('Please sign in with your Beatloop account to start a live session.');
+        location.href = 'login.html';
+        return;
+      }
       const bpmEl = document.getElementById('blBpm');
       const tempo = bpmEl ? +bpmEl.value : 92;
       const name = (document.getElementById('newSessionName')?.value || '').trim();
@@ -4010,7 +4022,13 @@ setInterval(() => {
         headers:{ 'Content-Type':'application/json', ...AUTH.hdr() },
         body: JSON.stringify({ tempo, name })
       });
-      const { id } = await r.json();
+      const payload = await r.json().catch(() => ({}));
+      if (!r.ok || !payload?.id) {
+        const message = payload?.error || 'Could not start session. Please try again.';
+        alert(message);
+        return;
+      }
+      const { id } = payload;
       await refreshSessions();
       await window.ensureToneStarted?.();
       joinSession(id);
@@ -4134,6 +4152,12 @@ setInterval(() => {
 
   async function joinSession(id){
     try {
+      if (!id) { alert('Session unavailable.'); return; }
+      if (!hasAuthToken(AUTH.token)) {
+        alert('Please sign in with your Beatloop account to join live sessions.');
+        location.href = 'login.html';
+        return;
+      }
       runSessionCleanup();
       const r = await fetch(API + `/api/sessions/${id}/join`, { method:'POST', headers:{ ...AUTH.hdr() }});
       if (!r.ok) { alert('Session full or unavailable.'); return; }
