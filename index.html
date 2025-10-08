@@ -728,6 +728,29 @@ function setupSubscribe() {
             try { localStorage.setItem('beatloop_api', base) } catch {}
             return base
           }
+
+          if (res.status === 404) {
+            const altController = new AbortController()
+            const altTimeout = setTimeout(() => altController.abort(), 4000)
+            try {
+              const altRes = await fetch(base + '/health', {
+                method: 'GET',
+                mode: 'cors',
+                cache: 'no-store',
+                signal: altController.signal,
+              })
+
+              if (altRes.ok) {
+                window.API_BASE = base
+                try { localStorage.setItem('beatloop_api', base) } catch {}
+                return base
+              }
+            } catch (altError) {
+              // Ignore CORS, timeout, or network failures and try the next candidate.
+            } finally {
+              clearTimeout(altTimeout)
+            }
+          }
         } catch (error) {
           // Ignore CORS, timeout, or network failures and try the next candidate.
         } finally {
