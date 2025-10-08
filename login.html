@@ -85,20 +85,7 @@
 
         location.href = 'network.html';
       } catch (ex) {
-        // Offline/dev fallback (legacy local users)
-        try {
-          const users = JSON.parse(localStorage.getItem('users') || '{}');
-          if (users[email] && users[email].password === password) {
-            localStorage.setItem('current_user', email);
-            localStorage.setItem('user', JSON.stringify({
-              name: users[email].name || email.split('@')[0],
-              email, avatar: users[email].avatar || '/img/avatar-default.svg'
-            }));
-            location.href = 'network.html';
-            return;
-          }
-        } catch(_){}
-        err.textContent = ex.message || 'Login failed';
+        err.textContent = ex.message || 'Login failed. Please try again.';
         err.classList.remove('hidden');
       } finally {
         btn.disabled = false;
