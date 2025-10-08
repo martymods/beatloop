@@ -99,6 +99,7 @@
 
         AUTH.set(data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('current_user', data.user.email || email);
 
         // Optional avatar upload
         if (avatarFile) {
@@ -127,17 +128,7 @@
 
         window.location.href = 'network.html';
       } catch (ex) {
-        // Legacy local fallback (offline dev)
-        try {
-          let users = JSON.parse(localStorage.getItem('users') || '{}');
-          if (users[email]) throw new Error('An account with this email already exists');
-          users[email] = { name, email, password, avatar: '/img/avatar-default.svg' };
-          localStorage.setItem('users', JSON.stringify(users));
-          localStorage.setItem('current_user', email);
-          window.location.href = 'network.html';
-          return;
-        } catch(_) {}
-        err.textContent = ex.message || 'Sign up failed';
+        err.textContent = ex.message || 'Sign up failed. Please try again.';
         err.classList.remove('hidden');
       }
     });
