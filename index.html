@@ -12,27 +12,7 @@
   <meta property="og:image" content="/img/og-cover.jpg" />
   <meta name="theme-color" content="#7c3aed" />
 
-  <!-- Tailwind via CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: {
-              DEFAULT: '#7c3aed',
-              50: '#f4f0ff', 100: '#ebe4ff', 200: '#d6c7ff', 300: '#b59bff',
-              400: '#9a76ff', 500: '#7c3aed', 600: '#6d28d9', 700: '#5b21b6',
-              800: '#4c1d95', 900: '#3b0d7b'
-            }
-          },
-          boxShadow: {
-            glow: '0 0 0 2px rgba(124,58,237,.25), 0 5px 25px rgba(124,58,237,.35)'
-          }
-        }
-      }
-    }
-  </script>
+  <link rel="stylesheet" href="./styles/tailwind.css" />
 
   <!-- Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -215,9 +195,9 @@
         <div class="md:w-1/3 mt-8 md:mt-0">
           <!-- Community collage -->
           <div class="grid grid-cols-3 gap-2 sm:gap-3">
-            <img src="/img/tcn_1.png" loading="lazy" alt="Artist in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
-            <img src="/img/tcn_2.png" loading="lazy" alt="Performer in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
-            <img src="/img/tcn_3.png" loading="lazy" alt="Producer in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
+            <img src="/img/tcn_1.png" alt="Artist in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
+            <img src="/img/tcn_2.png" alt="Performer in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
+            <img src="/img/tcn_3.png" alt="Producer in the beatloop community" class="aspect-square w-full rounded-xl object-cover ring-1 ring-white/10" />
           </div>
           <!-- Benefits list -->
           <ul class="mt-4 grid gap-3 text-sm text-white/80">
