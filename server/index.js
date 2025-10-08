@@ -19,7 +19,7 @@ const {
   JWT_SECRET = 'dev_secret_change_me',
   MONGODB_URI,
   PUBLIC_BASE_URL = `http://localhost:${PORT}`,
-  FRONTEND_ORIGINS = 'https://beatloop-eotg.onrender.com,http://localhost:8080'
+  FRONTEND_ORIGINS = 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,http://localhost:8080'
 } = process.env;
 
 if (!MONGODB_URI) {
@@ -102,7 +102,12 @@ const corsOptions = {
   origin(origin, cb) {
     if (!origin) return cb(null, true); // server-to-server or same-origin
     try {
-      const allowed = FRONTENDS.includes(origin) || /\.onrender\.com$/.test(new URL(origin).hostname);
+      const hostname = new URL(origin).hostname;
+      const allowed =
+        FRONTENDS.includes(origin) ||
+        /\.onrender\.com$/.test(hostname) ||
+        hostname === 'beatloop.co' ||
+        hostname.endsWith('.beatloop.co');
       return cb(allowed ? null : new Error('CORS blocked'), allowed);
     } catch {
       return cb(new Error('CORS bad origin'), false);
