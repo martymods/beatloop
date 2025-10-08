@@ -6,20 +6,7 @@
   <title>beatloop — Creator Network</title>
   <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
 
-  <!-- Silence Tailwind CDN production warning in dev/preview consoles -->
-  <script>
-    (function () {
-      const _warn = console.warn;
-      console.warn = function (...args) {
-        if (typeof args[0] === 'string' &&
-            args[0].includes('cdn.tailwindcss.com should not be used in production')) return;
-        return _warn.apply(console, args);
-      };
-    })();
-  </script>
-
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./styles/tailwind.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -366,15 +353,9 @@
     </div>
   </div>
 </div>
-
-
-  <script>
-    // Tailwind primary colour configuration to match main site
-    tailwind.config = { theme: { extend: { colors: { primary: { DEFAULT: '#7c3aed' } } } } }
-  </script>
-  <script>
-    /*
-      Enhanced feed implementation for the beatloop creator network.
+    <script>
+      /*
+        Enhanced feed implementation for the beatloop creator network.
       Fixes:
         - Silences Tailwind CDN production warning (dev-only).
         - Avoids localStorage QuotaExceededError by storing audio/cover BLOBS in IndexedDB,
