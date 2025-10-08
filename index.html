@@ -705,13 +705,39 @@ function setupSubscribe() {
 
     async function discoverApiBase() {
       const candidates = buildApiCandidates()
+      let fallback = null
+
       for (const base of candidates) {
+        if (!fallback) fallback = base
+
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 4000)
+
         try {
-          await fetch(base + '/api/health', { mode: 'no-cors' })
-          window.API_BASE = base
-          return base
-        } catch {}
+          const res = await fetch(base + '/api/health', {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-store',
+            signal: controller.signal,
+          })
+
+          if (res.ok) {
+            window.API_BASE = base
+            try { localStorage.setItem('beatloop_api', base) } catch {}
+            return base
+          }
+        } catch (error) {
+          // Ignore CORS, timeout, or network failures and try the next candidate.
+        } finally {
+          clearTimeout(timeout)
+        }
       }
+
+      if (fallback) {
+        window.API_BASE = fallback
+        return fallback
+      }
+
       return null
     }
 
