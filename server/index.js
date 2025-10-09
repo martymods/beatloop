@@ -577,6 +577,8 @@ async function broadcastRoster(sessionId) {
 }
 
 io.on('connection', (socket) => {
+  socket.data.sessions = new Set();
+
   socket.on('session:join', async ({ sessionId }) => {
     const s = await Session.findById(sessionId);
     if (!s || !s.isActive) return;
@@ -594,6 +596,7 @@ io.on('connection', (socket) => {
     if (!hadColor && color) changed = true;
     if (changed) await s.save();
     socket.join(`session:${sessionId}`);
+    socket.data.sessions.add(sessionId);
     await broadcastRoster(sessionId);
 
     // Play this user's tag once, aligned to next step
@@ -605,6 +608,7 @@ io.on('connection', (socket) => {
 
   socket.on('session:leave', async ({ sessionId }) => {
     socket.leave(`session:${sessionId}`);
+    socket.data.sessions.delete(sessionId);
     const s = await Session.findById(sessionId);
     if (!s) return;
     s.participants = s.participants.filter(p => String(p) !== String(socket.data.user._id));
@@ -615,16 +619,24 @@ io.on('connection', (socket) => {
 
   // when a browser tab closes, remove from any joined sessions
   socket.on('disconnect', async () => {
-    const rooms = [...socket.rooms].filter(r => r.startsWith('session:'));
-    for (const room of rooms) {
-      const sessionId = room.split(':')[1];
+    const sessionIds = Array.from(socket.data.sessions || []);
+    for (const sessionId of sessionIds) {
       const s = await Session.findById(sessionId);
       if (!s) continue;
-      s.participants = s.participants.filter(p => String(p) !== String(socket.data.user._id));
-      if (s.participants.length === 0) s.lastEmptyAt = new Date();
-      await s.save();
+      const room = io.sockets.adapter.rooms.get(`session:${sessionId}`);
+      const liveCount = room ? room.size : 0;
+      if (liveCount === 0) {
+        if (!s.lastEmptyAt) {
+          s.lastEmptyAt = new Date();
+          await s.save();
+        }
+      } else if (s.lastEmptyAt) {
+        s.lastEmptyAt = undefined;
+        await s.save();
+      }
       await broadcastRoster(sessionId);
     }
+    socket.data.sessions?.clear?.();
   });
 
   socket.on('grid:update', async ({ sessionId, row, col, on }) => {
