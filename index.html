@@ -35,7 +35,7 @@
     <div class="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
       <a href="#" class="flex items-center gap-2 font-extrabold tracking-tight text-white">
         <!-- Updated brand: beatloop -->
-        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span>
+        <span class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span>
         <span>beatloop</span>
       </a>
       <nav class="ml-auto hidden md:flex items-center gap-6 text-sm text-white/70">
@@ -51,7 +51,7 @@
   <!-- Hero -->
   <section class="relative overflow-hidden">
     <div class="absolute inset-0 -z-10 opacity-40" aria-hidden>
-      <svg class="size-full" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 1200 600">
+      <svg class="h-full w-full" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 1200 600">
         <defs>
           <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
             <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.35"/>
@@ -68,7 +68,7 @@
     <div class="mx-auto max-w-7xl px-4 py-16 md:py-24 grid md:grid-cols-2 items-center gap-10">
       <div>
         <p class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80">
-          <span class="size-2 rounded-full bg-emerald-400"></span> Royalty-Free • Instant Download • Creator-Friendly License
+          <span class="h-2 w-2 rounded-full bg-emerald-400"></span> Royalty-Free • Instant Download • Creator-Friendly License
         </p>
         <h1 class="text-3xl md:text-5xl font-extrabold leading-tight tracking-tight">
           Music Beats, AI Tools & a Zero-Cost <span class="text-primary">Creator Network</span>
@@ -90,11 +90,11 @@
       <div class="glass rounded-2xl p-4 md:p-6 shadow-xl ring-1 ring-white/10">
         <!-- Big Player Card -->
         <div class="flex items-center gap-4">
-          <button id="heroPlay" class="size-12 shrink-0 rounded-full bg-primary text-white grid place-items-center shadow-glow" aria-label="Play/Pause">
-            <svg id="heroPlayIcon" xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
+          <button id="heroPlay" class="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-white shadow-glow" aria-label="Play/Pause">
+            <svg id="heroPlayIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
           </button>
           <!-- Album art for the currently playing track -->
-          <img id="heroCover" src="" alt="Album art" class="hidden sm:block size-16 shrink-0 rounded-xl ring-1 ring-white/10 object-cover" />
+          <img id="heroCover" src="" alt="Album art" class="hidden h-16 w-16 shrink-0 rounded-xl ring-1 ring-white/10 object-cover sm:block" />
           <div class="min-w-0">
             <p id="nowTitle" class="truncate text-sm text-white/70">—</p>
             <h3 id="nowArtist" class="truncate text-xl font-semibold">Select a track below</h3>
@@ -329,7 +329,7 @@
   <footer class="border-t border-white/5 bg-black/40">
     <div class="mx-auto max-w-7xl px-4 py-10 grid gap-6 md:grid-cols-4 text-sm text-white/70">
       <div>
-        <div class="flex items-center gap-2 font-extrabold text-white"><span class="inline-flex size-7 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span> beatloop</div>
+        <div class="flex items-center gap-2 font-extrabold text-white"><span class="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span> beatloop</div>
         <p class="mt-3">We give every artist the power to create, share, and grow. Royalty-free beats + AI toolkit + a creator network that lifts you up.</p>
       </div>
       <div>
@@ -366,11 +366,11 @@
   <div class="fixed inset-x-0 bottom-0 z-50">
     <div class="mx-auto max-w-3xl rounded-t-2xl border-x border-t border-white/10 bg-black/70 backdrop-blur px-4 py-3 shadow-2xl">
       <div class="flex items-center gap-3">
-        <button id="miniPlay" class="size-9 rounded-full bg-primary text-white grid place-items-center" aria-label="Play/Pause">
-          <svg id="miniPlayIcon" xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
+        <button id="miniPlay" class="grid h-9 w-9 place-items-center rounded-full bg-primary text-white" aria-label="Play/Pause">
+          <svg id="miniPlayIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-5.197-3.028A1 1 0 008 9.028v5.944a1 1 0 001.555.832l5.197-3.028a1 1 0 000-1.664z"/></svg>
         </button>
         <!-- Mini cover for currently playing track -->
-        <img id="miniCover" src="" alt="Album art" class="size-10 rounded-xl ring-1 ring-white/10 object-cover" />
+        <img id="miniCover" src="" alt="Album art" class="h-10 w-10 rounded-xl ring-1 ring-white/10 object-cover" />
         <div class="min-w-0">
           <p id="miniTitle" class="truncate text-xs text-white/60">—</p>
           <p id="miniArtist" class="truncate text-sm text-white">Select a track</p>
