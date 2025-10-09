@@ -139,14 +139,8 @@
         <span class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span>
         <span>beatloop</span>
       </a>
-      <nav class="ml-auto hidden md:flex items-center gap-6 text-sm text-white/70">
-        <a href="index.html#beats" class="hover:text-white">Beats</a>
-        <a href="index.html#freestyle" class="hover:text-white">Freestyle</a>
-        <a href="network.html" class="hover:text-white font-semibold text-white">Network</a>
-        <a href="index.html#tools" class="hover:text-white">AI Tools</a>
-        <a href="index.html#blog" class="hover:text-white">Blog</a>
-      </nav>
-      <button id="logoutBtn" class="ml-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Log out</button>
+      <div class="ml-auto"></div>
+      <button id="logoutBtn" class="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Log out</button>
     </div>
   </header>
 
@@ -4165,7 +4159,7 @@ setInterval(() => {
       if (typeof ensurePatternForBank === 'function') {
         ensurePatternForBank(typeof currentBank !== 'undefined' ? currentBank : 0, rows);
       }
-      if (Array.isArray(patterns[currentBank])) {
+      if (typeof patterns !== 'undefined' && Array.isArray(patterns[currentBank])) {
         patterns[currentBank].forEach(row => { if (Array.isArray(row)) row.fill(false); });
       }
       if (typeof drawGrid === 'function' && Array.isArray(rowLabels) && rowLabels.length) {
@@ -4205,20 +4199,24 @@ setInterval(() => {
       socket.on('presence:update', ({ roster }) => renderParticipants(roster));
       socket.on('user:joined', ({ roster }) => renderParticipants(roster));
       socket.on('user:left',    ({ roster }) => renderParticipants(roster));
-      const leave = async (silent = false) => {
+      const leave = async ({ silent = false, skipServer = false } = {}) => {
         const activeSession = currentSessionId;
         if (!activeSession) return;
         runSessionCleanup();
-        try { socket && socket.emit('session:leave', { sessionId: activeSession }); } catch {}
+        if (!skipServer) {
+          try { socket && socket.emit('session:leave', { sessionId: activeSession }); } catch {}
+        }
         if (socket) {
           try { socket.removeAllListeners(); socket.disconnect(); } catch {}
           socket = null;
         }
-        const leaveReq = fetch(API + `/api/sessions/${activeSession}/leave`, { method:'POST', headers:{ ...AUTH.hdr() } });
-        if (!silent) {
-          try { await leaveReq; } catch {}
-        } else {
-          leaveReq.catch(()=>{});
+        if (!skipServer) {
+          const leaveReq = fetch(API + `/api/sessions/${activeSession}/leave`, { method:'POST', headers:{ ...AUTH.hdr() } });
+          if (!silent) {
+            try { await leaveReq; } catch {}
+          } else {
+            leaveReq.catch(()=>{});
+          }
         }
         currentSessionId = null;
         window.currentSessionId = null;
@@ -4235,7 +4233,7 @@ setInterval(() => {
 
       const endedHandler = async () => {
         alert('This session has ended.');
-        await leave(true);
+        await leave({ silent: true });
       };
       socket.on('session:ended', endedHandler);
 
@@ -4265,7 +4263,7 @@ setInterval(() => {
         grid._socketBound = true;
       }
 
-      const handleBeforeUnload = () => { leave(true); };
+      const handleBeforeUnload = () => { leave({ silent: true, skipServer: true }); };
       window.addEventListener('beforeunload', handleBeforeUnload);
       sessionCleanupFns.push(() => window.removeEventListener('beforeunload', handleBeforeUnload));
 
@@ -4282,7 +4280,8 @@ setInterval(() => {
       sessionCleanupFns.push(() => { socket && socket.off('grid:update', gridHandler); });
       sessionCleanupFns.push(() => { socket && socket.off('tag:play', tagHandler); });
       sessionCleanupFns.push(() => { socket && socket.off('session:ended', endedHandler); });
-    } catch {
+    } catch (err) {
+      console.error('Failed to join session', err);
       alert('Could not join session');
     }
   }
