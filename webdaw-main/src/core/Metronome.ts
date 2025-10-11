@@ -94,8 +94,15 @@ export class Metronome implements PlaybackScheduling, NamedObject, MutableObject
   ): void {
     // If the metronome is muted, do not schedule any events
     if (this.muted) {
+      console.log('[Metronome] Skipping scheduling because metronome is muted');
       return;
     }
+
+    console.log(
+      '[Metronome] Scheduling window',
+      `${(startTime + timeOffset).toFixed(3)}s -> ${(endTime + timeOffset).toFixed(3)}s`,
+      `loopIteration=${loopIteration}`,
+    );
 
     // For each beat in the interval, schedule a click
     // There should be at most one beat in any given interval we are presented with here, so
@@ -109,6 +116,7 @@ export class Metronome implements PlaybackScheduling, NamedObject, MutableObject
 
     if (nextBarTime <= endTime) {
       // Schedule a bar click at the beginning of the next measure
+      console.log('[Metronome] Scheduling bar click at', (timeOffset + nextBarTime).toFixed(3), 's');
       this.scheduleClick(timeOffset + nextBarTime, true);
       return;
     }
@@ -120,6 +128,7 @@ export class Metronome implements PlaybackScheduling, NamedObject, MutableObject
 
     if (nextBeatTime <= endTime) {
       // Schedule a beat click at the beginning of the next beat
+      console.log('[Metronome] Scheduling beat click at', (timeOffset + nextBeatTime).toFixed(3), 's');
       this.scheduleClick(timeOffset + nextBeatTime, false);
       return;
     }

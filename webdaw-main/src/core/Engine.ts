@@ -17,6 +17,22 @@ import { DEFAULT_METRONOME_AUDIO_FILE, Metronome } from './Metronome';
 import { Project } from './Project';
 import { PlaybackScheduling } from './Track';
 
+const formatLocation = (location?: Location): string => {
+  if (!location) {
+    return 'n/a';
+  }
+
+  return `bar ${location.bar}, beat ${location.beat}, tick ${location.tick}`;
+};
+
+const formatSeconds = (seconds: number | undefined): string => {
+  if (seconds === undefined) {
+    return 'n/a';
+  }
+
+  return `${seconds.toFixed(3)}s`;
+};
+
 /**
  * This class encapsulates the rendering engine for audio and MIDI playback.
  */
@@ -179,6 +195,20 @@ export class Engine {
     AudioFile.create(new URL(DEFAULT_METRONOME_AUDIO_FILE)),
   );
 
+  private describeSchedulable(schedulable: PlaybackScheduling): string {
+    if (schedulable instanceof Metronome) {
+      return 'Metronome';
+    }
+
+    const maybeNamed = schedulable as { name?: string; type?: string };
+    if (maybeNamed.name) {
+      return maybeNamed.type ? `${maybeNamed.type}:${maybeNamed.name}` : maybeNamed.name;
+    }
+
+    const ctorName = (schedulable as { constructor?: { name?: string } }).constructor?.name;
+    return ctorName ?? 'UnknownSchedulable';
+  }
+
   /**
    * Is the engine currently playing?
    */
@@ -191,15 +221,27 @@ export class Engine {
    */
   public start(): void {
     if (!this._playing) {
+      console.log(
+        '[Engine.start] Start requested',
+        `current=${formatLocation(this.current)}`,
+        `currentTime=${formatSeconds(this.currentTime)}`,
+        `looping=${this.looping}`,
+      );
+
       if (this.context.state === 'suspended') {
-        this.context.resume();
+        console.log('[Engine.start] AudioContext suspended - attempting to resume');
+        this.context.resume().then(() => {
+          console.log('[Engine.start] AudioContext resumed after start request');
+        });
       }
 
       // Stop any playback that is currently happening; it's no-op when nothing is playing
+      console.log('[Engine.start] Silencing any previously playing tracks');
       this.silenceTracks();
 
       // Bind tracks to audio destination; this is a no-op when those bindings already exist
       this.forAllSchedulables((track) => {
+        console.log('[Engine.start] Initializing audio for', this.describeSchedulable(track));
         track.initializeAudio(this.context);
       });
 
@@ -218,6 +260,13 @@ export class Engine {
         this.end.sub(new Duration(0, 0, 1), this.project.timeSignature),
       );
       this.currentTime = converter.convertLocation(this.current);
+
+      console.log(
+        '[Engine.start] Scheduling boundaries prepared',
+        `loopStart=${formatSeconds(this._loopStartTime)}`,
+        `loopEnd=${formatSeconds(this._loopEndTime)}`,
+        `projectEnd=${formatSeconds(this._endTime)}`,
+      );
 
       // Reset the last callback time and the time offset from audio to arrangement time
       const audioTime = this.context.currentTime;
@@ -242,12 +291,18 @@ export class Engine {
       // Notify listeners of the playback start.
       if (this.playbackEventHandlers.length > 0) {
         const event = new PlaybackEvent(PlaybackEventType.Started, this.current);
+        console.log(
+          '[Engine.start] Dispatching playback event',
+          PlaybackEventType[event.type],
+          `at ${formatLocation(event.location)}`,
+        );
         this.playbackEventHandlers.forEach((handler) => {
           handler(event);
         });
       }
 
       // Run the first callback.
+      console.log('[Engine.start] Invoking scheduler for the first time');
       this.scheduler(true);
     }
   }
@@ -256,6 +311,7 @@ export class Engine {
    * Stop playback of audio and MIDI by the rendering engine.
    */
   public stop(immediately: boolean = false): void {
+    console.log('[Engine.stop] Stop requested', `immediately=${immediately}`);
     this._stopRequested = true;
     this.silenceTracks();
   }
@@ -265,7 +321,9 @@ export class Engine {
    */
   scheduler(isFirstCallback: boolean = false): void {
     if (this.context.state === 'suspended') {
+      console.log('[Engine.scheduler] AudioContext suspended - attempting to resume');
       this.context.resume().then(() => {
+        console.log('[Engine.scheduler] AudioContext resumed - retrying scheduler');
         this.scheduler();
       });
       return;
@@ -311,7 +369,20 @@ export class Engine {
     // scheduling interval
     if (scheduleAheadTime >= this._endTime && !this.looping) {
       this._stopRequested = true;
+      console.log('[Engine.scheduler] Requesting stop after reaching arrangement end');
     }
+
+    console.log(
+      '[Engine.scheduler] Tick',
+      `isFirst=${isFirstCallback}`,
+      `callbackTime=${formatSeconds(callbackTime)}`,
+      `delta=${formatSeconds(deltaTime)}`,
+      `arrangementTime=${formatSeconds(arrangementTime)}`,
+      `lastScheduled=${formatSeconds(lastScheduledArrangementTime)}`,
+      `scheduleAhead=${formatSeconds(scheduleAheadTime)}`,
+      `continuation=${formatSeconds(continuationTime)}`,
+      `stopRequested=${this._stopRequested}`,
+    );
 
     // console.log(`arrangementTime: ${arrangementTime}`);
     // console.log(`lastScheduledAudioTime: ${this.lastScheduledArrangementTime}`);
@@ -324,12 +395,22 @@ export class Engine {
         scheduleAheadTime >= this._loopEndTime;
 
       if (!this.looping || !crossingLoopEnd) {
+        console.log(
+          '[Engine.scheduler] Scheduling window',
+          `${formatSeconds(lastScheduledArrangementTime)} -> ${formatSeconds(scheduleAheadTime)}`,
+        );
         var discontinuationTime = this._endTime;
         if (this.looping && lastScheduledArrangementTime < this._loopEndTime) {
           discontinuationTime = this._loopEndTime;
         }
 
         this.forAllSchedulables((track) => {
+          console.log(
+            '[Engine.scheduler] -> scheduling audio for',
+            this.describeSchedulable(track),
+            `offset=${formatSeconds(this._timeOffset)}`,
+            `loopIteration=${this._loopIteration}`,
+          );
           track.scheduleAudioEvents(
             this._timeOffset,
             lastScheduledArrangementTime,
@@ -343,7 +424,17 @@ export class Engine {
 
         this.lastScheduledArrangementTime = scheduleAheadTime;
       } else {
+        console.log(
+          '[Engine.scheduler] Loop boundary crossed, scheduling up to loop end',
+          `${formatSeconds(this._loopEndTime)}`,
+        );
         this.forAllSchedulables((track) => {
+          console.log(
+            '[Engine.scheduler] -> scheduling audio for',
+            this.describeSchedulable(track),
+            `offset=${formatSeconds(this._timeOffset)}`,
+            `loopIteration=${this._loopIteration}`,
+          );
           track.scheduleAudioEvents(
             this._timeOffset,
             lastScheduledArrangementTime,
@@ -363,6 +454,12 @@ export class Engine {
         console.log(`loop iteration: ${this._loopIteration}`);
 
         this.forAllSchedulables((track) => {
+          console.log(
+            '[Engine.scheduler] -> scheduling audio for',
+            this.describeSchedulable(track),
+            `offset=${formatSeconds(this._timeOffset)}`,
+            `loopIteration=${this._loopIteration}`,
+          );
           track.scheduleAudioEvents(
             this._timeOffset,
             locationToTime.convertLocation(
@@ -388,6 +485,11 @@ export class Engine {
         locationToTime.convertTime(arrangementTime),
         arrangementTime,
       );
+      console.log(
+        '[Engine.scheduler] Dispatching playback position',
+        formatLocation(event.location),
+        `(${formatSeconds(event.timestamp)})`,
+      );
       this.playbackPositionEventHandlers.forEach((handler) => {
         handler(event);
       });
@@ -406,6 +508,11 @@ export class Engine {
         const event = new PlaybackEvent(
           PlaybackEventType.Stopped,
           locationToTime.convertTime(stopTime),
+        );
+        console.log(
+          '[Engine.scheduler] Dispatching playback event',
+          PlaybackEventType[event.type],
+          `at ${formatLocation(event.location)}`,
         );
         this.playbackEventHandlers.forEach((handler) => {
           handler(event);
@@ -675,6 +782,7 @@ export class Engine {
    */
   private silenceTracks(): void {
     this.forAllSchedulables((track) => {
+      console.log('[Engine.silenceTracks] Stopping', this.describeSchedulable(track));
       track.stop();
     });
   }

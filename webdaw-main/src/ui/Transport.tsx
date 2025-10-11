@@ -148,21 +148,36 @@ export const Transport: FunctionComponent<TransportProps> = (props: TransportPro
   }
 
   function play() {
-    console.log('Play');
+    console.log(
+      '[Transport.play] Play pressed',
+      `current=${props.current.bar}:${props.current.beat}:${props.current.tick}`,
+      `timestamp=${props.timestamp}`,
+      `enginePlaying=${engine.isPlaying}`,
+    );
     // should chnage the behavior to play from the current position
     setPlayback(PlaybackState.Playing);
     engine.start();
   }
 
   function pause() {
-    console.log('Pause');
+    console.log(
+      '[Transport.pause] Pause pressed',
+      `current=${props.current.bar}:${props.current.beat}:${props.current.tick}`,
+      `timestamp=${props.timestamp}`,
+      `enginePlaying=${engine.isPlaying}`,
+    );
     // needs to be changed such that the audio generation stops more or less immediately
     setPlayback(PlaybackState.Stopped);
     engine.stop();
   }
 
   function record() {
-    console.log('Record');
+    console.log(
+      '[Transport.record] Record pressed',
+      `current=${props.current.bar}:${props.current.beat}:${props.current.tick}`,
+      `timestamp=${props.timestamp}`,
+      `enginePlaying=${engine.isPlaying}`,
+    );
     // should change the behavior to record from the current position
     // ultimately, this will require a count-in prior to the recording starting
     setPlayback(PlaybackState.Recording);
