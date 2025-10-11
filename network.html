@@ -405,7 +405,7 @@
     if (typeof window.followedUserId === 'undefined' || window.followedUserId == null) {
       window.followedUserId = null;
     } else {
-      window.followedUserId = String(window.followedUserId);
+      window.followedUserId = normalizeUserId(window.followedUserId);
     }
 
     window.stepOwnerMatches = window.stepOwnerMatches || function stepOwnerMatches(row, col) {
@@ -415,13 +415,22 @@
         const map = window.sessionGridState;
         if (map && typeof map.get === 'function') {
           const info = map.get(`${row}-${col}`);
-          if (info && info.userId) return String(info.userId) === follow;
-          if (info && info.user) return String(info.user) === follow;
+          if (info && info.userId) {
+            const ownerId = normalizeUserId(info.userId);
+            if (ownerId) return ownerId === follow;
+          }
+          if (info && info.user) {
+            const ownerId = normalizeUserId(info.user);
+            if (ownerId) return ownerId === follow;
+          }
         }
         const grid = document.getElementById('blGrid');
         if (grid) {
           const cell = grid.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
-          if (cell && cell.dataset.owner) return String(cell.dataset.owner) === follow;
+          if (cell && cell.dataset.owner) {
+            const ownerId = normalizeUserId(cell.dataset.owner);
+            if (ownerId) return ownerId === follow;
+          }
         }
         return false;
       } catch (err) {
@@ -446,6 +455,28 @@
       } catch (err) {
         return fallbackAvatar;
       }
+    }
+
+    function normalizeUserId(raw) {
+      if (!raw) return null;
+      if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        return trimmed && trimmed !== 'null' && trimmed !== 'undefined' ? trimmed : null;
+      }
+      if (typeof raw === 'number') {
+        return Number.isFinite(raw) ? String(raw) : null;
+      }
+      if (typeof raw === 'object') {
+        if (typeof raw.$oid === 'string') return normalizeUserId(raw.$oid);
+        if (typeof raw._id === 'string') return normalizeUserId(raw._id);
+        if (typeof raw.id === 'string') return normalizeUserId(raw.id);
+        if (typeof raw.toHexString === 'function') return normalizeUserId(raw.toHexString());
+        if (typeof raw.toString === 'function' && raw.toString !== Object.prototype.toString) {
+          return normalizeUserId(raw.toString());
+        }
+      }
+      const str = String(raw);
+      return str && str !== '[object Object]' ? str : null;
     }
 
     // REPLACE your DEFAULT_TRACK_COVER with this:
@@ -554,7 +585,7 @@
 
     // ---------- Current user
     let currentUser = null
-    let currentUserId = window.currentUserId || null
+    let currentUserId = normalizeUserId(window.currentUserId || null)
     let currentUserColor = window.currentUserColor || null
     window.currentUserId = currentUserId
     window.currentUserColor = currentUserColor
@@ -589,10 +620,10 @@ function ensureLoggedIn() {
   if (typeof window.recordCurrentUserId === 'function') {
     window.recordCurrentUserId(currentUser);
   }
-  const activeUserId = window.currentUserId;
+  const activeUserId = normalizeUserId(window.currentUserId);
   const colors = window.userColors;
   if (activeUserId && colors instanceof Map) {
-    currentUserColor = colors.get(String(activeUserId)) || currentUserColor;
+    currentUserColor = colors.get(activeUserId) || currentUserColor;
     window.currentUserColor = currentUserColor;
   }
   try {
@@ -3786,21 +3817,21 @@ stopBtn.addEventListener('click', () => {
   let currentSessionCap = 8;
   currentUserColor = window.currentUserColor || currentUserColor || null;
   let sessionCleanupFns = [];
-  currentUserId = window.currentUserId || currentUserId || null;
+  currentUserId = normalizeUserId(window.currentUserId || currentUserId || null);
 
   try {
     const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
     if (storedUser) {
-      currentUserId = storedUser.id || storedUser._id || null;
+      currentUserId = normalizeUserId(storedUser.id ?? storedUser._id);
       window.currentUserId = currentUserId;
     }
   } catch {}
 
   function recordCurrentUserId(u){
     if (!u) return;
-    const id = u.id || u._id || null;
+    const id = normalizeUserId(u?.id ?? u?._id);
     if (id) {
-      currentUserId = String(id);
+      currentUserId = id;
       window.currentUserId = currentUserId;
     }
   }
@@ -3882,7 +3913,7 @@ stopBtn.addEventListener('click', () => {
     const follow = window.followedUserId || null;
     document.querySelectorAll('#participantsStrip button').forEach(btn => {
       const isAll = btn.dataset.role === 'follow-all';
-      const id = btn.dataset.uid ? String(btn.dataset.uid) : null;
+      const id = normalizeUserId(btn.dataset.uid);
       const active = isAll ? !follow : (follow && id === follow);
       btn.classList.toggle('ring-2', !!active);
       btn.classList.toggle('ring-white/70', !!active);
@@ -3894,7 +3925,7 @@ stopBtn.addEventListener('click', () => {
       }
     });
     document.querySelectorAll('#rosterList img').forEach(img => {
-      const id = img.dataset.uid ? String(img.dataset.uid) : null;
+      const id = normalizeUserId(img.dataset.uid);
       const active = follow && id === follow;
       img.style.opacity = follow && !active ? '0.4' : '';
       if (active) {
@@ -3909,13 +3940,14 @@ stopBtn.addEventListener('click', () => {
   window.applyFollowHighlight = applyFollowHighlight;
 
   function setFollowedUser(id){
-    window.followedUserId = id ? String(id) : null;
+    const normalized = normalizeUserId(id);
+    window.followedUserId = normalized;
     applyFollowHighlight();
   }
   window.setFollowedUser = setFollowedUser;
 
   function toggleFollow(id){
-    const normalized = id ? String(id) : null;
+    const normalized = normalizeUserId(id);
     const current = window.followedUserId || null;
     if (normalized && current === normalized) {
       setFollowedUser(null);
@@ -3938,12 +3970,13 @@ stopBtn.addEventListener('click', () => {
     const key = `${row}-${col}`;
     updatePatternCell(row, col, on);
     const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
+    const ownerId = normalizeUserId(userId);
     if (cell) {
       cell.classList.toggle('on', !!on);
       if (on) {
-        const targetColor = color || (userId ? userColors.get(String(userId)) : null) || currentUserColor;
+        const targetColor = color || (ownerId ? userColors.get(ownerId) : null) || currentUserColor;
         applyStepColor(cell, targetColor || null);
-        if (userId) cell.dataset.owner = String(userId);
+        if (ownerId) cell.dataset.owner = ownerId;
       } else {
         applyStepColor(cell, null);
         delete cell.dataset.owner;
@@ -3951,7 +3984,7 @@ stopBtn.addEventListener('click', () => {
       updateSingleCellFollowState(cell);
     }
     if (on) {
-      sessionGridState.set(key, { userId: userId ? String(userId) : null, color: color || null });
+      sessionGridState.set(key, { userId: ownerId, color: color || null });
     } else {
       sessionGridState.delete(key);
     }
@@ -3962,7 +3995,8 @@ stopBtn.addEventListener('click', () => {
       const [r, c] = key.split('-').map(Number);
       const cell = document.querySelector(`.step[data-r="${r}"][data-c="${c}"]`);
       if (!cell || !cell.classList.contains('on')) return;
-      const color = info.color || (info.userId ? userColors.get(info.userId) : null);
+      const ownerId = normalizeUserId(info?.userId ?? info?.user);
+      const color = info.color || (ownerId ? userColors.get(ownerId) : null);
       applyStepColor(cell, color || null);
     });
     applyFollowHighlight();
@@ -4171,7 +4205,10 @@ setInterval(() => {
   }
 
   function renderParticipants(list){
-    const count = (list||[]).length;
+    const participants = Array.isArray(list)
+      ? list.map(p => ({ ...p, id: normalizeUserId(p?.id ?? p?._id) }))
+      : [];
+    const count = participants.length;
     const cap = currentSessionCap || 8;
     const countEl = document.getElementById('sessionCount');
     const rosterCount = document.getElementById('rosterCount');
@@ -4180,20 +4217,20 @@ setInterval(() => {
     if (rosterCount) rosterCount.textContent = `${count}/${cap}`;
     const map = window.participantsById instanceof Map ? window.participantsById : null;
     if (map) map.clear();
-    if (map && Array.isArray(list)) {
-      list.forEach(p => {
-        if (p && p.id) map.set(String(p.id), p);
+    if (map) {
+      participants.forEach(p => {
+        if (p && p.id) map.set(p.id, p);
       });
     }
     if (rosterList) {
       rosterList.innerHTML = '';
-      (list||[]).slice(0,8).forEach(p => {
+      participants.slice(0,8).forEach(p => {
         const safeAvatar = sanitizeAvatar(p.avatar);
         const img = document.createElement('img');
         img.src = safeAvatar;
         img.className = 'h-7 w-7 rounded-full';
         img.title = p.name || p.email || 'user';
-        if (p && p.id) img.dataset.uid = String(p.id);
+        if (p && p.id) img.dataset.uid = p.id;
         img.onclick = () => {
           if (p && p.id && window.toggleFollowParticipant) {
             window.toggleFollowParticipant(p.id);
@@ -4209,17 +4246,17 @@ setInterval(() => {
       });
     }
     userColors.clear();
-    (list||[]).forEach(p => {
-      if (p && p.id) userColors.set(String(p.id), p.color || null);
+    participants.forEach(p => {
+      if (p && p.id) userColors.set(p.id, p.color || null);
     });
     if (currentUserId) {
-      currentUserColor = userColors.get(String(currentUserId)) || null;
+      currentUserColor = userColors.get(currentUserId) || null;
       window.currentUserColor = currentUserColor;
     } else if (currentUser && currentUser.email) {
-      const match = (list||[]).find(p => p && p.email === currentUser.email);
+      const match = participants.find(p => p && p.email === currentUser.email);
       if (match && match.id) {
         recordCurrentUserId(match);
-        currentUserColor = userColors.get(String(match.id)) || null;
+        currentUserColor = userColors.get(match.id) || null;
         window.currentUserColor = currentUserColor;
       }
     }
@@ -4239,7 +4276,7 @@ setInterval(() => {
     };
     strip.appendChild(allBtn);
 
-    (list||[]).forEach(p => {
+    participants.forEach(p => {
       const btn = document.createElement('button');
       btn.className = 'relative shrink-0';
       const safeAvatar = sanitizeAvatar(p.avatar);
@@ -4247,7 +4284,7 @@ setInterval(() => {
       btn.innerHTML = `
         <img src="${safeAvatar}" class="h-8 w-8 rounded-full" ${ringStyle} alt="">
         <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-white/70">${p.name || 'user'}</span>`;
-      if (p && p.id) btn.dataset.uid = String(p.id);
+      if (p && p.id) btn.dataset.uid = p.id;
       btn.title = 'Click to listen • Right-click for profile';
       btn.onclick = () => {
         if (p && p.id && window.toggleFollowParticipant) {
@@ -4274,7 +4311,7 @@ setInterval(() => {
     currentUser = { ...u, avatar: sanitizeAvatar(u.avatar) };
     recordCurrentUserId(u);
     if (currentUserId) {
-      currentUserColor = userColors.get(String(currentUserId)) || null;
+      currentUserColor = userColors.get(currentUserId) || null;
       window.currentUserColor = currentUserColor;
     }
     if (composerAvatarEl) {
@@ -4341,7 +4378,7 @@ setInterval(() => {
           if (!Number.isFinite(row) || !Number.isFinite(col)) return;
           const entry = (info && typeof info === 'object') ? info : { on: !!info };
           if (entry.on === false) return;
-          const owner = entry.user ? String(entry.user) : null;
+          const owner = normalizeUserId(entry.user);
           applySessionStep(row, col, true, entry.color || null, owner);
         });
       }
@@ -4423,7 +4460,7 @@ setInterval(() => {
           const row = +cell.dataset.r;
           const col = +cell.dataset.c;
           const on = cell.classList.contains('on');
-          const owner = currentUserId ? String(currentUserId) : (currentUser && currentUser.id ? String(currentUser.id) : null);
+          const owner = normalizeUserId(currentUserId ?? currentUser?.id ?? currentUser?._id);
           const color = currentUserColor || (owner ? userColors.get(owner) : null) || null;
           applySessionStep(row, col, on, color, owner);
           socket.emit('grid:update', { sessionId: currentSessionId, row, col, on });
