@@ -17,15 +17,13 @@ import { Project } from './ui/Project';
 import { Project as ProjectObj } from './core/Project';
 import { createProject, loadProject, saveAsProject, saveProject } from './controller/Projects';
 import { copy, cut, doDelete, paste, redo, undo } from './controller/Edit';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Engine } from './core/Engine';
 import { BUFFER_SIZE, SAMPLE_RATE } from './core/Config';
 
 import styles from './App.module.css';
 import { AudioFileManager } from './core/AudioFileManager';
-import { AudioFileManagerContext, EngineContext } from './ui/Context';
-
-const audioContext = new AudioContext();
+import { AudioContextContext, AudioFileManagerContext, EngineContext } from './ui/Context';
 
 // MIT License
 const LICENSE =
@@ -41,14 +39,14 @@ function openDocumentation() {
 }
 
 function App() {
-  const initialProject = new ProjectObj();
-  const engine = useRef<Engine>(
-    new Engine(audioContext, { bufferSize: BUFFER_SIZE, sampleRate: SAMPLE_RATE }, initialProject),
-  );
+  const initialProjectRef = useRef(new ProjectObj());
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const [engineInstance, setEngineInstance] = useState<Engine | null>(null);
+  const engineRef = useRef<Engine | null>(null);
   const audioFileManager = useRef<AudioFileManager>(new AudioFileManager());
 
-  const [project, setProject] = useState(initialProject);
-  const [tracks, setTracks] = useState(initialProject.tracks); // [TrackInterface]
+  const [project, setProject] = useState(initialProjectRef.current);
+  const [tracks, setTracks] = useState(initialProjectRef.current.tracks); // [TrackInterface]
 
   const [loading, setLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0); // [0, 1]
@@ -58,11 +56,40 @@ function App() {
   const [browserVisible, setBrowserVisible] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
 
+  const [audioInitError, setAudioInitError] = useState<string | null>(null);
   const continueChangeProject = useRef<() => void>();
 
   useEffect(() => {
-    initializeEngine(engine.current);
-  }, []);
+    if (!audioContext || audioContext.state !== 'running') {
+      return;
+    }
+    if (engineRef.current) {
+      return;
+    }
+    const project = initialProjectRef.current;
+    const engine = new Engine(audioContext, { bufferSize: BUFFER_SIZE, sampleRate: SAMPLE_RATE }, project);
+    engineRef.current = engine;
+    setEngineInstance(engine);
+    initializeEngine(engine);
+  }, [audioContext]);
+
+  const handleEnableAudio = useCallback(async () => {
+    try {
+      setAudioInitError(null);
+      let context = audioContext;
+      if (!context || context.state === 'closed') {
+        context = new AudioContext();
+      }
+      if (context.state !== 'running') {
+        await context.resume();
+      }
+      setAudioContext(context);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to start audio context';
+      setAudioInitError(message);
+      console.warn('[App] Failed to enable audio context', err);
+    }
+  }, [audioContext]);
 
   function initializeEngine(engine: Engine) {
     setLoading(true);
@@ -72,11 +99,16 @@ function App() {
   }
 
   function loadFiles(project: ProjectObj) {
+    if (!engineRef.current) {
+      return;
+    }
     setLoading(true);
     project.loadFiles(
-      engine.current.context,
+      engineRef.current.context,
       (project) => {
-        engine.current.project = project;
+        if (engineRef.current) {
+          engineRef.current.project = project;
+        }
         setProject(project);
         setTracks(project.tracks);
         setLoading(false);
@@ -88,16 +120,53 @@ function App() {
   }
 
   function changeProject(action: () => void) {
+    if (!engineRef.current) {
+      action();
+      return;
+    }
     continueChangeProject.current = action;
-    if (engine.current.isPlaying) {
+    if (engineRef.current.isPlaying) {
       setConfirmStopAudio(true);
     } else {
       action();
     }
   }
 
+  if (!audioContext || !engineInstance) {
+    return (
+      <div className={styles.app} style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div
+          style={{
+            maxWidth: 420,
+            padding: '2.5rem 2rem',
+            borderRadius: '16px',
+            background: 'rgba(15, 15, 20, 0.85)',
+            boxShadow: '0 18px 48px rgba(0, 0, 0, 0.35)',
+            textAlign: 'center',
+          }}
+        >
+          <h2 style={{ marginBottom: '0.5rem' }}>Enable audio to launch WebDAW</h2>
+          <p style={{ marginBottom: '1.25rem', color: 'rgba(255,255,255,0.75)' }}>
+            Click the button below to grant the browser permission to start the audio engine. This step is required by
+            modern autoplay policies.
+          </p>
+          <Button large intent="primary" onClick={handleEnableAudio}>
+            Enable Audio
+          </Button>
+          {audioInitError ? (
+            <p style={{ marginTop: '1rem', color: '#f97316' }}>
+              {audioInitError}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <EngineContext.Provider value={engine.current}>
+    <AudioContextContext.Provider value={audioContext}>
+      <EngineContext.Provider value={engineInstance}>
+        <AudioFileManagerContext.Provider value={audioFileManager.current}>
       <Dialog title="About" icon="info-sign" isOpen={showAbout}>
         <DialogBody>
           <img src="logo-192.png" alt="WebDAW Logo" width="96" style={{ float: 'right' }} />
@@ -178,7 +247,7 @@ function App() {
                     text="New Project"
                     onClick={() => {
                       changeProject(() => {
-                        engine.current.stop();
+                        engineRef.current?.stop();
                         project.audioFiles.forEach((audioFile) => {
                           audioFileManager.current.unregisterAudioFile(audioFile);
                         });
@@ -191,7 +260,7 @@ function App() {
                     text="Load..."
                     onClick={() => {
                       changeProject(() => {
-                        engine.current.stop();
+                        engineRef.current?.stop();
                         loadProject(audioFileManager.current);
                       });
                     }}
@@ -293,7 +362,9 @@ function App() {
         title="Settings"
         onClose={() => setShowSettings(false)}
       ></Drawer>
-    </EngineContext.Provider>
+        </AudioFileManagerContext.Provider>
+      </EngineContext.Provider>
+    </AudioContextContext.Provider>
   );
 }
 

@@ -7,6 +7,7 @@
   <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
 
   <link rel="stylesheet" href="./styles/tailwind.css" />
+  <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1280,28 +1281,102 @@ uploadTrackInput.addEventListener('change', async (e) => {
 <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
 <script>
   window.ensureToneStarted = window.ensureToneStarted || (() => {
-    let pending = null;
-    return async function ensureToneStarted() {
-      if (typeof Tone === 'undefined' || typeof Tone.start !== 'function') return false;
-      if (Tone.context && Tone.context.state === 'running') return true;
-      if (!pending) {
-        pending = (async () => {
-          try {
-            await Tone.start();
-            return Tone.context && Tone.context.state === 'running';
-          } catch (err) {
-            console.warn('Tone.js context failed to start', err);
-            return false;
-          } finally {
-            pending = null;
-          }
-        })();
+    let pendingStart = null;
+    let awaitingGesture = false;
+    let hasUserGesture = false;
+    const waitingResolvers = [];
+
+    function resolveWaiting(result) {
+      while (waitingResolvers.length) {
+        const resolve = waitingResolvers.shift();
+        try {
+          resolve?.(result);
+        } catch {}
       }
-      try {
-        return await pending;
-      } catch {
+    }
+
+    function removeGestureListeners(handler) {
+      document.removeEventListener('pointerdown', handler, true);
+      document.removeEventListener('keydown', handler, true);
+      document.removeEventListener('touchend', handler, true);
+    }
+
+    function attachGestureListeners() {
+      if (awaitingGesture) return;
+      awaitingGesture = true;
+      const handler = () => {
+        hasUserGesture = true;
+        awaitingGesture = false;
+        removeGestureListeners(handler);
+        if (!pendingStart) {
+          startToneContext();
+        }
+      };
+      document.addEventListener('pointerdown', handler, true);
+      document.addEventListener('keydown', handler, true);
+      document.addEventListener('touchend', handler, true);
+    }
+
+    function startToneContext() {
+      if (pendingStart) {
+        return pendingStart;
+      }
+      pendingStart = (async () => {
+        if (typeof Tone === 'undefined' || typeof Tone.start !== 'function') {
+          resolveWaiting(false);
+          return false;
+        }
+        if (Tone.context && Tone.context.state === 'running') {
+          resolveWaiting(true);
+          return true;
+        }
+        try {
+          await Tone.start();
+          const running = Tone.context && Tone.context.state === 'running';
+          resolveWaiting(running);
+          return running;
+        } catch (err) {
+          console.warn('Tone.js context failed to start', err);
+          resolveWaiting(false);
+          return false;
+        } finally {
+          pendingStart = null;
+        }
+      })();
+      return pendingStart;
+    }
+
+    return async function ensureToneStarted(options = {}) {
+      const waitForUser = options?.waitForUser !== false;
+      if (typeof Tone === 'undefined' || typeof Tone.start !== 'function') {
         return false;
       }
+      if (Tone.context && Tone.context.state === 'running') {
+        return true;
+      }
+      const activationActive =
+        typeof navigator !== 'undefined' && navigator.userActivation?.isActive === true;
+      if (activationActive && !hasUserGesture) {
+        hasUserGesture = true;
+      }
+      if (pendingStart) {
+        return waitForUser ? pendingStart : true;
+      }
+      if (hasUserGesture) {
+        const startPromise = startToneContext();
+        if (!waitForUser) {
+          startPromise.catch(() => {});
+          return true;
+        }
+        return startPromise;
+      }
+      attachGestureListeners();
+      if (!waitForUser) {
+        return false;
+      }
+      return new Promise((resolve) => {
+        waitingResolvers.push(resolve);
+      });
     };
   })();
 </script>
@@ -2618,7 +2693,7 @@ const AI_MELODY_SCALES = {
   async function launchStudio(){
     showStudio();
     try {
-      await window.ensureToneStarted?.();
+      await window.ensureToneStarted?.({ waitForUser: false });
     } catch (err) {
       console.warn('Tone.js failed to start', err);
     }
@@ -4090,7 +4165,7 @@ stopBtn.addEventListener('click', () => {
   async function scheduleTagPlayback(url, at){
     if (!url) return;
     try {
-      await window.ensureToneStarted?.();
+      await window.ensureToneStarted?.({ waitForUser: false });
       const buses = typeof ensureMixBuses === 'function' ? ensureMixBuses() : null;
       const destination = (buses && buses.main) || Tone.Destination;
       const player = new Tone.Player({ url, autostart: false, fadeOut: 0.05 }).connect(destination);
@@ -4228,7 +4303,7 @@ setInterval(() => {
       }
       const { id } = payload;
       await refreshSessions();
-      await window.ensureToneStarted?.();
+      await window.ensureToneStarted?.({ waitForUser: false });
       joinSession(id);
     } catch {
       alert('Could not start session.');
@@ -4418,7 +4493,7 @@ setInterval(() => {
       currentSessionCap = payload.maxPlayers || 8;
       currentSessionId = id;
       window.currentSessionId = currentSessionId;
-      await window.ensureToneStarted?.();
+      await window.ensureToneStarted?.({ waitForUser: false });
       if (typeof setFollowedUser === 'function') {
         setFollowedUser(null);
       } else {
@@ -4462,7 +4537,9 @@ setInterval(() => {
           if (!Number.isFinite(row) || !Number.isFinite(col)) return;
           const entry = (info && typeof info === 'object') ? info : { on: !!info };
           if (entry.on === false) return;
-          const owner = normalizeUserId(entry.user);
+          const owner = normalizeUserId(
+            entry.user ?? entry.userId ?? entry.owner ?? entry.ownerId ?? entry.createdBy ?? entry.creator,
+          );
           applySessionStep(row, col, true, entry.color || null, owner);
         });
       }
@@ -4478,9 +4555,10 @@ setInterval(() => {
         const bpm = document.getElementById('blBpm');
         if (bpm) { bpm.value = tempo; document.getElementById('blBpmVal').textContent = tempo; }
       };
-      const gridHandler = ({ row, col, on, color, userId }) => {
-        sessionDebug('Grid update received from server', { row, col, on, color, userId });
-        applySessionStep(row, col, on, color || null, userId || null);
+      const gridHandler = ({ row, col, on, color, userId, owner, createdBy }) => {
+        const resolvedOwner = normalizeUserId(userId ?? owner ?? createdBy ?? null);
+        sessionDebug('Grid update received from server', { row, col, on, color, userId: resolvedOwner || userId });
+        applySessionStep(row, col, on, color || null, resolvedOwner || null);
       };
       socket.on('tempo:update', tempoHandler);
       socket.on('grid:update', gridHandler);
