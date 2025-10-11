@@ -334,16 +334,33 @@ export class AudioTrack extends AbstractTrack {
   ): void {
     // Don't schedule anything if the track is disabled
     if (!this._enabled) {
+      console.log(`[AudioTrack:${this.name}] Skipping scheduling because track is disabled.`);
       return;
     }
+
+    const formatTime = (value: number | undefined) =>
+      value === undefined ? 'n/a' : `${value.toFixed(3)}s`;
+
+    console.log(
+      `[AudioTrack:${this.name}] Scheduling request`,
+      `start=${formatTime(startTime)}`,
+      `end=${formatTime(endTime)}`,
+      `continuation=${formatTime(continuationTime)}`,
+      `discontinuation=${formatTime(discontinuationTime)}`,
+      `loopIteration=${loopIteration}`,
+    );
 
     // Check for need to schedule continuation
     if (this._scheduleContinuation && continuationTime === undefined) {
       continuationTime = startTime;
+      console.log(
+        `[AudioTrack:${this.name}] Scheduling continuation from previous callback at ${formatTime(continuationTime)}`,
+      );
     }
 
     // Clear out any previous coninuation need
     this._scheduleContinuation = false;
+    console.log(`[AudioTrack:${this.name}] Regions to evaluate: ${this.regions.length}`);
 
     this.regions.forEach((region) => {
       // TODO: The current code will handle looping at the arrangement level, but not looping of
