@@ -156,6 +156,38 @@ async function userSummary(u) {
   return { id: u._id, name: u.name, email: u.email, avatar: u.avatarUrl, tagUrl: u.tagUrl, joinedAt: u.createdAt };
 }
 
+function toIdString(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === '[object Object]') {
+      return null;
+    }
+    const match = trimmed.match(/([0-9a-f]{24})/i);
+    return match ? match[1].toLowerCase() : trimmed;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : null;
+  }
+  if (typeof value === 'object') {
+    if (typeof value.$oid === 'string') return toIdString(value.$oid);
+    if (typeof value._id !== 'undefined') return toIdString(value._id);
+    if (typeof value.id !== 'undefined') return toIdString(value.id);
+    if (typeof value.toHexString === 'function') return toIdString(value.toHexString());
+    if (typeof value.toString === 'function' && value.toString !== Object.prototype.toString) {
+      const str = value.toString();
+      if (str && str !== '[object Object]') {
+        const match = str.match(/([0-9a-f]{24})/i);
+        return match ? match[1].toLowerCase() : str;
+      }
+    }
+  }
+  const str = String(value);
+  if (!str || str === 'null' || str === 'undefined' || str === '[object Object]') return null;
+  const match = str.match(/([0-9a-f]{24})/i);
+  return match ? match[1].toLowerCase() : str;
+}
+
 function ensureGridShape(sessionDoc) {
   if (!sessionDoc.grid || typeof sessionDoc.grid !== 'object') {
     sessionDoc.grid = { rows: 8, cols: 16, map: {} };
@@ -170,16 +202,30 @@ function ensurePlayerColors(sessionDoc, userId) {
   if (!sessionDoc.playerColors || typeof sessionDoc.playerColors !== 'object') {
     sessionDoc.playerColors = {};
   }
-  const key = String(userId);
-  if (sessionDoc.playerColors[key]) return sessionDoc.playerColors[key];
+  const primary = toIdString(userId);
+  const fallbackRaw = String(userId ?? '').trim();
+  const fallback = (!fallbackRaw || fallbackRaw === 'null' || fallbackRaw === 'undefined' || fallbackRaw === '[object Object]')
+    ? null
+    : fallbackRaw;
+  if (primary && sessionDoc.playerColors[primary]) return sessionDoc.playerColors[primary];
+  if (primary && fallback && sessionDoc.playerColors[fallback]) {
+    sessionDoc.playerColors[primary] = sessionDoc.playerColors[fallback];
+    delete sessionDoc.playerColors[fallback];
+    if (typeof sessionDoc.markModified === 'function') sessionDoc.markModified('playerColors');
+    return sessionDoc.playerColors[primary];
+  }
+  if (!primary && fallback && sessionDoc.playerColors[fallback]) return sessionDoc.playerColors[fallback];
   const used = new Set(Object.values(sessionDoc.playerColors || {}));
   let color = PLAYER_COLOR_PALETTE.find(c => !used.has(c));
   if (!color) {
     color = `#${crypto.randomBytes(3).toString('hex')}`;
   }
-  sessionDoc.playerColors[key] = color;
-  if (typeof sessionDoc.markModified === 'function') {
-    sessionDoc.markModified('playerColors');
+  const key = primary || fallback;
+  if (key) {
+    sessionDoc.playerColors[key] = color;
+    if (typeof sessionDoc.markModified === 'function') {
+      sessionDoc.markModified('playerColors');
+    }
   }
   return color;
 }
@@ -195,7 +241,13 @@ async function rosterFor(sessionDoc) {
     avatar: u.avatarUrl,
     tagUrl: u.tagUrl,
     joinedAt: u.createdAt,
-    color: sessionDoc.playerColors?.[String(u._id)] || null
+    color: (() => {
+      const idStr = toIdString(u._id);
+      if (idStr && sessionDoc.playerColors?.[idStr]) return sessionDoc.playerColors[idStr];
+      const fallback = String(u._id ?? '').trim();
+      if (!fallback || fallback === 'null' || fallback === 'undefined' || fallback === '[object Object]') return null;
+      return sessionDoc.playerColors?.[fallback] || null;
+    })()
   }));
 }
 
@@ -413,7 +465,10 @@ app.get('/api/sessions', async (_req, res) => {
   // include host info + name + counts for the feed
   const hostIds = sessions.map(s => s.hostUserId).filter(Boolean);
   const hosts = await User.find({ _id: { $in: hostIds } }).select('name avatarUrl');
-  const hostMap = new Map(hosts.map(h => [String(h._id), { name: h.name, avatar: h.avatarUrl }]));
+  const hostMap = new Map(hosts.map(h => {
+    const key = toIdString(h._id) || String(h._id);
+    return [key, { name: h.name, avatar: h.avatarUrl }];
+  }));
   const out = sessions.map(s => ({
     id: s._id,
     name: s.name || 'Untitled',
@@ -421,14 +476,17 @@ app.get('/api/sessions', async (_req, res) => {
     participants: Array.isArray(s.participants) ? s.participants.length : 0,
     maxPlayers: s.maxPlayers,
     openSec: Math.floor((Date.now() - new Date(s.createdAt).getTime()) / 1000),
-    host: hostMap.get(String(s.hostUserId)) || null
+    host: (() => {
+      const key = toIdString(s.hostUserId) || String(s.hostUserId);
+      return hostMap.get(key) || null;
+    })()
   }));
   res.json({ sessions: out });
 });
 
 app.post('/api/sessions', auth, async (req, res) => {
   const { tempo = 92, maxPlayers = 8, name = '' } = req.body || {};
-  const hostId = String(req.user._id);
+  const hostId = toIdString(req.user._id) || String(req.user._id);
   const session = await Session.create({
     name: (name || '').trim() || undefined,
     hostUserId: req.user._id,
@@ -455,10 +513,19 @@ app.post('/api/sessions/:id/join', auth, async (req, res) => {
     }
   }
 
-  const userKey = String(req.user._id);
-  const beforeColor = s.playerColors?.[userKey];
+  const userKey = toIdString(req.user._id);
+  const fallbackKeyRaw = String(req.user._id ?? '').trim();
+  const fallbackKey = (!fallbackKeyRaw || fallbackKeyRaw === 'null' || fallbackKeyRaw === 'undefined' || fallbackKeyRaw === '[object Object]')
+    ? null
+    : fallbackKeyRaw;
+  const beforeColor = (userKey && s.playerColors?.[userKey]) || (fallbackKey && s.playerColors?.[fallbackKey]) || null;
   const assignedColor = ensurePlayerColors(s, req.user._id);
-  const already = s.participants.find(p => String(p) === userKey);
+  const already = s.participants.find(p => {
+    const normalized = toIdString(p);
+    if (normalized && userKey) return normalized === userKey;
+    if (fallbackKey) return String(p) === fallbackKey;
+    return false;
+  });
   let changed = false;
   if (!beforeColor && assignedColor) changed = true;
 
@@ -480,8 +547,15 @@ app.post('/api/sessions/:id/join', auth, async (req, res) => {
     if (typeof value === 'object') {
       plainMap[key] = {
         on: true,
-        user: value.user ? String(value.user) : null,
-        color: value.color || (value.user ? s.playerColors?.[String(value.user)] || null : null)
+        user: value.user ? toIdString(value.user) || (typeof value.user === 'string' ? value.user : null) : null,
+        color: (() => {
+          if (value.color) return value.color;
+          const ownerKey = value.user ? (toIdString(value.user) || (typeof value.user === 'string' ? value.user : null)) : null;
+          if (ownerKey && s.playerColors?.[ownerKey]) return s.playerColors[ownerKey];
+          const fallbackRaw = value.user ? String(value.user ?? '').trim() : null;
+          if (!fallbackRaw || fallbackRaw === 'null' || fallbackRaw === 'undefined' || fallbackRaw === '[object Object]') return null;
+          return s.playerColors?.[fallbackRaw] || null;
+        })()
       };
     } else {
       plainMap[key] = { on: !!value, user: null, color: null };
@@ -512,7 +586,18 @@ app.get('/api/sessions/:id', auth, async (req, res) => {
 app.post('/api/sessions/:id/leave', auth, async (req, res) => {
   const s = await Session.findById(req.params.id);
   if (!s) return res.json({ ok: true });
-  s.participants = s.participants.filter(p => String(p) !== String(req.user._id));
+  const targetId = toIdString(req.user._id);
+  const fallback = (() => {
+    const raw = String(req.user._id ?? '').trim();
+    if (!raw || raw === 'null' || raw === 'undefined' || raw === '[object Object]') return null;
+    return raw;
+  })();
+  s.participants = s.participants.filter(p => {
+    const normalized = toIdString(p);
+    if (normalized && targetId) return normalized !== targetId;
+    if (fallback) return String(p) !== fallback;
+    return true;
+  });
   if (s.participants.length === 0) {
     s.lastEmptyAt = new Date();
   }
@@ -523,7 +608,9 @@ app.post('/api/sessions/:id/leave', auth, async (req, res) => {
 app.post('/api/sessions/:id/tempo', auth, async (req, res) => {
   const s = await Session.findById(req.params.id);
   if (!s) return res.status(404).json({ error: 'session not found' });
-  if (String(s.hostUserId) !== String(req.user._id)) return res.status(403).json({ error: 'only host can change tempo' });
+  const hostId = toIdString(s.hostUserId) || String(s.hostUserId);
+  const requester = toIdString(req.user._id) || String(req.user._id);
+  if (hostId !== requester) return res.status(403).json({ error: 'only host can change tempo' });
   const { tempo } = req.body || {};
   if (!tempo || tempo < 60 || tempo > 180) return res.status(400).json({ error: 'tempo out of range' });
   s.tempo = tempo;
@@ -583,12 +670,21 @@ io.on('connection', (socket) => {
     const s = await Session.findById(sessionId);
     if (!s || !s.isActive) return;
     ensureGridShape(s);
-    const userId = String(socket.data.user._id);
-    const hadColor = !!(s.playerColors && s.playerColors[userId]);
+    const userId = toIdString(socket.data.user._id);
+    const fallbackIdRaw = String(socket.data.user._id ?? '').trim();
+    const fallbackId = (!fallbackIdRaw || fallbackIdRaw === 'null' || fallbackIdRaw === 'undefined' || fallbackIdRaw === '[object Object]')
+      ? null
+      : fallbackIdRaw;
+    const hadColor = !!(s.playerColors && ((userId && s.playerColors[userId]) || (fallbackId && s.playerColors[fallbackId])));
     const color = ensurePlayerColors(s, socket.data.user._id);
     // ensure db has this user in participants (handles socket reconnect edge)
     let changed = false;
-    if (!s.participants.find(p => String(p) === userId)) {
+    if (!s.participants.find(p => {
+      const normalized = toIdString(p);
+      if (normalized && userId) return normalized === userId;
+      if (fallbackId) return String(p) === fallbackId;
+      return false;
+    })) {
       s.participants.push(socket.data.user._id);
       s.lastEmptyAt = undefined;
       changed = true;
@@ -611,7 +707,16 @@ io.on('connection', (socket) => {
     socket.data.sessions.delete(sessionId);
     const s = await Session.findById(sessionId);
     if (!s) return;
-    s.participants = s.participants.filter(p => String(p) !== String(socket.data.user._id));
+    s.participants = s.participants.filter(p => {
+      const normalized = toIdString(p);
+      const target = toIdString(socket.data.user._id);
+      if (normalized && target) return normalized !== target;
+      const fallback = String(socket.data.user._id ?? '').trim();
+      if (!fallback || fallback === 'null' || fallback === 'undefined' || fallback === '[object Object]') {
+        return true;
+      }
+      return String(p) !== fallback;
+    });
     if (s.participants.length === 0) s.lastEmptyAt = new Date();
     await s.save();
     await broadcastRoster(sessionId);
@@ -645,8 +750,15 @@ io.on('connection', (socket) => {
     ensureGridShape(s);
     const key = `${row}-${col}`;
     const color = ensurePlayerColors(s, socket.data.user._id);
+    const ownerId = (() => {
+      const primary = toIdString(socket.data.user._id);
+      if (primary) return primary;
+      const raw = String(socket.data.user._id ?? '').trim();
+      if (!raw || raw === 'null' || raw === 'undefined' || raw === '[object Object]') return null;
+      return raw;
+    })();
     if (on) {
-      s.grid.map[key] = { user: socket.data.user._id, color };
+      s.grid.map[key] = { user: ownerId, color };
     } else {
       delete s.grid.map[key];
     }
@@ -656,7 +768,7 @@ io.on('connection', (socket) => {
       row,
       col,
       on,
-      userId: String(socket.data.user._id),
+      userId: ownerId,
       color
     });
   });
@@ -665,7 +777,9 @@ io.on('connection', (socket) => {
   socket.on('tempo:set', async ({ sessionId, tempo }) => {
     const s = await Session.findById(sessionId);
     if (!s) return;
-    if (String(s.hostUserId) !== String(socket.data.user._id)) return;
+    const hostId = toIdString(s.hostUserId) || String(s.hostUserId);
+    const requester = toIdString(socket.data.user._id) || String(socket.data.user._id);
+    if (hostId !== requester) return;
     s.tempo = tempo;
     await s.save();
     io.to(`session:${sessionId}`).emit('tempo:update', { tempo });
@@ -681,29 +795,46 @@ async function reapStaleSessions({ emit = true } = {}) {
   const participantIds = new Set();
   sessions.forEach(s => {
     if (Array.isArray(s.participants)) {
-      s.participants.forEach(id => participantIds.add(String(id)));
+      s.participants.forEach(id => {
+        const normalized = toIdString(id);
+        if (normalized) participantIds.add(normalized);
+      });
     }
   });
 
   let validIds = new Set();
   if (participantIds.size) {
-    const rows = await User.find({ _id: { $in: Array.from(participantIds) } }).select('_id');
-    validIds = new Set(rows.map(r => String(r._id)));
+    const queryIds = Array.from(participantIds).map(id => new mongoose.Types.ObjectId(id));
+    const rows = await User.find({ _id: { $in: queryIds } }).select('_id');
+    validIds = new Set(rows.map(r => toIdString(r._id) || String(r._id)));
   }
 
   let closed = 0;
   for (const s of sessions) {
     ensureGridShape(s);
     if (!Array.isArray(s.participants)) s.participants = [];
-    const filtered = s.participants.filter(id => validIds.has(String(id)));
+    const filtered = s.participants.filter(id => {
+      const normalized = toIdString(id);
+      if (normalized && validIds.has(normalized)) return true;
+      const fallback = String(id ?? '').trim();
+      if (!fallback || fallback === 'null' || fallback === 'undefined' || fallback === '[object Object]') return false;
+      return validIds.has(fallback);
+    });
     let changed = filtered.length !== s.participants.length;
     if (changed) {
-      const keep = new Set(filtered.map(id => String(id)));
+      const keep = new Set(filtered.map(id => {
+        const normalized = toIdString(id);
+        if (normalized) return normalized;
+        const fallback = String(id ?? '').trim();
+        if (!fallback || fallback === 'null' || fallback === 'undefined' || fallback === '[object Object]') return null;
+        return fallback;
+      }).filter(Boolean));
       s.participants = filtered;
       if (s.playerColors && typeof s.playerColors === 'object') {
         let removed = false;
         for (const key of Object.keys(s.playerColors)) {
-          if (!keep.has(key)) { delete s.playerColors[key]; removed = true; }
+          const normalizedKey = toIdString(key) || key;
+          if (!keep.has(normalizedKey)) { delete s.playerColors[key]; removed = true; }
         }
         if (removed) s.markModified('playerColors');
       }
