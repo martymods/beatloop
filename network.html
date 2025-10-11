@@ -402,6 +402,14 @@
     // Defaults (leave fallbackAvatar as-is)
     const fallbackAvatar = '/img/avatar-default.svg';
 
+    const SESSION_LOG_PREFIX = '[Beatloop Session]';
+    const sessionInfo  = (...args) => console.info(SESSION_LOG_PREFIX, ...args);
+    const sessionWarn  = (...args) => console.warn(SESSION_LOG_PREFIX, ...args);
+    const sessionDebug = (...args) => console.debug(SESSION_LOG_PREFIX, ...args);
+
+    const missingOwnerWarnings = new Set();
+    const followSkipLog = new Set();
+
     if (typeof window.followedUserId === 'undefined' || window.followedUserId == null) {
       window.followedUserId = null;
     } else {
@@ -410,30 +418,55 @@
 
     window.stepOwnerMatches = window.stepOwnerMatches || function stepOwnerMatches(row, col) {
       try {
-        const follow = window.followedUserId;
+        const followRaw = window.followedUserId;
+        if (!followRaw) return true;
+        const follow = normalizeUserId(followRaw);
         if (!follow) return true;
+
+        const key = `${row}-${col}`;
         const map = window.sessionGridState;
+        let ownerFromMap = null;
         if (map && typeof map.get === 'function') {
-          const info = map.get(`${row}-${col}`);
-          if (info && info.userId) {
-            const ownerId = normalizeUserId(info.userId);
-            if (ownerId) return ownerId === follow;
-          }
-          if (info && info.user) {
-            const ownerId = normalizeUserId(info.user);
-            if (ownerId) return ownerId === follow;
+          const info = map.get(key);
+          if (info) {
+            ownerFromMap = normalizeUserId(info.userId ?? info.user ?? info.owner);
+            if (ownerFromMap && ownerFromMap === follow) return true;
           }
         }
+
+        let ownerFromCell = null;
         const grid = document.getElementById('blGrid');
         if (grid) {
           const cell = grid.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
           if (cell && cell.dataset.owner) {
-            const ownerId = normalizeUserId(cell.dataset.owner);
-            if (ownerId) return ownerId === follow;
+            ownerFromCell = normalizeUserId(cell.dataset.owner);
+            if (ownerFromCell && ownerFromCell === follow) return true;
           }
         }
-        return false;
+
+        if (!ownerFromMap && !ownerFromCell) {
+          if (!missingOwnerWarnings.has(key)) {
+            sessionWarn('Missing owner metadata for step while following; playing anyway', { row, col, follow });
+            missingOwnerWarnings.add(key);
+          }
+          return true;
+        }
+
+        const differentOwner = ownerFromMap && ownerFromMap !== follow
+          ? ownerFromMap
+          : (ownerFromCell && ownerFromCell !== follow ? ownerFromCell : null);
+        if (differentOwner) {
+          const logKey = `${key}:${differentOwner}`;
+          if (!followSkipLog.has(logKey)) {
+            sessionDebug('Skipping step from different owner due to follow filter', { row, col, follow, owner: differentOwner });
+            followSkipLog.add(logKey);
+          }
+          return false;
+        }
+
+        return true;
       } catch (err) {
+        sessionWarn('stepOwnerMatches error; playing step', err);
         return true;
       }
     };
@@ -3956,7 +3989,20 @@ stopBtn.addEventListener('click', () => {
 
   function setFollowedUser(id){
     const normalized = normalizeUserId(id);
+    const previous = window.followedUserId || null;
     window.followedUserId = normalized;
+    missingOwnerWarnings.clear();
+    followSkipLog.clear();
+    if (normalized) {
+      const info = participantsById.get(normalized);
+      const label = info?.name || info?.email || normalized;
+      sessionInfo('Following participant', { userId: normalized, label });
+    } else {
+      sessionInfo('Listening to every participant in the session');
+    }
+    if (previous !== normalized) {
+      sessionDebug('Follow target changed', { previous, next: normalized });
+    }
     applyFollowHighlight();
   }
   window.setFollowedUser = setFollowedUser;
@@ -3965,8 +4011,10 @@ stopBtn.addEventListener('click', () => {
     const normalized = normalizeUserId(id);
     const current = window.followedUserId || null;
     if (normalized && current === normalized) {
+      sessionDebug('Toggle follow: switching back to everyone', { userId: normalized });
       setFollowedUser(null);
     } else {
+      sessionDebug('Toggle follow: focusing on participant', { userId: normalized });
       setFollowedUser(normalized);
     }
   }
@@ -4225,6 +4273,11 @@ setInterval(() => {
       : [];
     const count = participants.length;
     const cap = currentSessionCap || 8;
+    sessionInfo('Participants roster updated', {
+      count,
+      cap,
+      participants: participants.map(p => ({ id: p.id, label: p.name || p.email || 'user' }))
+    });
     const countEl = document.getElementById('sessionCount');
     const rosterCount = document.getElementById('rosterCount');
     const rosterList  = document.getElementById('rosterList');
@@ -4346,6 +4399,7 @@ setInterval(() => {
 
   async function joinSession(id){
     try {
+      sessionInfo('Attempting to join session', { sessionId: id });
       if (!id) { alert('Session unavailable.'); return; }
       if (!hasAuthToken(AUTH.token)) {
         alert('Please sign in with your Beatloop account to join live sessions.');
@@ -4354,15 +4408,30 @@ setInterval(() => {
       }
       runSessionCleanup();
       const r = await fetch(API + `/api/sessions/${id}/join`, { method:'POST', headers:{ ...AUTH.hdr() }});
-      if (!r.ok) { alert('Session full or unavailable.'); return; }
+      if (!r.ok) {
+        sessionWarn('Session join rejected', { sessionId: id, status: r.status });
+        alert('Session full or unavailable.');
+        return;
+      }
       const payload = await r.json();
       const participants = payload.participants || [];
       currentSessionCap = payload.maxPlayers || 8;
       currentSessionId = id;
       window.currentSessionId = currentSessionId;
       await window.ensureToneStarted?.();
+      if (typeof setFollowedUser === 'function') {
+        setFollowedUser(null);
+      } else {
+        window.followedUserId = null;
+        sessionDebug('Follow state reset to everyone (fallback path)');
+      }
       document.getElementById('beatloopStudio')?.classList.remove('hidden');
       renderParticipants(participants);
+      sessionInfo('Joined session successfully', {
+        sessionId: id,
+        tempo: payload.tempo,
+        participantCount: participants.length
+      });
 
       if (typeof payload.tempo === 'number') {
         const bpmEl = document.getElementById('blBpm');
@@ -4410,6 +4479,7 @@ setInterval(() => {
         if (bpm) { bpm.value = tempo; document.getElementById('blBpmVal').textContent = tempo; }
       };
       const gridHandler = ({ row, col, on, color, userId }) => {
+        sessionDebug('Grid update received from server', { row, col, on, color, userId });
         applySessionStep(row, col, on, color || null, userId || null);
       };
       socket.on('tempo:update', tempoHandler);
@@ -4421,6 +4491,7 @@ setInterval(() => {
       const leave = async ({ silent = false, skipServer = false } = {}) => {
         const activeSession = currentSessionId;
         if (!activeSession) return;
+        sessionInfo('Leaving session', { sessionId: activeSession, silent, skipServer });
         runSessionCleanup();
         if (!skipServer) {
           try { socket && socket.emit('session:leave', { sessionId: activeSession }); } catch {}
@@ -4477,6 +4548,7 @@ setInterval(() => {
           const on = cell.classList.contains('on');
           const owner = normalizeUserId(currentUserId ?? currentUser?.id ?? currentUser?._id);
           const color = currentUserColor || (owner ? userColors.get(owner) : null) || null;
+          sessionDebug('Grid step toggled locally', { row, col, on, owner, color });
           applySessionStep(row, col, on, color, owner);
           socket.emit('grid:update', { sessionId: currentSessionId, row, col, on });
         });
@@ -4501,7 +4573,7 @@ setInterval(() => {
       sessionCleanupFns.push(() => { socket && socket.off('tag:play', tagHandler); });
       sessionCleanupFns.push(() => { socket && socket.off('session:ended', endedHandler); });
     } catch (err) {
-      console.error('Failed to join session', err);
+      sessionWarn('Failed to join session', err);
       alert('Could not join session');
     }
   }
