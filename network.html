@@ -2625,7 +2625,7 @@ const AI_MELODY_SCALES = {
   let currentMidiProfile = null;
 
   // transport
-  let loop = null, currentStep = 0, lastStep = -1, recorder = null;
+  let loop = null, currentStep = 0, lastStep = -1, recorder = null, isRecording = false;
   let mode = 'pattern';     // 'pattern' | 'song'
   let songIdx = 0;          // which bar in arrangement we’re on
 let userBankBeforeSong = 0;   // remember the bank before entering Song Mode
@@ -3544,7 +3544,12 @@ songToggle?.addEventListener('click', ()=>{
     await window.ensureToneStarted?.(); ensureLoop();
     mode='song'; currentStep=0; songIdx=0;
     if(!recorder) recorder=new Tone.Recorder(); Tone.Destination.connect(recorder);
+    if (isRecording) {
+      try { await recorder.stop(); } catch {}
+      isRecording = false;
+    }
     recorder.start();
+    isRecording = true;
     Tone.Transport.bpm.value=+bpmRange.value;
     loop.start(0);
     if(Tone.Transport.state!=='started') Tone.Transport.start('+0.03');
@@ -3556,6 +3561,7 @@ songToggle?.addEventListener('click', ()=>{
     setTimeout(async ()=>{
       if(loop) loop.stop(); Tone.Transport.stop(); mode='pattern';
       const blob=await recorder.stop();
+      isRecording = false;
       const url=URL.createObjectURL(blob);
       const a=document.createElement('a'); a.href=url; a.download=`beatloop_song_${Date.now()}.wav`; document.body.appendChild(a); a.click(); a.remove();
       alert('Full song exported.');
@@ -3586,7 +3592,12 @@ playBtn.addEventListener('click', async () => {
   loop.start(0);
 
   if (Tone.Transport.state !== 'started') {
+    if (isRecording) {
+      try { await recorder.stop(); } catch {}
+      isRecording = false;
+    }
     recorder.start();
+    isRecording = true;
     Tone.Transport.start('+0.03');
   }
 });
@@ -3595,6 +3606,9 @@ playBtn.addEventListener('click', async () => {
 stopBtn.addEventListener('click', () => {
   if (loop) loop.stop();
   Tone.Transport.stop();
+  if (recorder && isRecording) {
+    recorder.stop().then(()=>{ isRecording = false; }).catch(()=>{ isRecording = false; });
+  }
   mode = 'pattern';
   songMute = false;
   currentStep = 0;
@@ -3617,8 +3631,9 @@ stopBtn.addEventListener('click', () => {
 
   // Export current loop (pattern)
   saveBtn.addEventListener('click', async () => {
-    if (!recorder) return;
+    if (!recorder || !isRecording) return;
     const blob = await recorder.stop();
+    isRecording = false;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `beatloop_${Date.now()}.wav`;
