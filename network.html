@@ -495,7 +495,12 @@
       if (!raw) return null;
       if (typeof raw === 'string') {
         const trimmed = raw.trim();
-        return trimmed && trimmed !== 'null' && trimmed !== 'undefined' ? trimmed : null;
+        if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === '[object Object]') {
+          return null;
+        }
+        const match = trimmed.match(/([0-9a-f]{24})/i);
+        if (match) return match[1].toLowerCase();
+        return trimmed;
       }
       if (typeof raw === 'number') {
         return Number.isFinite(raw) ? String(raw) : null;
@@ -510,7 +515,9 @@
         }
       }
       const str = String(raw);
-      return str && str !== '[object Object]' ? str : null;
+      if (!str || str === 'null' || str === 'undefined' || str === '[object Object]') return null;
+      const match = str.match(/([0-9a-f]{24})/i);
+      return match ? match[1].toLowerCase() : str;
     }
 
     // REPLACE your DEFAULT_TRACK_COVER with this:
@@ -4106,15 +4113,24 @@ stopBtn.addEventListener('click', () => {
 
   function applySessionStep(row, col, on, color, userId){
     const key = `${row}-${col}`;
+    const previous = sessionGridState.get(key) || null;
+    const previousOwner = previous ? normalizeUserId(previous.userId ?? previous.user ?? previous.owner) : null;
+    const ownerId = normalizeUserId(userId) || previousOwner || null;
+    const colorToApply = color || previous?.color || null;
     updatePatternCell(row, col, on);
     const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
-    const ownerId = normalizeUserId(userId);
     if (cell) {
       cell.classList.toggle('on', !!on);
       if (on) {
-        const targetColor = color || (ownerId ? userColors.get(ownerId) : null) || currentUserColor;
+        const targetColor = colorToApply || (ownerId ? userColors.get(ownerId) : null) || currentUserColor;
         applyStepColor(cell, targetColor || null);
-        if (ownerId) cell.dataset.owner = ownerId;
+        if (ownerId) {
+          cell.dataset.owner = ownerId;
+        } else if (previousOwner) {
+          cell.dataset.owner = previousOwner;
+        } else {
+          delete cell.dataset.owner;
+        }
       } else {
         applyStepColor(cell, null);
         delete cell.dataset.owner;
@@ -4122,7 +4138,7 @@ stopBtn.addEventListener('click', () => {
       updateSingleCellFollowState(cell);
     }
     if (on) {
-      sessionGridState.set(key, { userId: ownerId, color: color || null });
+      sessionGridState.set(key, { userId: ownerId, color: colorToApply || null });
     } else {
       sessionGridState.delete(key);
     }
