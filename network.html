@@ -64,6 +64,7 @@
   .step.alt{ background: var(--step-off-alt) !important; }
   .step.on{ background: var(--step-on) !important; box-shadow:0 0 0 1px var(--step-border),0 6px 18px var(--step-glow); }
   .step.playhead{box-shadow:inset 0 0 12px rgba(255,255,255,.65),0 0 12px rgba(255,255,255,.35)}
+  .step.dimmed{opacity:.28;filter:saturate(.4)}
 
   /* single dial */
   .dial{display:inline-flex;align-items:center;gap:.25rem;font-size:.7rem;color:#bbb;max-width:80px}
@@ -400,6 +401,33 @@
 
     // Defaults (leave fallbackAvatar as-is)
     const fallbackAvatar = '/img/avatar-default.svg';
+
+    if (typeof window.followedUserId === 'undefined' || window.followedUserId == null) {
+      window.followedUserId = null;
+    } else {
+      window.followedUserId = String(window.followedUserId);
+    }
+
+    window.stepOwnerMatches = window.stepOwnerMatches || function stepOwnerMatches(row, col) {
+      try {
+        const follow = window.followedUserId;
+        if (!follow) return true;
+        const map = window.sessionGridState;
+        if (map && typeof map.get === 'function') {
+          const info = map.get(`${row}-${col}`);
+          if (info && info.userId) return String(info.userId) === follow;
+          if (info && info.user) return String(info.user) === follow;
+        }
+        const grid = document.getElementById('blGrid');
+        if (grid) {
+          const cell = grid.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
+          if (cell && cell.dataset.owner) return String(cell.dataset.owner) === follow;
+        }
+        return false;
+      } catch (err) {
+        return true;
+      }
+    };
 
     function sanitizeAvatar(url) {
       if (!url) return fallbackAvatar;
@@ -3304,6 +3332,7 @@ if (mode === 'song' && currentStep === 0) {
           if (mode === 'song' && songMute) break; // empty bar: nothing triggers this step
 
         if (!pat?.[r]?.[currentStep]) continue;
+        if (typeof window.stepOwnerMatches === 'function' && !window.stepOwnerMatches(r, currentStep)) continue;
         if (r < kitRowCount){
           const note = noteFromC3(pitches[r] || 0);
           kitSamplers[r]?.triggerAttack(note, time, 1);
@@ -3328,6 +3357,7 @@ if (mode === 'song' && currentStep === 0) {
           for (let r = 0; r < (rowLabels?.length||0); r++){
             const hasSongMute = (typeof songMute !== 'undefined') ? songMute : false;
             if (typeof mode !== 'undefined' && mode === 'song' && hasSongMute) break;
+            if (typeof window.stepOwnerMatches === 'function' && !window.stepOwnerMatches(r, currentStep)) continue;
             const prEntry = (pianoRoll[(typeof currentBank!=='undefined'?currentBank:0)]||[])[r];
             if (!prEntry) continue;
             const rowPR = prEntry.notes;
@@ -3745,9 +3775,12 @@ stopBtn.addEventListener('click', () => {
 
   const AUTH = window.AUTH;
 
-  const sessionGridState = new Map();
+  const sessionGridState = window.sessionGridState instanceof Map ? window.sessionGridState : new Map();
+  window.sessionGridState = sessionGridState;
   const userColors = window.userColors instanceof Map ? window.userColors : new Map();
   window.userColors = userColors;
+  const participantsById = window.participantsById instanceof Map ? window.participantsById : new Map();
+  window.participantsById = participantsById;
   let socket = null;
   let currentSessionId = null;
   let currentSessionCap = 8;
@@ -3802,6 +3835,96 @@ stopBtn.addEventListener('click', () => {
     cell.style.removeProperty('--step-glow');
   }
 
+  const stripEl = window.participantsStrip || document.getElementById('participantsStrip');
+  let listeningBadge = document.getElementById('listeningBadge') || null;
+
+  function updateSingleCellFollowState(cell){
+    if (!cell) return;
+    if (!cell.classList.contains('on')) {
+      cell.classList.remove('dimmed');
+      return;
+    }
+    const follow = window.followedUserId || null;
+    if (!follow) {
+      cell.classList.remove('dimmed');
+      return;
+    }
+    const owner = cell.dataset.owner || null;
+    cell.classList.toggle('dimmed', !owner || owner !== follow);
+  }
+
+  function ensureListeningBadge(){
+    if (listeningBadge && listeningBadge.isConnected) return listeningBadge;
+    listeningBadge = document.getElementById('listeningBadge') || null;
+    if (!listeningBadge && stripEl && stripEl.parentNode) {
+      listeningBadge = document.createElement('div');
+      listeningBadge.id = 'listeningBadge';
+      listeningBadge.className = 'mt-1 text-xs text-white/60';
+      stripEl.insertAdjacentElement('afterend', listeningBadge);
+    }
+    return listeningBadge;
+  }
+
+  function updateListeningBadge(){
+    const badge = ensureListeningBadge();
+    if (!badge) return;
+    const follow = window.followedUserId || null;
+    if (!follow) {
+      badge.textContent = 'Listening to everyone in the session';
+      return;
+    }
+    const info = participantsById.get(follow);
+    const label = info?.name || info?.email || 'user';
+    badge.textContent = `Listening to ${label}'s pattern`;
+  }
+
+  function applyFollowHighlight(){
+    const follow = window.followedUserId || null;
+    document.querySelectorAll('#participantsStrip button').forEach(btn => {
+      const isAll = btn.dataset.role === 'follow-all';
+      const id = btn.dataset.uid ? String(btn.dataset.uid) : null;
+      const active = isAll ? !follow : (follow && id === follow);
+      btn.classList.toggle('ring-2', !!active);
+      btn.classList.toggle('ring-white/70', !!active);
+      btn.classList.toggle('bg-white/20', !!active);
+      if (follow && !active && !isAll) {
+        btn.style.opacity = '0.45';
+      } else {
+        btn.style.opacity = '';
+      }
+    });
+    document.querySelectorAll('#rosterList img').forEach(img => {
+      const id = img.dataset.uid ? String(img.dataset.uid) : null;
+      const active = follow && id === follow;
+      img.style.opacity = follow && !active ? '0.4' : '';
+      if (active) {
+        img.classList.add('ring-2', 'ring-white');
+      } else {
+        img.classList.remove('ring-2', 'ring-white');
+      }
+    });
+    document.querySelectorAll('#blGrid .step').forEach(cell => updateSingleCellFollowState(cell));
+    updateListeningBadge();
+  }
+  window.applyFollowHighlight = applyFollowHighlight;
+
+  function setFollowedUser(id){
+    window.followedUserId = id ? String(id) : null;
+    applyFollowHighlight();
+  }
+  window.setFollowedUser = setFollowedUser;
+
+  function toggleFollow(id){
+    const normalized = id ? String(id) : null;
+    const current = window.followedUserId || null;
+    if (normalized && current === normalized) {
+      setFollowedUser(null);
+    } else {
+      setFollowedUser(normalized);
+    }
+  }
+  window.toggleFollowParticipant = toggleFollow;
+
   function updatePatternCell(row, col, on){
     try {
       const bank = typeof currentBank !== 'undefined' ? currentBank : 0;
@@ -3825,6 +3948,7 @@ stopBtn.addEventListener('click', () => {
         applyStepColor(cell, null);
         delete cell.dataset.owner;
       }
+      updateSingleCellFollowState(cell);
     }
     if (on) {
       sessionGridState.set(key, { userId: userId ? String(userId) : null, color: color || null });
@@ -3841,6 +3965,7 @@ stopBtn.addEventListener('click', () => {
       const color = info.color || (info.userId ? userColors.get(info.userId) : null);
       applyStepColor(cell, color || null);
     });
+    applyFollowHighlight();
   }
   window.refreshStepOwnerColors = refreshStepOwnerColors;
 
@@ -3850,6 +3975,7 @@ stopBtn.addEventListener('click', () => {
       cell.classList.remove('on');
       applyStepColor(cell, null);
       delete cell.dataset.owner;
+      cell.classList.remove('dimmed');
     });
     try {
       const bank = typeof currentBank !== 'undefined' ? currentBank : 0;
@@ -4018,6 +4144,7 @@ setInterval(() => {
   strip.id = 'participantsStrip';
   strip.className = 'mt-2 flex items-center gap-2 overflow-x-auto';
   (studio?.querySelector('h3, .studio-title') || studio?.firstElementChild || studio)?.after(strip);
+  window.participantsStrip = strip;
 
   function openProfileCard(p){
     const existing = document.getElementById('profileFly');
@@ -4051,6 +4178,13 @@ setInterval(() => {
     const rosterList  = document.getElementById('rosterList');
     if (countEl) countEl.textContent = `${count}/${cap}`;
     if (rosterCount) rosterCount.textContent = `${count}/${cap}`;
+    const map = window.participantsById instanceof Map ? window.participantsById : null;
+    if (map) map.clear();
+    if (map && Array.isArray(list)) {
+      list.forEach(p => {
+        if (p && p.id) map.set(String(p.id), p);
+      });
+    }
     if (rosterList) {
       rosterList.innerHTML = '';
       (list||[]).slice(0,8).forEach(p => {
@@ -4059,7 +4193,13 @@ setInterval(() => {
         img.src = safeAvatar;
         img.className = 'h-7 w-7 rounded-full';
         img.title = p.name || p.email || 'user';
-        img.onclick = () => openProfileCard(p);
+        if (p && p.id) img.dataset.uid = String(p.id);
+        img.onclick = () => {
+          if (p && p.id && window.toggleFollowParticipant) {
+            window.toggleFollowParticipant(p.id);
+          }
+        };
+        img.addEventListener('contextmenu', (ev) => { ev.preventDefault(); openProfileCard(p); });
         if (p.color) {
           img.style.boxShadow = `0 0 0 2px ${p.color}`;
         } else {
@@ -4085,6 +4225,20 @@ setInterval(() => {
     }
     refreshStepOwnerColors();
     strip.innerHTML = '';
+    const allBtn = document.createElement('button');
+    allBtn.className = 'relative shrink-0';
+    allBtn.dataset.role = 'follow-all';
+    allBtn.title = 'Listen to everyone';
+    allBtn.innerHTML = `
+      <div class="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold text-white/80">All</div>
+      <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-white/70">All</span>`;
+    allBtn.onclick = () => {
+      if (window.setFollowedUser) window.setFollowedUser(null);
+      else window.followedUserId = null;
+      if (window.applyFollowHighlight) window.applyFollowHighlight();
+    };
+    strip.appendChild(allBtn);
+
     (list||[]).forEach(p => {
       const btn = document.createElement('button');
       btn.className = 'relative shrink-0';
@@ -4093,9 +4247,22 @@ setInterval(() => {
       btn.innerHTML = `
         <img src="${safeAvatar}" class="h-8 w-8 rounded-full" ${ringStyle} alt="">
         <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-white/70">${p.name || 'user'}</span>`;
-      btn.onclick = () => openProfileCard(p);
+      if (p && p.id) btn.dataset.uid = String(p.id);
+      btn.title = 'Click to listen • Right-click for profile';
+      btn.onclick = () => {
+        if (p && p.id && window.toggleFollowParticipant) {
+          window.toggleFollowParticipant(p.id);
+        }
+      };
+      btn.addEventListener('contextmenu', (ev) => { ev.preventDefault(); openProfileCard(p); });
       strip.appendChild(btn);
     });
+
+    if (window.followedUserId && map && !map.has(window.followedUserId)) {
+      if (window.setFollowedUser) window.setFollowedUser(null);
+      else window.followedUserId = null;
+    }
+    if (window.applyFollowHighlight) window.applyFollowHighlight();
   }
 
     function renderRoster(list){
@@ -4222,6 +4389,7 @@ setInterval(() => {
         window.currentSessionId = null;
         currentSessionCap = 8;
         resetSessionGridVisuals();
+        try { setFollowedUser(null); } catch {}
         const tempoSlider = document.getElementById('blBpm');
         if (tempoSlider) tempoSlider.oninput = null;
         document.getElementById('beatloopStudio')?.classList.add('hidden');
