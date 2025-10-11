@@ -19,7 +19,7 @@ const {
   JWT_SECRET = 'dev_secret_change_me',
   MONGODB_URI,
   PUBLIC_BASE_URL = `http://localhost:${PORT}`,
-  FRONTEND_ORIGINS = 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,http://localhost:8080'
+  FRONTEND_ORIGINS = 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,https://beatloop.co,http://localhost:8080'
 } = process.env;
 
 if (!MONGODB_URI) {
@@ -96,19 +96,44 @@ const Session = mongoose.model('Session', SessionSchema);
 const app = express();
 
 /* ---- CORS (Express + Socket.IO use the SAME rule) ---- */
-const FRONTENDS = FRONTEND_ORIGINS.split(',').map(s => s.trim()).filter(Boolean);
+function normalizeOrigin(value) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    // Normalize by stripping search/hash and forcing lower-case host.
+    const host = url.hostname?.toLowerCase?.();
+    if (host) {
+      return `${url.protocol}//${host}${url.port ? `:${url.port}` : ''}`;
+    }
+    return url.origin;
+  } catch {
+    return value.replace(/\/+$/, '').trim();
+  }
+}
+
+const FRONTENDS = new Set(
+  FRONTEND_ORIGINS
+    .split(',')
+    .map(s => normalizeOrigin(s.trim()))
+    .filter(Boolean)
+);
 
 const corsOptions = {
   origin(origin, cb) {
     if (!origin) return cb(null, true); // server-to-server or same-origin
     try {
-      const hostname = new URL(origin).hostname;
+      const url = new URL(origin);
+      const hostname = url.hostname?.toLowerCase?.() || '';
+      const normalizedOrigin = `${url.protocol}//${hostname}${url.port ? `:${url.port}` : ''}`;
+
       const allowed =
-        FRONTENDS.includes(origin) ||
+        FRONTENDS.has(normalizedOrigin) ||
         /\.onrender\.com$/.test(hostname) ||
         hostname === 'beatloop.co' ||
+        hostname === 'www.beatloop.co' ||
         hostname.endsWith('.beatloop.co');
-      return cb(allowed ? null : new Error('CORS blocked'), allowed);
+
+      return cb(allowed ? null : new Error(`CORS blocked: ${origin}`), allowed);
     } catch {
       return cb(new Error('CORS bad origin'), false);
     }
