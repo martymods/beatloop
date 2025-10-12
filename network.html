@@ -437,6 +437,113 @@
     const API_BASE_DEFAULT = storedApiOverride || derivedApiBase;
     window.API_BASE = API_BASE_DEFAULT;
 
+    const normalizeApiBase = (value) => {
+      if (typeof value !== 'string') return '';
+      const trimmed = value.trim();
+      if (!trimmed) return '';
+      if (!/^https?:\/\//i.test(trimmed)) return '';
+      return trimmed.replace(/\/+$/, '');
+    };
+
+    const knownApiBases = [];
+    const unreachableApiBases = new Set();
+    const registerApiBase = (value) => {
+      const normalized = normalizeApiBase(value);
+      if (normalized && !knownApiBases.includes(normalized)) {
+        knownApiBases.push(normalized);
+      }
+      return normalized;
+    };
+
+    registerApiBase(API_BASE_DEFAULT);
+    registerApiBase(storedApiOverride);
+    registerApiBase(derivedApiBase);
+    try { registerApiBase(window.location.origin); } catch {}
+    registerApiBase('https://api.beatloop.co');
+    registerApiBase('http://localhost:10000');
+
+    let activeApiBase = registerApiBase(window.API_BASE || API_BASE_DEFAULT) || 'http://localhost:10000';
+    window.API_BASE = activeApiBase;
+    const updateActiveApiBase = (nextBase) => {
+      const normalized = registerApiBase(nextBase);
+      if (!normalized || normalized === activeApiBase) return;
+      activeApiBase = normalized;
+      window.API_BASE = activeApiBase;
+      unreachableApiBases.delete(activeApiBase);
+      try { localStorage.setItem('beatloop_api', activeApiBase); } catch {}
+    };
+
+    window.getApiBase = () => activeApiBase;
+
+    const buildApiCandidates = (preferredBase) => {
+      const list = [];
+      const push = (value) => {
+        const normalized = normalizeApiBase(value);
+        if (!normalized || list.includes(normalized)) return;
+        if (unreachableApiBases.has(normalized)) return;
+        list.push(normalized);
+      };
+      push(preferredBase);
+      knownApiBases.forEach(push);
+      if (!list.length) {
+        const fallback = normalizeApiBase(preferredBase) || normalizeApiBase('http://localhost:10000');
+        if (fallback) list.push(fallback);
+      }
+      return list;
+    };
+
+    const isRecoverableNetworkError = (err) => {
+      if (!err) return false;
+      if (err.name === 'AbortError') return false;
+      if (err.name === 'TypeError') return true;
+      const msg = String(err.message || '').toLowerCase();
+      return msg.includes('failed to fetch')
+        || msg.includes('networkerror')
+        || msg.includes('err_name_not_resolved')
+        || msg.includes('err_connection');
+    };
+
+    const parseApiResource = (resource) => {
+      if (typeof resource !== 'string') return null;
+      const input = resource.trim();
+      if (!input || !/^https?:/i.test(input)) return null;
+      for (const base of knownApiBases) {
+        if (!base) continue;
+        if (input === base || input.startsWith(base + '/') || input.startsWith(base + '?')) {
+          const remainder = input.slice(base.length);
+          const path = remainder.startsWith('/') || remainder.startsWith('?') ? remainder : '/' + remainder;
+          return { base, path };
+        }
+      }
+      return null;
+    };
+
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async function patchedFetch(resource, options){
+      const parsed = parseApiResource(resource);
+      if (!parsed) {
+        return originalFetch(resource, options);
+      }
+
+      const candidates = buildApiCandidates(parsed.base);
+      let lastError = null;
+      for (const candidate of candidates) {
+        const targetUrl = candidate + parsed.path;
+        try {
+          const response = await originalFetch(targetUrl, options);
+          updateActiveApiBase(candidate);
+          return response;
+        } catch (err) {
+          if (!isRecoverableNetworkError(err)) throw err;
+          unreachableApiBases.add(candidate);
+          lastError = err;
+        }
+      }
+
+      if (lastError) throw lastError;
+      return originalFetch(resource, options);
+    };
+
     // ---------- Predefined tracks
     const TRACKS = [
       { id: 'reggae-trap',   title: 'Reggae Trap',       artist: 'Slim Pattie',           bpm: 92, url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
@@ -1128,7 +1235,9 @@ async function updateLeaderboard() {
   if (!listEl) return;
   listEl.innerHTML = '';
   try {
-    const apiBase = window.API_BASE || API_BASE_DEFAULT;
+    const apiBase = (typeof window.getApiBase === 'function'
+      ? window.getApiBase()
+      : (window.API_BASE || API_BASE_DEFAULT));
     const r = await fetch(apiBase + '/api/leaderboard', {
       headers: { ...AUTH.hdr() }
     });
@@ -1177,7 +1286,9 @@ async function updateLeaderboard() {
 uploadTrackInput.addEventListener('change', async (e) => {
   const file = e.target.files[0]
   if (!file) return
-  const API = window.API_BASE || API_BASE_DEFAULT
+  const getApiBase = () => (typeof window.getApiBase === 'function'
+    ? window.getApiBase()
+    : (window.API_BASE || API_BASE_DEFAULT))
   const token = localStorage.getItem('jwt') || ''
   const idLocal = 'custom-' + Date.now()
 
@@ -1204,7 +1315,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
     fd.append('title', metaLocal.title)
     fd.append('bpm', String(metaLocal.bpm))
 
-    const r = await fetch(API + '/api/tracks', {
+    const r = await fetch(getApiBase() + '/api/tracks', {
       method: 'POST',
       headers: token ? { Authorization: 'Bearer ' + token } : {},
       body: fd
@@ -4174,8 +4285,10 @@ stopBtn.addEventListener('click', () => {
     }
   }, true);
 
+  const resolveApiBase = getApiBase;
+
   document.getElementById('profSave').onclick = async ()=>{
-    const apiBase = window.API_BASE || API_BASE_DEFAULT;
+    const apiBase = resolveApiBase();
     const name = document.getElementById('profName').value.trim();
     const avatarFile = document.getElementById('profAvatar').files[0];
     const tagFile = document.getElementById('profTag').files[0];
@@ -4235,7 +4348,9 @@ stopBtn.addEventListener('click', () => {
 (() => {
   if (window.IS_STUDIO_EMBED) return;
   // --- API + auth helpers (reuse existing globals when present) ---
-  const API = window.API_BASE || API_BASE_DEFAULT;
+  const getApiBase = () => (typeof window.getApiBase === 'function'
+    ? window.getApiBase()
+    : (window.API_BASE || API_BASE_DEFAULT));
 
   const AUTH = window.AUTH;
 
@@ -4556,7 +4671,6 @@ stopBtn.addEventListener('click', () => {
 
 /* ---------- Unified login gate (works with API JWT and legacy local users) ---------- */
 (() => {
-  const API_BASE = window.API_BASE || API_BASE_DEFAULT;
 
   // Try to read the “new” user object
   let user = null;
@@ -4578,7 +4692,7 @@ stopBtn.addEventListener('click', () => {
   // Hydrate user non-blocking if JWT exists but user is stale/missing fields.
   const token = localStorage.getItem('jwt');
   if (hasAuthToken(token) && (!user.name || !user.email)) {
-    fetch(API_BASE + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
+    fetch(resolveApiBase() + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => d?.user && localStorage.setItem('user', JSON.stringify(d.user)))
       .catch(()=>{});
@@ -4587,7 +4701,7 @@ stopBtn.addEventListener('click', () => {
   // Presence heartbeat (safe even without token)
   if (hasAuthToken(token)) {
     setInterval(() => {
-      fetch(API_BASE + '/api/presence/ping', {
+      fetch(resolveApiBase() + '/api/presence/ping', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token }
       }).catch(()=>{});
@@ -4616,7 +4730,7 @@ stopBtn.addEventListener('click', () => {
   // --- Helpers to fetch + paint the sessions list ---
   async function refreshSessions(){
     try{
-      const r = await fetch(API + '/api/sessions', { headers: { ...AUTH.hdr() }});
+      const r = await fetch(getApiBase() + '/api/sessions', { headers: { ...AUTH.hdr() }});
       const { sessions=[] } = await r.json();
       const wrap = document.getElementById('sessionsList'); if (!wrap) return;
       wrap.innerHTML = '';
@@ -4645,12 +4759,12 @@ stopBtn.addEventListener('click', () => {
   refreshSessions();
   setInterval(refreshSessions, 5000);
   // Attempt stale session cleanup every minute (no-op if endpoint doesn’t exist)
-setInterval(() => {
-  fetch((window.API_BASE || API_BASE_DEFAULT) + '/api/sessions/cleanup', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('jwt') || '') }
-  }).catch(()=>{});
-}, 60000);
+  setInterval(() => {
+    fetch(resolveApiBase() + '/api/sessions/cleanup', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('jwt') || '') }
+    }).catch(()=>{});
+  }, 60000);
 
 
   // --- Start Session (optional name) ---
@@ -4664,7 +4778,7 @@ setInterval(() => {
       const bpmEl = document.getElementById('blBpm');
       const tempo = bpmEl ? +bpmEl.value : 92;
       const name = (document.getElementById('newSessionName')?.value || '').trim();
-      const r = await fetch(API + '/api/sessions', {
+      const r = await fetch(getApiBase() + '/api/sessions', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', ...AUTH.hdr() },
         body: JSON.stringify({ tempo, name })
@@ -4856,7 +4970,7 @@ setInterval(() => {
         return;
       }
       runSessionCleanup();
-      const r = await fetch(API + `/api/sessions/${id}/join`, { method:'POST', headers:{ ...AUTH.hdr() }});
+      const r = await fetch(getApiBase() + `/api/sessions/${id}/join`, { method:'POST', headers:{ ...AUTH.hdr() }});
       if (!r.ok) {
         sessionWarn('Session join rejected', { sessionId: id, status: r.status });
         alert('Session full or unavailable.');
@@ -4932,7 +5046,7 @@ setInterval(() => {
       if (socket) {
         try { socket.removeAllListeners(); socket.disconnect(); } catch {}
       }
-      socket = io(API, { auth: { token: AUTH.token }});
+      socket = io(getApiBase(), { auth: { token: AUTH.token }});
       socket.emit('session:join', { sessionId: id });
 
       const tempoHandler = ({ tempo }) => {
@@ -5025,7 +5139,7 @@ setInterval(() => {
         await socketAck;
       }
         if (!skipServer) {
-          const leaveReq = fetch(API + `/api/sessions/${activeSession}/leave`, {
+        const leaveReq = fetch(getApiBase() + `/api/sessions/${activeSession}/leave`, {
             method: 'POST',
             headers: { ...AUTH.hdr() },
             keepalive: !!useBeacon
