@@ -622,7 +622,7 @@
 
   <!-- Global API + Auth helper -->
   <script>
-    const API_BASE = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
+    const API_BASE = localStorage.getItem('beatloop_api') || 'https://api.beatloop.co';
     function setApiBase(url){ localStorage.setItem('beatloop_api', url); }
     const AUTH = {
       token: localStorage.getItem('jwt') || '',
