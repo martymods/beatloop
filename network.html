@@ -1991,16 +1991,14 @@ const AI_MELODY_SCALES = {
   const stopBtn   = document.getElementById('blStop');
   const clearBtn  = document.getElementById('blClear');
   const kitSel    = document.getElementById('blKit');
-  const LOOP_PICKER_SELECTOR = '#blLoops';
-  const INSTRUMENT_PICKER_SELECTOR = '#blInstruments';
+  const loopsWrap = document.getElementById('blLoops');
+  const instrumentsWrap = document.getElementById('blInstruments');
   const saveBtn   = document.getElementById('blSaveWav');
   const midiSearchInput = document.getElementById('midiSearch');
   const midiRandomBtn = document.getElementById('midiRandom');
-  const MIDI_STATUS_SELECTOR = '#midiStatus';
-  const MIDI_FAVORITES_SELECTOR = '#midiFavorites';
-  const MIDI_RESULTS_SELECTOR = '#midiResults';
-
-  const queryAll = (selector) => Array.from(document.querySelectorAll(selector));
+  const midiStatusEl = document.getElementById('midiStatus');
+  const midiFavoritesEl = document.getElementById('midiFavorites');
+  const midiResultsEl = document.getElementById('midiResults');
   const kitDetailsEl = document.getElementById('blKitDetails');
   const butterPanelEl = document.getElementById('butterFeaturePanel');
   const aiPanelEl = document.getElementById('aiAssistantPanel');
@@ -3526,15 +3524,11 @@ let lastBar = -1;             // arranger playhead column
   }
 
   function renderLoopPicker(){
-    queryAll(LOOP_PICKER_SELECTOR).forEach((target) => {
-      renderAssetPicker(target, LOOPS, selectedLoops);
-    });
+    renderAssetPicker(loopsWrap, LOOPS, selectedLoops);
   }
 
   function renderInstrumentPicker(){
-    queryAll(INSTRUMENT_PICKER_SELECTOR).forEach((target) => {
-      renderAssetPicker(target, INSTRUMENTS, selectedInstruments);
-    });
+    renderAssetPicker(instrumentsWrap, INSTRUMENTS, selectedInstruments);
   }
 
   // ---------- MIDI Browser ----------
@@ -3555,9 +3549,7 @@ let lastBar = -1;             // arranger playhead column
   }
 
   function setMidiStatus(text){
-    queryAll(MIDI_STATUS_SELECTOR).forEach((el) => {
-      el.textContent = text;
-    });
+    if (midiStatusEl) midiStatusEl.textContent = text;
   }
 
   async function ensureMidiIndex(){
@@ -3635,47 +3627,41 @@ let lastBar = -1;             // arranger playhead column
   }
 
   function renderMidiFavoritesList(list, hasTerm){
-    const containers = queryAll(MIDI_FAVORITES_SELECTOR);
-    if (!containers.length) return;
-    containers.forEach((container) => {
-      container.innerHTML = '';
-      if (!midiFavorites.size) {
-        container.innerHTML = '<p class="px-1 text-[0.65rem] text-white/40">Tap ★ to save go-to MIDI progressions.</p>';
-        return;
-      }
-      const header = document.createElement('p');
-      header.className = 'px-1 text-[0.65rem] uppercase tracking-wide text-white/40';
-      header.textContent = 'Favorites';
-      container.appendChild(header);
-      if (!list.length) {
-        const msg = document.createElement('p');
-        msg.className = 'px-1 text-[0.65rem] text-white/40';
-        msg.textContent = hasTerm ? 'No favorites match this search.' : 'Favorites will appear here.';
-        container.appendChild(msg);
-        return;
-      }
-      list.slice(0, 80).forEach(item => container.appendChild(createMidiRow(item)));
-    });
+    if (!midiFavoritesEl) return;
+    midiFavoritesEl.innerHTML = '';
+    if (!midiFavorites.size) {
+      midiFavoritesEl.innerHTML = '<p class="px-1 text-[0.65rem] text-white/40">Tap ★ to save go-to MIDI progressions.</p>';
+      return;
+    }
+    const header = document.createElement('p');
+    header.className = 'px-1 text-[0.65rem] uppercase tracking-wide text-white/40';
+    header.textContent = 'Favorites';
+    midiFavoritesEl.appendChild(header);
+    if (!list.length) {
+      const msg = document.createElement('p');
+      msg.className = 'px-1 text-[0.65rem] text-white/40';
+      msg.textContent = hasTerm ? 'No favorites match this search.' : 'Favorites will appear here.';
+      midiFavoritesEl.appendChild(msg);
+      return;
+    }
+    list.slice(0, 80).forEach(item => midiFavoritesEl.appendChild(createMidiRow(item)));
   }
 
   function renderMidiResultsList(list){
-    const containers = queryAll(MIDI_RESULTS_SELECTOR);
-    if (!containers.length) return;
-    containers.forEach((container) => {
-      container.innerHTML = '';
-      if (!list.length) {
-        container.innerHTML = '<p class="px-1 text-[0.65rem] text-white/40">No MIDI files match your search.</p>';
-        return;
-      }
-      const limit = 200;
-      list.slice(0, limit).forEach(item => container.appendChild(createMidiRow(item)));
-      if (list.length > limit) {
-        const note = document.createElement('p');
-        note.className = 'px-1 text-[0.65rem] text-white/40';
-        note.textContent = `Showing ${limit} of ${list.length} results. Narrow your search for more.`;
-        container.appendChild(note);
-      }
-    });
+    if (!midiResultsEl) return;
+    midiResultsEl.innerHTML = '';
+    if (!list.length) {
+      midiResultsEl.innerHTML = '<p class="px-1 text-[0.65rem] text-white/40">No MIDI files match your search.</p>';
+      return;
+    }
+    const limit = 200;
+    list.slice(0, limit).forEach(item => midiResultsEl.appendChild(createMidiRow(item)));
+    if (list.length > limit) {
+      const note = document.createElement('p');
+      note.className = 'px-1 text-[0.65rem] text-white/40';
+      note.textContent = `Showing ${limit} of ${list.length} results. Narrow your search for more.`;
+      midiResultsEl.appendChild(note);
+    }
   }
 
   async function refreshMidiLists(){
@@ -3896,8 +3882,7 @@ let lastBar = -1;             // arranger playhead column
   }
 
   async function setupMidiBrowser(){
-    const hasResultsContainer = queryAll(MIDI_RESULTS_SELECTOR).length > 0;
-    if (!midiSearchInput || !hasResultsContainer || midiBrowserInitialized) {
+    if (!midiSearchInput || !midiResultsEl || midiBrowserInitialized) {
       if (midiBrowserInitialized) refreshMidiLists();
       return;
     }
@@ -4850,12 +4835,6 @@ stopBtn.addEventListener('click', () => {
       </div>
       <div id="sessionsList" class="mt-3 grid gap-2"></div>`;
     feed.prepend(sessionsCard);
-    if (!window.IS_STUDIO_EMBED) {
-      renderLoopPicker();
-      renderInstrumentPicker();
-      try { loadMidiFavorites(); } catch {}
-      refreshMidiLists().catch(() => {});
-    }
   }
 
   // --- Helpers to fetch + paint the sessions list ---
