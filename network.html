@@ -142,6 +142,28 @@
   .pr-preview .mini{position:absolute;top:6px;bottom:6px;border-radius:.25rem;background:rgba(124,58,237,.7);box-shadow:0 0 0 1px rgba(124,58,237,.45),0 6px 12px rgba(124,58,237,.35)}
   .pr-preview .tag{position:absolute;left:6px;top:6px;font-size:.625rem;color:#bbb;background:#1f1f28;border:1px solid #2b2b34;padding:.1rem .35rem;border-radius:.35rem}
 </style>
+
+<style>
+  .bl-eq-panel{position:relative}
+  .bl-eq-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:1.5rem;justify-items:center}
+  .bl-eq-band{display:flex;flex-direction:column;align-items:center;gap:.75rem;font-size:.75rem;color:#e2e8f0}
+  .bl-eq-meter{position:relative;width:34px;height:128px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);overflow:hidden;box-shadow:inset 0 0 18px rgba(12,12,18,.65)}
+  .bl-eq-meter::after{content:"";position:absolute;left:4px;right:4px;top:50%;height:1px;background:rgba(255,255,255,.35);opacity:.55}
+  .bl-eq-meter-fill{position:absolute;left:0;right:0;bottom:0;height:50%;border-radius:999px;background:linear-gradient(180deg,#22d3ee 0%,#7c3aed 100%);box-shadow:0 0 16px rgba(124,58,237,.35);transition:height .15s ease,background .15s ease}
+  .bl-eq-meter-fill.bl-eq-negative{background:linear-gradient(180deg,#fb7185 0%,#f97316 100%);box-shadow:0 0 16px rgba(249,115,22,.35)}
+  .bl-eq-slider{-webkit-appearance:slider-vertical;appearance:none;width:34px;height:128px;padding:0;margin:0;background:transparent;cursor:pointer;writing-mode:bt-lr}
+  .bl-eq-slider::-webkit-slider-runnable-track{width:100%;height:100%;border-radius:999px;background:linear-gradient(180deg,rgba(148,163,184,.2),rgba(51,65,85,.35));border:1px solid rgba(148,163,184,.35)}
+  .bl-eq-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:999px;background:linear-gradient(180deg,#ffffff 0%,#cbd5f5 100%);border:2px solid rgba(124,58,237,.9);box-shadow:0 0 12px rgba(124,58,237,.45);margin-left:-6px;margin-right:-6px;margin-top:-4px}
+  .bl-eq-slider::-moz-range-track{width:100%;height:100%;border-radius:999px;background:linear-gradient(180deg,rgba(148,163,184,.2),rgba(51,65,85,.35));border:1px solid rgba(148,163,184,.35)}
+  .bl-eq-slider::-moz-range-thumb{width:18px;height:18px;border-radius:999px;background:linear-gradient(180deg,#ffffff 0%,#cbd5f5 100%);border:2px solid rgba(124,58,237,.9);box-shadow:0 0 12px rgba(124,58,237,.45)}
+  .bl-eq-slider::-ms-track{width:100%;height:100%;border-radius:999px;background:transparent;border:none;color:transparent}
+  .bl-eq-slider::-ms-fill-lower,.bl-eq-slider::-ms-fill-upper{border-radius:999px;background:linear-gradient(180deg,rgba(148,163,184,.2),rgba(51,65,85,.35));border:1px solid rgba(148,163,184,.35)}
+  .bl-eq-slider::-ms-thumb{width:18px;height:18px;border-radius:999px;background:linear-gradient(180deg,#ffffff 0%,#cbd5f5 100%);border:2px solid rgba(124,58,237,.9);box-shadow:0 0 12px rgba(124,58,237,.45)}
+  .bl-eq-slider:focus-visible{outline:2px solid rgba(124,58,237,.6);outline-offset:4px}
+  .bl-eq-value{font-size:.65rem;color:rgba(226,232,240,.75)}
+  .bl-eq-label{font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(148,163,184,.7)}
+  @media (max-width:640px){.bl-eq-grid{grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:1rem}.bl-eq-meter{height:112px}.bl-eq-slider{height:112px}}
+</style>
 </head>
 <body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
   <!-- Header -->
@@ -1636,6 +1658,17 @@ const ROUTE_OPTIONS = [
   { id: 'delay',  label: 'FX Delay',          detail: 'Quarter-note feedback delay for quick ear candy.' }
 ];
 
+const EQ_BANDS = [
+  { id: 'sub', label: '60 Hz', frequency: 60, q: 1.1 },
+  { id: 'bass', label: '120 Hz', frequency: 120, q: 1.1 },
+  { id: 'lowmid', label: '250 Hz', frequency: 250, q: 1.2 },
+  { id: 'mid', label: '500 Hz', frequency: 500, q: 1.25 },
+  { id: 'uppermid', label: '1 kHz', frequency: 1000, q: 1.35 },
+  { id: 'presence', label: '2.5 kHz', frequency: 2500, q: 1.4 },
+  { id: 'brilliance', label: '6 kHz', frequency: 6000, q: 1.45 },
+  { id: 'air', label: '12 kHz', frequency: 12000, q: 1.5 }
+];
+
 let routeAssignments = [];
 let pluginSettings = [];
 let rowHeaderRefs = [];
@@ -1644,6 +1677,12 @@ let rowGains = [];
 let rowDistortions = [];
 let mixBuses = null;
 let masterVolume = null;
+let equalizerInput = null;
+let equalizerFilters = [];
+const equalizerSettings = EQ_BANDS.map(() => 0);
+let eqSliderEls = [];
+let eqMeterEls = [];
+let eqValueEls = [];
 let butterRouteListEl = null;
 let butterPluginEl = null;
 let rowLabels = Array.isArray(window.__rowLabels) ? window.__rowLabels : [];
@@ -1938,24 +1977,26 @@ const AI_MELODY_SCALES = {
   function ensureMixBuses(){
     if (mixBuses && mixBuses.main) return mixBuses;
     if (typeof Tone === 'undefined') return null;
-    if (!masterVolume) masterVolume = new Tone.Volume(0).toDestination();
 
-    const main = new Tone.Gain(1).connect(masterVolume);
+    const eqInput = ensureEqualizerChain();
+    const destination = eqInput || masterVolume || Tone.Destination;
+
+    const main = new Tone.Gain(1).connect(destination);
 
     const chorus = new Tone.Chorus(4, 2.5, 0.22);
     chorus.wet.value = 1;
     if (typeof chorus.start === 'function') chorus.start();
-    chorus.connect(masterVolume);
+    chorus.connect(destination);
     const wide = new Tone.Gain(1).connect(chorus);
 
     const crunchFx = new Tone.Distortion(0.35);
     crunchFx.wet.value = 1;
-    crunchFx.connect(masterVolume);
+    crunchFx.connect(destination);
     const crunch = new Tone.Gain(1).connect(crunchFx);
 
     const delayFx = new Tone.FeedbackDelay('8n', 0.25);
     delayFx.wet.value = 0.85;
-    delayFx.connect(masterVolume);
+    delayFx.connect(destination);
     const delay = new Tone.Gain(1).connect(delayFx);
 
     mixBuses = { main, wide, crunch, delay };
@@ -2126,8 +2167,121 @@ const AI_MELODY_SCALES = {
     refreshButterToolkit();
   }
 
+  function clampEqValue(val){
+    const num = Number(val);
+    if (!Number.isFinite(num)) return 0;
+    return Math.max(-10, Math.min(10, num));
+  }
+
+  function formatDb(value){
+    const num = clampEqValue(value);
+    if (Math.abs(num) < 0.001) return '0 dB';
+    return `${num > 0 ? '+' : ''}${num} dB`;
+  }
+
+  function ensureEqualizerChain(){
+    if (typeof Tone === 'undefined') return null;
+    if (!masterVolume) masterVolume = new Tone.Volume(0).toDestination();
+    if (equalizerInput) return equalizerInput;
+    equalizerInput = new Tone.Gain(1);
+    let cursor = equalizerInput;
+    equalizerFilters = EQ_BANDS.map((band, idx) => {
+      const filter = new Tone.Filter(band.frequency, 'peaking');
+      filter.type = 'peaking';
+      if (filter.Q) filter.Q.value = band.q || 1.2;
+      if (filter.gain) filter.gain.value = clampEqValue(equalizerSettings[idx]);
+      cursor.connect(filter);
+      cursor = filter;
+      return filter;
+    });
+    cursor.connect(masterVolume);
+    return equalizerInput;
+  }
+
+  function updateEqMeter(idx, value){
+    if (!Array.isArray(eqMeterEls)) return;
+    const meter = eqMeterEls[idx];
+    if (meter){
+      const fill = meter.querySelector('.bl-eq-meter-fill');
+      if (fill){
+        const percent = Math.max(0, Math.min(1, 0.5 + (clampEqValue(value) / 20)));
+        fill.style.height = `${percent * 100}%`;
+        fill.classList.toggle('bl-eq-negative', value < 0);
+      }
+    }
+    if (Array.isArray(eqValueEls)){ const label = eqValueEls[idx]; if (label) label.textContent = formatDb(value); }
+  }
+
+  function updateAllEqMeters(){
+    equalizerSettings.forEach((value, idx) => updateEqMeter(idx, value));
+  }
+
+  function setEqualizerGain(idx, nextValue){
+    const index = Number(idx);
+    if (!Number.isFinite(index) || index < 0 || index >= EQ_BANDS.length) return;
+    const value = clampEqValue(nextValue);
+    equalizerSettings[index] = value;
+    const filter = equalizerFilters[index];
+    if (filter && filter.gain) filter.gain.value = value;
+    updateEqMeter(index, value);
+  }
+
+  function resetEqualizer(){
+    equalizerSettings.forEach((_, idx) => {
+      setEqualizerGain(idx, 0);
+      if (Array.isArray(eqSliderEls) && eqSliderEls[idx]) eqSliderEls[idx].value = '0';
+    });
+  }
+
+  function bindEqualizerUI(scope){
+    if (!scope) return;
+    eqSliderEls = Array(EQ_BANDS.length).fill(null);
+    eqMeterEls = Array(EQ_BANDS.length).fill(null);
+    eqValueEls = Array(EQ_BANDS.length).fill(null);
+
+    scope.querySelectorAll('[data-eq-meter]').forEach(el => {
+      const idx = parseInt(el.dataset.eqMeter, 10);
+      if (!Number.isNaN(idx) && idx >= 0 && idx < EQ_BANDS.length) eqMeterEls[idx] = el;
+    });
+    scope.querySelectorAll('[data-eq-value]').forEach(el => {
+      const idx = parseInt(el.dataset.eqValue, 10);
+      if (!Number.isNaN(idx) && idx >= 0 && idx < EQ_BANDS.length) eqValueEls[idx] = el;
+    });
+    scope.querySelectorAll('[data-eq-slider]').forEach(input => {
+      const idx = parseInt(input.dataset.eqSlider, 10);
+      if (Number.isNaN(idx) || idx < 0 || idx >= EQ_BANDS.length) return;
+      eqSliderEls[idx] = input;
+      input.value = String(equalizerSettings[idx] ?? 0);
+      const handle = (evt) => {
+        const val = parseFloat(evt.target.value);
+        setEqualizerGain(idx, Number.isFinite(val) ? val : 0);
+      };
+      input.addEventListener('input', handle);
+      input.addEventListener('change', handle);
+    });
+
+    const resetBtn = scope.querySelector('[data-eq-reset]');
+    if (resetBtn) resetBtn.addEventListener('click', resetEqualizer);
+
+    updateAllEqMeters();
+  }
+
   function renderAIAssistant(){
     if (!aiPanelEl) return;
+
+    const eqBandsMarkup = EQ_BANDS.map((band, idx) => {
+      const current = clampEqValue(equalizerSettings[idx] ?? 0);
+      return `
+        <div class="bl-eq-band" data-eq-band="${idx}">
+          <div class="bl-eq-meter" data-eq-meter="${idx}">
+            <div class="bl-eq-meter-fill"></div>
+          </div>
+          <input type="range" min="-10" max="10" step="1" value="${current}" orient="vertical" data-eq-slider="${idx}" aria-label="${band.label} gain" class="bl-eq-slider" />
+          <span class="bl-eq-value" data-eq-value="${idx}">${formatDb(current)}</span>
+          <span class="bl-eq-label">${band.label}</span>
+        </div>
+      `;
+    }).join('');
 
     aiPanelEl.innerHTML = `
       <header class="space-y-2">
@@ -2164,6 +2318,18 @@ const AI_MELODY_SCALES = {
           <button class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" data-ai="random">Spark Variation</button>
         </div>
         <div id="aiStatus" class="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-[0.7rem] text-white/60">Load a kit to get started.</div>
+        <div class="mt-6 bl-eq-panel rounded-xl border border-white/10 bg-black/40 p-4">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h5 class="text-sm font-semibold text-white">Global Equalizer</h5>
+              <p class="text-xs text-white/60">Shape the overall level balance of your current pattern or full song.</p>
+            </div>
+            <button type="button" class="text-xs font-semibold text-primary hover:underline" data-eq-reset>Reset</button>
+          </div>
+          <div class="bl-eq-grid mt-4" data-eq-bands>
+            ${eqBandsMarkup}
+          </div>
+        </div>
       </div>
     `;
 
@@ -2172,6 +2338,8 @@ const AI_MELODY_SCALES = {
     aiDensityValue = aiPanelEl.querySelector('#aiDensityVal');
     aiStatusEl = aiPanelEl.querySelector('#aiStatus');
     aiMidiContextEl = aiPanelEl.querySelector('#aiMidiContext');
+
+    bindEqualizerUI(aiPanelEl);
 
     if (aiDensitySlider && aiDensityValue) {
       const updateDensityLabel = () => {
