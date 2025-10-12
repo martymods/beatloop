@@ -403,7 +403,7 @@
     const derivedApiBase = (() => {
       try {
         const origin = window.location.origin;
-        const host = window.location.hostname || '';
+        const host = (window.location.hostname || '').toLowerCase();
 
         // Allow a meta tag to explicitly set the API host when embedding Beatloop.
         const metaApi = document.querySelector('meta[name="beatloop-api-base"]')?.content;
@@ -421,8 +421,18 @@
 
           return origin.replace(/\/$/, '');
         }
+
+        // When loading the standalone HTML file (file:// protocol) we don't have a
+        // meaningful origin, so default to the local development API instead of the
+        // production hostname which fails to resolve in offline sandboxes.
+        const devDefault = 'http://localhost:10000';
+        if (host === 'localhost' || host === '127.0.0.1') {
+          const port = window.location.port ? `:${window.location.port}` : '';
+          return `${window.location.protocol}//${host}${port}`.replace(/\/$/, '') || devDefault;
+        }
+        return devDefault;
       } catch {}
-      return 'https://api.beatloop.co';
+      return 'http://localhost:10000';
     })();
     const API_BASE_DEFAULT = storedApiOverride || derivedApiBase;
     window.API_BASE = API_BASE_DEFAULT;
