@@ -4309,6 +4309,75 @@ stopBtn.addEventListener('click', () => {
 
   const AUTH = window.AUTH;
 
+  let sessionsApiOffline = navigator.onLine === false;
+
+  function isLikelyNetworkError(err) {
+    if (!err) return false;
+    const message = String(err?.message || err).toLowerCase();
+    return (
+      err.name === 'TypeError' ||
+      message.includes('failed to fetch') ||
+      message.includes('networkerror') ||
+      message.includes('net::')
+    );
+  }
+
+  function renderSessionsOfflineNotice() {
+    const wrap = document.getElementById('sessionsList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    const notice = document.createElement('div');
+    notice.dataset.sessionsOffline = '1';
+    notice.className = 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2';
+    notice.innerHTML = `
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p class="text-sm text-amber-100">
+          <strong>Offline mode.</strong> Live sessions are unavailable because the Beatloop API could not be reached.
+        </p>
+        <button type="button" data-sessions-retry class="self-start rounded-md bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-500/30">
+          Retry connection
+        </button>
+      </div>`;
+    const retry = notice.querySelector('[data-sessions-retry]');
+    if (retry) {
+      retry.addEventListener('click', () => {
+        sessionsApiOffline = false;
+        refreshSessions(true);
+      });
+    }
+    wrap.appendChild(notice);
+  }
+
+  function markSessionsApiOffline(err) {
+    if (!sessionsApiOffline) {
+      sessionWarn('Live sessions API unreachable; switching to offline mode', err);
+    }
+    sessionsApiOffline = true;
+    renderSessionsOfflineNotice();
+  }
+
+  function handleSessionsFetchError(err) {
+    if (isLikelyNetworkError(err) || navigator.onLine === false) {
+      markSessionsApiOffline(err);
+    } else if (err) {
+      sessionWarn('Session refresh failed', err);
+    }
+  }
+
+  if (sessionsApiOffline) {
+    markSessionsApiOffline(new Error('offline'));
+  }
+
+  window.addEventListener('online', () => {
+    if (!sessionsApiOffline) return;
+    sessionsApiOffline = false;
+    refreshSessions(true);
+  });
+
+  window.addEventListener('offline', () => {
+    markSessionsApiOffline(new Error('offline'));
+  });
+
   const sessionGridState = window.sessionGridState instanceof Map ? window.sessionGridState : new Map();
   window.sessionGridState = sessionGridState;
   const userColors = window.userColors instanceof Map ? window.userColors : new Map();
@@ -4684,11 +4753,23 @@ stopBtn.addEventListener('click', () => {
   }
 
   // --- Helpers to fetch + paint the sessions list ---
-  async function refreshSessions(){
+  async function refreshSessions(force = false){
+    const wrap = document.getElementById('sessionsList');
+    if (!wrap) return;
+    if (!force && sessionsApiOffline) {
+      renderSessionsOfflineNotice();
+      return;
+    }
     try{
       const r = await fetch(API + '/api/sessions', { headers: { ...AUTH.hdr() }});
-      const { sessions=[] } = await r.json();
-      const wrap = document.getElementById('sessionsList'); if (!wrap) return;
+      const payload = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        wrap.innerHTML = '';
+        sessionWarn('Session list request rejected', { status: r.status, payload });
+        return;
+      }
+      const { sessions=[] } = payload || {};
+      sessionsApiOffline = false;
       wrap.innerHTML = '';
       const freshSessions = sessions.filter(s => (s.participants || 0) > 0 && (s.openSec || 0) < (12 * 60 * 60));
       freshSessions.forEach(s => {
@@ -4710,16 +4791,19 @@ stopBtn.addEventListener('click', () => {
         wrap.appendChild(row);
       });
       wrap.querySelectorAll('.joinSession').forEach(btn => btn.onclick = () => joinSession(btn.dataset.id));
-    } catch {}
+    } catch (err) {
+      handleSessionsFetchError(err);
+    }
   }
   refreshSessions();
-  setInterval(refreshSessions, 5000);
+  setInterval(() => refreshSessions(), 5000);
   // Attempt stale session cleanup every minute (no-op if endpoint doesn’t exist)
 setInterval(() => {
+  if (sessionsApiOffline) return;
   fetch((window.API_BASE || API_BASE_DEFAULT) + '/api/sessions/cleanup', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('jwt') || '') }
-  }).catch(()=>{});
+  }).catch(handleSessionsFetchError);
 }, 60000);
 
 
@@ -4795,19 +4879,22 @@ setInterval(() => {
       const name = (document.getElementById('newSessionName')?.value || '').trim();
       let payload = null;
       let responseOk = false;
-      try {
-        const r = await fetch(API + '/api/sessions', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json', ...AUTH.hdr() },
-          body: JSON.stringify({ tempo, name })
-        });
-        payload = await r.json().catch(() => ({}));
-        responseOk = r.ok && !!payload?.id;
-        if (!responseOk) {
-          sessionWarn('Remote session creation failed', { status: r.status, payload });
+      if (!sessionsApiOffline) {
+        try {
+          const r = await fetch(API + '/api/sessions', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', ...AUTH.hdr() },
+            body: JSON.stringify({ tempo, name })
+          });
+          payload = await r.json().catch(() => ({}));
+          responseOk = r.ok && !!payload?.id;
+          if (!responseOk) {
+            sessionWarn('Remote session creation failed', { status: r.status, payload });
+          }
+        } catch (err) {
+          sessionWarn('Session creation network error', err);
+          handleSessionsFetchError(err);
         }
-      } catch (err) {
-        sessionWarn('Session creation network error', err);
       }
 
       if (!responseOk) {
@@ -4994,6 +5081,10 @@ setInterval(() => {
 
   async function joinSession(id){
     try {
+      if (sessionsApiOffline) {
+        alert('Live sessions are unavailable while the Beatloop API is offline. Start a new session to continue locally.');
+        return;
+      }
       sessionInfo('Attempting to join session', { sessionId: id });
       const offlineNotice = document.getElementById('sessionOfflineNotice');
       if (offlineNotice) offlineNotice.remove();
