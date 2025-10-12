@@ -151,7 +151,7 @@
   .bl-eq-meter::after{content:"";position:absolute;left:4px;right:4px;top:50%;height:1px;background:rgba(255,255,255,.35);opacity:.55}
   .bl-eq-meter-fill{position:absolute;left:0;right:0;bottom:0;height:50%;border-radius:999px;background:linear-gradient(180deg,#22d3ee 0%,#7c3aed 100%);box-shadow:0 0 16px rgba(124,58,237,.35);transition:height .15s ease,background .15s ease}
   .bl-eq-meter-fill.bl-eq-negative{background:linear-gradient(180deg,#fb7185 0%,#f97316 100%);box-shadow:0 0 16px rgba(249,115,22,.35)}
-  .bl-eq-slider{-webkit-appearance:slider-vertical;appearance:none;width:34px;height:128px;padding:0;margin:0;background:transparent;cursor:pointer;writing-mode:bt-lr}
+  .bl-eq-slider{-webkit-appearance:none;appearance:none;width:34px;height:128px;padding:0;margin:0;background:transparent;cursor:pointer;writing-mode:vertical-lr;direction:rtl}
   .bl-eq-slider::-webkit-slider-runnable-track{width:100%;height:100%;border-radius:999px;background:linear-gradient(180deg,rgba(148,163,184,.2),rgba(51,65,85,.35));border:1px solid rgba(148,163,184,.35)}
   .bl-eq-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:999px;background:linear-gradient(180deg,#ffffff 0%,#cbd5f5 100%);border:2px solid rgba(124,58,237,.9);box-shadow:0 0 12px rgba(124,58,237,.45);margin-left:-6px;margin-right:-6px;margin-top:-4px}
   .bl-eq-slider::-moz-range-track{width:100%;height:100%;border-radius:999px;background:linear-gradient(180deg,rgba(148,163,184,.2),rgba(51,65,85,.35));border:1px solid rgba(148,163,184,.35)}
@@ -4839,11 +4839,15 @@ setInterval(() => {
 
       const gridPayload = payload.grid || {};
       const rows = gridPayload.rows || (Array.isArray(rowLabels) ? rowLabels.length : 0);
+      const activeBank = typeof currentBank !== 'undefined' ? currentBank : 0;
       if (typeof ensurePatternForBank === 'function') {
-        ensurePatternForBank(typeof currentBank !== 'undefined' ? currentBank : 0, rows);
+        ensurePatternForBank(activeBank, rows);
       }
-      if (typeof patterns !== 'undefined' && Array.isArray(patterns[currentBank])) {
-        patterns[currentBank].forEach(row => { if (Array.isArray(row)) row.fill(false); });
+      if (typeof patterns !== 'undefined') {
+        const bankPatterns = patterns[activeBank];
+        if (Array.isArray(bankPatterns)) {
+          bankPatterns.forEach(row => { if (Array.isArray(row)) row.fill(false); });
+        }
       }
       if (typeof drawGrid === 'function' && Array.isArray(rowLabels) && rowLabels.length) {
         drawGrid(rowLabels);
