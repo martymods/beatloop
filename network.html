@@ -1646,6 +1646,8 @@ let mixBuses = null;
 let masterVolume = null;
 let butterRouteListEl = null;
 let butterPluginEl = null;
+let rowLabels = Array.isArray(window.__rowLabels) ? window.__rowLabels : [];
+window.__rowLabels = rowLabels;
 
 const AI_MELODY_SCALES = {
   minor:  [-12, -10, -8, -7, -5, -3, 0, 2, 3, 5, 7],
@@ -2764,7 +2766,7 @@ const AI_MELODY_SCALES = {
   let arrangement = Array(STEPS).fill(-1);   // 16 bars, -1 empty or 0..15 pattern index
 
   // per-row nodes
-  let volumes=[], panners=[], pitches=[], rowLabels=[];
+  let volumes=[], panners=[], pitches[];
   let kitSamplers=[], loopPlayers=[];
   let loopSources=[];
   const selectedLoops = new Set();
@@ -2874,6 +2876,7 @@ let lastBar = -1;             // arranger playhead column
   // ---------- Grid ----------
   function drawGrid(labels){
     rowLabels = labels.slice();
+    window.__rowLabels = rowLabels;
     gridWrap.innerHTML = '';
     const rows = labels.length;
     syncRowState(rows);
@@ -4016,6 +4019,12 @@ stopBtn.addEventListener('click', () => {
   let socket = null;
   let currentSessionId = null;
   let currentSessionCap = 8;
+  let rowLabels = Array.isArray(window.__rowLabels) ? window.__rowLabels : [];
+  Object.defineProperty(window, '__rowLabels', {
+    configurable: true,
+    get() { return rowLabels; },
+    set(value) { rowLabels = Array.isArray(value) ? value : []; }
+  });
   currentUserColor = window.currentUserColor || currentUserColor || null;
   let sessionCleanupFns = [];
   currentUserId = normalizeUserId(window.currentUserId || currentUserId || null);
@@ -4723,7 +4732,7 @@ setInterval(() => {
       socket.on('presence:update', ({ roster }) => renderParticipants(roster));
       socket.on('user:joined', ({ roster }) => renderParticipants(roster));
       socket.on('user:left',    ({ roster }) => renderParticipants(roster));
-      const leave = async ({ silent = false, skipServer = false } = {}) => {
+      const leave = async ({ silent = false, skipServer = false, useBeacon = false } = {}) => {
         const activeSession = currentSessionId;
         if (!activeSession) return;
         sessionInfo('Leaving session', { sessionId: activeSession, silent, skipServer });
@@ -4739,7 +4748,11 @@ setInterval(() => {
           socket = null;
         }
         if (!skipServer) {
-          const leaveReq = fetch(API + `/api/sessions/${activeSession}/leave`, { method:'POST', headers:{ ...AUTH.hdr() } });
+          const leaveReq = fetch(API + `/api/sessions/${activeSession}/leave`, {
+            method: 'POST',
+            headers: { ...AUTH.hdr() },
+            keepalive: !!useBeacon
+          });
           if (!silent) {
             try { await leaveReq; } catch {}
           } else {
@@ -4793,7 +4806,7 @@ setInterval(() => {
         grid._socketBound = true;
       }
 
-      const handleBeforeUnload = () => { leave({ silent: true, skipServer: true }); };
+      const handleBeforeUnload = () => { leave({ silent: true, useBeacon: true }); };
       window.addEventListener('beforeunload', handleBeforeUnload);
       sessionCleanupFns.push(() => window.removeEventListener('beforeunload', handleBeforeUnload));
 
