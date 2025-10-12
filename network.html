@@ -1693,16 +1693,42 @@ const AI_MELODY_SCALES = {
   dorian: [-12, -10, -8, -5, -3, -1, 0, 2, 5, 7, 9],
   pent:   [-12, -9, -7, -5, -2, 0, 3, 5, 7]
 };
-  const STEPS = 16, MAX_BANKS = 16;
+  const ROOT_SCOPE = typeof window !== 'undefined' ? window : globalThis;
+  const STEPS = (() => {
+    const direct = (typeof window !== 'undefined' && typeof window.STEPS === 'number') ? window.STEPS : undefined;
+    const globalGuess = (typeof globalThis !== 'undefined' && typeof globalThis.STEPS === 'number') ? globalThis.STEPS : undefined;
+    const candidate = Number.isFinite(direct) ? direct : (Number.isFinite(globalGuess) ? globalGuess : undefined);
+    return Number.isFinite(candidate) && candidate > 0 ? candidate : 16;
+  })();
+  const MAX_BANKS = (() => {
+    const direct = (typeof window !== 'undefined' && typeof window.MAX_BANKS === 'number') ? window.MAX_BANKS : undefined;
+    const globalGuess = (typeof globalThis !== 'undefined' && typeof globalThis.MAX_BANKS === 'number') ? globalThis.MAX_BANKS : undefined;
+    const candidate = Number.isFinite(direct) ? direct : (Number.isFinite(globalGuess) ? globalGuess : undefined);
+    return Number.isFinite(candidate) && candidate > 0 ? candidate : 16;
+  })();
+  ROOT_SCOPE.STEPS = STEPS;
+  ROOT_SCOPE.MAX_BANKS = MAX_BANKS;
+
+  function getStepCount(){
+    if (typeof STEPS === 'number' && Number.isFinite(STEPS) && STEPS > 0) return STEPS;
+    if (typeof ROOT_SCOPE?.STEPS === 'number' && Number.isFinite(ROOT_SCOPE.STEPS) && ROOT_SCOPE.STEPS > 0) return ROOT_SCOPE.STEPS;
+    return 16;
+  }
+
+  function getMaxBankCount(){
+    if (typeof MAX_BANKS === 'number' && Number.isFinite(MAX_BANKS) && MAX_BANKS > 0) return MAX_BANKS;
+    if (typeof ROOT_SCOPE?.MAX_BANKS === 'number' && Number.isFinite(ROOT_SCOPE.MAX_BANKS) && ROOT_SCOPE.MAX_BANKS > 0) return ROOT_SCOPE.MAX_BANKS;
+    return 16;
+  }
   // ---- Piano Roll state (per bank, per row)
   let SUBDIV = 4;              // 4 = 64th notes; try 8 or 16 for finer
   const PITCH_ROWS = 16;       // 0 (low) .. 15 (high)
   // pianoRoll[bank][row] = { notes: PITCH_ROWS x (STEPS*SUBDIV), loopSlice:{start,end} }
-  let pianoRoll = Array.from({ length: MAX_BANKS }, () => []);
+  let pianoRoll = Array.from({ length: getMaxBankCount() }, () => []);
 
   function ensurePR(bank, row){
     if (!pianoRoll[bank][row]) {
-      const cols = STEPS * SUBDIV;
+      const cols = getStepCount() * SUBDIV;
       const grid = Array.from({ length: PITCH_ROWS }, () => Array(cols).fill(null));
       pianoRoll[bank][row] = { notes: grid, loopSlice: { start: 0, end: 1 } };
     }
@@ -4365,8 +4391,11 @@ stopBtn.addEventListener('click', () => {
     try {
       const bank = typeof currentBank !== 'undefined' ? currentBank : 0;
       const pat = patterns[bank] || (patterns[bank] = []);
-      if (!Array.isArray(pat[row])) pat[row] = Array(STEPS).fill(false);
-      pat[row][col] = !!on;
+      const steps = getStepCount();
+      if (!Array.isArray(pat[row])) pat[row] = Array(steps).fill(false);
+      if (col >= 0 && col < steps) {
+        pat[row][col] = !!on;
+      }
     } catch {}
   }
 
@@ -4374,6 +4403,7 @@ stopBtn.addEventListener('click', () => {
     try {
       const rows = Array.isArray(rowLabels) ? rowLabels.length : 0;
       if (!rows) return;
+      const steps = getStepCount();
       const candidateBank = Number.isFinite(bank) ? bank : Number(bank);
       const targetBank = Number.isFinite(candidateBank) ? candidateBank : (typeof currentBank !== 'undefined' ? currentBank : 0);
       const ensurePattern = typeof window.ensurePatternForBank === 'function'
@@ -4392,7 +4422,7 @@ stopBtn.addEventListener('click', () => {
       const pat = patternSource[targetBank] || [];
       for (let r = 0; r < rows; r++){
         if (!Array.isArray(pat[r])) {
-          pat[r] = Array(STEPS).fill(false);
+          pat[r] = Array(steps).fill(false);
         } else {
           pat[r].fill(false);
         }
@@ -4403,8 +4433,8 @@ stopBtn.addEventListener('click', () => {
         const rr = Number(rowStr);
         const cc = Number(colStr);
         if (!Number.isFinite(rr) || !Number.isFinite(cc)) return;
-        if (rr < 0 || rr >= rows || cc < 0 || cc >= STEPS) return;
-        if (!Array.isArray(pat[rr])) pat[rr] = Array(STEPS).fill(false);
+        if (rr < 0 || rr >= rows || cc < 0 || cc >= steps) return;
+        if (!Array.isArray(pat[rr])) pat[rr] = Array(steps).fill(false);
         pat[rr][cc] = true;
       });
     } catch (err) {
@@ -4938,13 +4968,32 @@ setInterval(() => {
         try { Tone.Transport.stop(); } catch {}
         setPlayPauseState(false);
         runSessionCleanup();
-        if (!skipServer) {
-          try { socket && socket.emit('session:leave', { sessionId: activeSession }); } catch {}
-        }
-        if (socket) {
+      let socketAck = Promise.resolve();
+      if (!skipServer && socket) {
+        socketAck = new Promise((resolve) => {
+          let settled = false;
+          try {
+            socket.emit('session:leave', { sessionId: activeSession }, () => {
+              settled = true;
+              resolve();
+            });
+          } catch {
+            resolve();
+            return;
+          }
+          setTimeout(() => { if (!settled) resolve(); }, 500);
+        });
+      }
+      if (socket) {
+        try {
+          await socketAck;
+        } finally {
           try { socket.removeAllListeners(); socket.disconnect(); } catch {}
           socket = null;
         }
+      } else {
+        await socketAck;
+      }
         if (!skipServer) {
           const leaveReq = fetch(API + `/api/sessions/${activeSession}/leave`, {
             method: 'POST',

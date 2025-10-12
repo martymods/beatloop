@@ -736,11 +736,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('session:leave', async ({ sessionId }) => {
+  socket.on('session:leave', async ({ sessionId } = {}, ack) => {
     socket.leave(`session:${sessionId}`);
     socket.data.sessions.delete(sessionId);
     const s = await Session.findById(sessionId);
-    if (!s) return;
+    if (!s) {
+      if (typeof ack === 'function') ack({ ok: true, participants: 0 });
+      return;
+    }
     s.participants = s.participants.filter(p => {
       const normalized = toIdString(p);
       const target = toIdString(socket.data.user._id);
@@ -754,6 +757,9 @@ io.on('connection', (socket) => {
     if (s.participants.length === 0) s.lastEmptyAt = new Date();
     await s.save();
     await broadcastRoster(sessionId);
+    if (typeof ack === 'function') {
+      ack({ ok: true, participants: s.participants.length });
+    }
   });
 
   // when a browser tab closes, remove from any joined sessions
