@@ -463,7 +463,22 @@
     registerApiBase(metaApiBase);
     registerApiBase(storedApiOverride);
     registerApiBase(derivedApiBase);
-    try { registerApiBase(window.location.origin); } catch {}
+
+    const registerLocationOrigin = () => {
+      try {
+        const origin = window.location.origin;
+        if (!origin || origin === 'null' || origin === 'undefined') return;
+        const { hostname } = new URL(origin);
+        const normalized = (hostname || '').toLowerCase();
+        const isMarketingHost = normalized === 'beatloop.co'
+          || normalized === 'www.beatloop.co';
+        if (isMarketingHost) {
+          return;
+        }
+        registerApiBase(origin);
+      } catch {}
+    };
+    registerLocationOrigin();
     registerApiBase('https://beatloop-api.onrender.com');
     registerApiBase('https://api.beatloop.co');
     registerApiBase('http://localhost:10000');

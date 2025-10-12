@@ -148,9 +148,25 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json({ limit: '5mb' }));
-const uploadsRoot = path.join(process.cwd(), 'uploads');
+const projectRoot = process.cwd();
+const uploadsRoot = path.join(projectRoot, 'uploads');
 fs.mkdirSync(uploadsRoot, { recursive: true });
 app.use('/uploads', express.static(uploadsRoot));
+
+const STATIC_ASSET_MOUNTS = [
+  { mount: '/audio', dir: 'audio' },
+  { mount: '/img', dir: 'img' }
+];
+
+for (const { mount, dir } of STATIC_ASSET_MOUNTS) {
+  const absoluteDir = path.join(projectRoot, dir);
+  if (!fs.existsSync(absoluteDir)) continue;
+  app.use(mount, express.static(absoluteDir, {
+    fallthrough: true,
+    maxAge: '7d',
+    redirect: false
+  }));
+}
 
 /* ---- Health check ---- */
 app.get('/api/health', (req, res) => {
