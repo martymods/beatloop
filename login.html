@@ -43,7 +43,7 @@
 
 <!-- API + auth helpers -->
 <script>
-  const API_BASE = localStorage.getItem('beatloop_api') || 'https://beatloop-api.onrender.com';
+  const API_BASE = localStorage.getItem('beatloop_api') || 'https://api.beatloop.co';
   const AUTH = {
     token: localStorage.getItem('jwt') || '',
     set(t){ this.token = t; localStorage.setItem('jwt', t); },
