@@ -536,18 +536,22 @@
           const isLikelyMarketingHost = (() => {
             try {
               const { hostname } = new URL(candidate);
+
               if (!hostname) return false;
               const normalized = hostname.toLowerCase();
               if (normalized === 'api.beatloop.co') return false;
               return normalized === 'beatloop.co' || normalized.endsWith('.beatloop.co');
+
             } catch {
               return false;
             }
           })();
           const isApiPath = /^\/api\//i.test(parsed.path);
+
           const shouldRetry = response.status === 404
             && isApiPath
             && isLikelyMarketingHost;
+
           if (shouldRetry) {
             unreachableApiBases.add(candidate);
             lastResponse = response;
