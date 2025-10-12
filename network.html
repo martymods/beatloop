@@ -305,7 +305,7 @@
     </div>
     <!-- (JS injects the participants strip right after the title) -->
 
-    <div class="mt-3 grid gap-3 md:grid-cols-[220px_1fr]">
+    <div id="studioLayout" class="mt-3 grid gap-3 md:grid-cols-[220px_1fr]">
       <!-- Left controls -->
       <div class="rounded-xl border border-white/10 bg-white/5 p-3 max-h-[70vh] overflow-y-auto overscroll-contain" style="touch-action: pan-y;">
         <label class="block text-xs text-white/60 mb-1">Tempo</label>
@@ -397,25 +397,46 @@
     */
 
     // ---------- API base helpers ----------
+    function normalizeApiBase(input){
+      if (!input) return null;
+      try {
+        const candidate = new URL(String(input).trim(), window.location.href);
+        if (!/^https?:$/i.test(candidate.protocol)) return null;
+        return candidate.origin.replace(/\/$/, '');
+      } catch {
+        return null;
+      }
+    }
+
+    const urlApiOverride = (() => {
+      try {
+        const url = new URL(window.location.href);
+        const param =
+          url.searchParams.get('api') ||
+          url.searchParams.get('api_base') ||
+          url.searchParams.get('api-base');
+        return normalizeApiBase(param);
+      } catch {
+        return null;
+      }
+    })();
+
     const storedApiOverride = (() => {
+      if (urlApiOverride) return urlApiOverride;
       try {
         const raw = localStorage.getItem('beatloop_api');
         if (!raw) return null;
-        const trimmed = String(raw).trim();
-        if (!trimmed) return null;
-        const normalized = trimmed.replace(/\/$/, '');
-        try {
-          const candidate = new URL(normalized, window.location.href);
-          if (!/^https?:$/i.test(candidate.protocol)) return null;
-          const host = candidate.hostname || '';
-          if (/beatloop-api\.onrender\.com$/i.test(host)) {
-            localStorage.removeItem('beatloop_api');
-            return null;
-          }
-          return candidate.origin;
-        } catch {
+        const normalized = normalizeApiBase(raw);
+        if (!normalized) {
+          localStorage.removeItem('beatloop_api');
           return null;
         }
+        const host = new URL(normalized).hostname || '';
+        if (/beatloop-api\.onrender\.com$/i.test(host)) {
+          localStorage.removeItem('beatloop_api');
+          return null;
+        }
+        return normalized;
       } catch {
         return null;
       }
@@ -428,21 +449,34 @@
         // Allow a meta tag to explicitly set the API host when embedding Beatloop.
         const metaApi = document.querySelector('meta[name="beatloop-api-base"]')?.content;
         if (metaApi) {
-          return metaApi.replace(/\/$/, '');
+          const normalized = normalizeApiBase(metaApi);
+          if (normalized) return normalized;
+        }
+
+        if (urlApiOverride) {
+          return urlApiOverride;
+        }
+
+        if (host) {
+          const lowerHost = host.toLowerCase();
+          if (lowerHost === 'localhost' || lowerHost === '127.0.0.1' || lowerHost === '0.0.0.0') {
+            const port = window.location.port || '10000';
+            const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+            return `${protocol}//${lowerHost}:${port}`.replace(/\/$/, '');
+          }
+          if (/\.beatloop\.co$/i.test(lowerHost)) {
+            return 'https://api.beatloop.co';
+          }
+          if (origin && /^https?:/i.test(origin)) {
+            return origin.replace(/\/$/, '');
+          }
         }
 
         if (origin && origin.startsWith('http')) {
-          // On the production domain the REST API lives on a separate host. When the
-          // site is served from beatloop.co we should keep using the deployed API
-          // backend instead of the marketing site origin to avoid 404s on /api/*.
-          if (/\.beatloop\.co$/i.test(host)) {
-            return 'https://api.beatloop.co';
-          }
-
           return origin.replace(/\/$/, '');
         }
       } catch {}
-      return 'https://api.beatloop.co';
+      return normalizeApiBase('http://localhost:10000') || 'http://localhost:10000';
     })();
     const API_BASE_DEFAULT = storedApiOverride || derivedApiBase;
     window.API_BASE = API_BASE_DEFAULT;
@@ -4689,6 +4723,65 @@ setInterval(() => {
 }, 60000);
 
 
+  let offlineSessionSeq = 0;
+
+  function startOfflineSessionFallback({ tempo, name, reason }) {
+    try {
+      offlineSessionSeq += 1;
+      const offlineId = `offline-${Date.now()}-${offlineSessionSeq}`;
+      sessionWarn('Falling back to offline session', { tempo, name, reason });
+      currentSessionCap = 1;
+      currentSessionId = offlineId;
+      window.currentSessionId = offlineId;
+      if (typeof setFollowedUser === 'function') {
+        setFollowedUser(null);
+      } else {
+        window.followedUserId = null;
+        if (typeof applyFollowHighlight === 'function') {
+          applyFollowHighlight();
+        }
+      }
+      resetSessionGridVisuals();
+      const bpmEl = document.getElementById('blBpm');
+      if (bpmEl) {
+        bpmEl.value = tempo;
+        const valEl = document.getElementById('blBpmVal');
+        if (valEl) valEl.textContent = tempo;
+      }
+      const storedUser = (() => {
+        try { return JSON.parse(localStorage.getItem('user') || 'null'); }
+        catch { return null; }
+      })();
+      const offlineUser = storedUser && typeof storedUser === 'object'
+        ? storedUser
+        : (currentUser || {});
+      const hostParticipant = {
+        id: normalizeUserId(offlineUser?.id || offlineUser?._id) || 'offline-host',
+        name: offlineUser?.name || 'You',
+        email: offlineUser?.email || '',
+        avatar: sanitizeAvatar(offlineUser?.avatar) || fallbackAvatar,
+        color: '#f97316'
+      };
+      renderParticipants([hostParticipant]);
+      const studioShell = document.getElementById('beatloopStudio');
+      const layout = document.getElementById('studioLayout');
+      if (studioShell && layout && !document.getElementById('sessionOfflineNotice')) {
+        const notice = document.createElement('div');
+        notice.id = 'sessionOfflineNotice';
+        notice.className = 'mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100';
+        notice.innerHTML = '<strong>Offline mode.</strong> Multiplayer features are unavailable because the Beatloop API could not be reached. You can keep creating beats locally.';
+        layout.before(notice);
+      }
+      document.getElementById('beatloopStudio')?.classList.remove('hidden');
+      window.ensureToneStarted?.({ waitForUser: false });
+      sessionInfo('Offline session ready', { sessionId: offlineId, tempo, name });
+      return true;
+    } catch (err) {
+      sessionWarn('Unable to start offline fallback session', err);
+      return false;
+    }
+  }
+
   // --- Start Session (optional name) ---
   document.getElementById('btnNewSession')?.addEventListener('click', async () => {
     try {
@@ -4700,15 +4793,29 @@ setInterval(() => {
       const bpmEl = document.getElementById('blBpm');
       const tempo = bpmEl ? +bpmEl.value : 92;
       const name = (document.getElementById('newSessionName')?.value || '').trim();
-      const r = await fetch(API + '/api/sessions', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', ...AUTH.hdr() },
-        body: JSON.stringify({ tempo, name })
-      });
-      const payload = await r.json().catch(() => ({}));
-      if (!r.ok || !payload?.id) {
-        const message = payload?.error || 'Could not start session. Please try again.';
-        alert(message);
+      let payload = null;
+      let responseOk = false;
+      try {
+        const r = await fetch(API + '/api/sessions', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', ...AUTH.hdr() },
+          body: JSON.stringify({ tempo, name })
+        });
+        payload = await r.json().catch(() => ({}));
+        responseOk = r.ok && !!payload?.id;
+        if (!responseOk) {
+          sessionWarn('Remote session creation failed', { status: r.status, payload });
+        }
+      } catch (err) {
+        sessionWarn('Session creation network error', err);
+      }
+
+      if (!responseOk) {
+        const usedFallback = startOfflineSessionFallback({ tempo, name, reason: 'network' });
+        if (!usedFallback) {
+          const message = payload?.error || 'Could not start session. Please try again.';
+          alert(message);
+        }
         return;
       }
       const { id } = payload;
@@ -4716,7 +4823,10 @@ setInterval(() => {
       await window.ensureToneStarted?.({ waitForUser: false });
       joinSession(id);
     } catch {
-      alert('Could not start session.');
+      const usedFallback = startOfflineSessionFallback({ tempo, name, reason: 'unexpected' });
+      if (!usedFallback) {
+        alert('Could not start session.');
+      }
     }
   });
 
@@ -4885,6 +4995,8 @@ setInterval(() => {
   async function joinSession(id){
     try {
       sessionInfo('Attempting to join session', { sessionId: id });
+      const offlineNotice = document.getElementById('sessionOfflineNotice');
+      if (offlineNotice) offlineNotice.remove();
       if (!id) { alert('Session unavailable.'); return; }
       if (!hasAuthToken(AUTH.token)) {
         alert('Please sign in with your Beatloop account to join live sessions.');
