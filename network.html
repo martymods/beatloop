@@ -461,6 +461,20 @@
         const follow = normalizeUserId(followRaw);
         if (!follow) return true;
 
+        const activeSelfIds = new Set();
+        const addSelfCandidate = (candidate) => {
+          const normalized = normalizeUserId(candidate);
+          if (normalized) activeSelfIds.add(normalized);
+        };
+        addSelfCandidate(window.currentUserId);
+        const globalUser = window.currentUser;
+        if (globalUser && typeof globalUser === 'object') {
+          addSelfCandidate(globalUser.id);
+          addSelfCandidate(globalUser._id);
+          addSelfCandidate(globalUser.userId);
+        }
+        if (activeSelfIds.has(follow)) return true;
+
         const key = `${row}-${col}`;
         const map = window.sessionGridState;
         let ownerFromMap = null;
@@ -4843,15 +4857,21 @@ setInterval(() => {
       currentSessionCap = payload.maxPlayers || 8;
       currentSessionId = id;
       window.currentSessionId = currentSessionId;
-      await window.ensureToneStarted?.({ waitForUser: false });
       if (typeof setFollowedUser === 'function') {
         setFollowedUser(null);
       } else {
         window.followedUserId = null;
         sessionDebug('Follow state reset to everyone (fallback path)');
+        if (typeof applyFollowHighlight === 'function') {
+          applyFollowHighlight();
+        }
       }
+      await window.ensureToneStarted?.({ waitForUser: false });
       document.getElementById('beatloopStudio')?.classList.remove('hidden');
       renderParticipants(participants);
+      if (typeof applyFollowHighlight === 'function') {
+        applyFollowHighlight();
+      }
       sessionInfo('Joined session successfully', {
         sessionId: id,
         tempo: payload.tempo,
