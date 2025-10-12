@@ -398,27 +398,7 @@
 
     // ---------- API base helpers ----------
     const storedApiOverride = (() => {
-      try {
-        const raw = localStorage.getItem('beatloop_api');
-        if (!raw) return null;
-        const trimmed = String(raw).trim();
-        if (!trimmed) return null;
-        const normalized = trimmed.replace(/\/$/, '');
-        try {
-          const candidate = new URL(normalized, window.location.href);
-          if (!/^https?:$/i.test(candidate.protocol)) return null;
-          const host = candidate.hostname || '';
-          if (/beatloop-api\.onrender\.com$/i.test(host)) {
-            localStorage.removeItem('beatloop_api');
-            return null;
-          }
-          return candidate.origin;
-        } catch {
-          return null;
-        }
-      } catch {
-        return null;
-      }
+      try { return localStorage.getItem('beatloop_api'); } catch { return null; }
     })();
     const derivedApiBase = (() => {
       try {
@@ -1754,32 +1734,6 @@ const AI_MELODY_SCALES = {
     if (typeof ROOT_SCOPE?.MAX_BANKS === 'number' && Number.isFinite(ROOT_SCOPE.MAX_BANKS) && ROOT_SCOPE.MAX_BANKS > 0) return ROOT_SCOPE.MAX_BANKS;
     return 16;
   }
-  ROOT_SCOPE.getStepCount = getStepCount;
-  ROOT_SCOPE.getMaxBankCount = getMaxBankCount;
-
-  function getSafeStepCount(){
-    try {
-      const value = getStepCount();
-      if (Number.isFinite(value) && value > 0) return value;
-    } catch {}
-    try {
-      const fallbackFn = ROOT_SCOPE?.getStepCount;
-      if (typeof fallbackFn === 'function') {
-        const value = fallbackFn();
-        if (Number.isFinite(value) && value > 0) return value;
-      }
-    } catch {}
-    const fallback = (() => {
-      if (typeof ROOT_SCOPE?.STEPS === 'number' && Number.isFinite(ROOT_SCOPE.STEPS) && ROOT_SCOPE.STEPS > 0) {
-        return ROOT_SCOPE.STEPS;
-      }
-      if (typeof STEPS === 'number' && Number.isFinite(STEPS) && STEPS > 0) {
-        return STEPS;
-      }
-      return 16;
-    })();
-    return fallback;
-  }
   // ---- Piano Roll state (per bank, per row)
   let SUBDIV = 4;              // 4 = 64th notes; try 8 or 16 for finer
   const PITCH_ROWS = 16;       // 0 (low) .. 15 (high)
@@ -1788,7 +1742,7 @@ const AI_MELODY_SCALES = {
 
   function ensurePR(bank, row){
     if (!pianoRoll[bank][row]) {
-      const cols = getSafeStepCount() * SUBDIV;
+      const cols = getStepCount() * SUBDIV;
       const grid = Array.from({ length: PITCH_ROWS }, () => Array(cols).fill(null));
       pianoRoll[bank][row] = { notes: grid, loopSlice: { start: 0, end: 1 } };
     }
@@ -4451,7 +4405,7 @@ stopBtn.addEventListener('click', () => {
     try {
       const bank = typeof currentBank !== 'undefined' ? currentBank : 0;
       const pat = patterns[bank] || (patterns[bank] = []);
-      const steps = getSafeStepCount();
+      const steps = getStepCount();
       if (!Array.isArray(pat[row])) pat[row] = Array(steps).fill(false);
       if (col >= 0 && col < steps) {
         pat[row][col] = !!on;
@@ -4463,7 +4417,7 @@ stopBtn.addEventListener('click', () => {
     try {
       const rows = Array.isArray(rowLabels) ? rowLabels.length : 0;
       if (!rows) return;
-      const steps = getSafeStepCount();
+      const steps = getStepCount();
       const candidateBank = Number.isFinite(bank) ? bank : Number(bank);
       const targetBank = Number.isFinite(candidateBank) ? candidateBank : (typeof currentBank !== 'undefined' ? currentBank : 0);
       const ensurePattern = typeof window.ensurePatternForBank === 'function'
