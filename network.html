@@ -4182,11 +4182,43 @@ stopBtn.addEventListener('click', () => {
     } catch {}
   }
 
+  function syncSessionPatternFromGrid({ bank } = {}){
+    try {
+      const rows = Array.isArray(rowLabels) ? rowLabels.length : 0;
+      if (!rows) return;
+      const candidateBank = Number.isFinite(bank) ? bank : Number(bank);
+      const targetBank = Number.isFinite(candidateBank) ? candidateBank : (typeof currentBank !== 'undefined' ? currentBank : 0);
+      ensurePatternForBank(targetBank, rows);
+      const pat = patterns[targetBank] || [];
+      for (let r = 0; r < rows; r++){
+        if (!Array.isArray(pat[r])) {
+          pat[r] = Array(STEPS).fill(false);
+        } else {
+          pat[r].fill(false);
+        }
+      }
+      sessionGridState.forEach((info, key) => {
+        if (!info || info.on === false) return;
+        const [rowStr, colStr] = key.split('-');
+        const rr = Number(rowStr);
+        const cc = Number(colStr);
+        if (!Number.isFinite(rr) || !Number.isFinite(cc)) return;
+        if (rr < 0 || rr >= rows || cc < 0 || cc >= STEPS) return;
+        if (!Array.isArray(pat[rr])) pat[rr] = Array(STEPS).fill(false);
+        pat[rr][cc] = true;
+      });
+    } catch (err) {
+      sessionWarn('Unable to rebuild session pattern from grid state', err);
+    }
+  }
+  window.syncSessionPatternFromGrid = syncSessionPatternFromGrid;
+
   function applySessionStep(row, col, on, color, userId){
     const key = `${row}-${col}`;
     const previous = sessionGridState.get(key) || null;
     const previousOwner = previous ? normalizeUserId(previous.userId ?? previous.user ?? previous.owner) : null;
-    const ownerId = normalizeUserId(userId) || previousOwner || null;
+    const ownerIdRaw = userId ?? previous?.userId ?? previous?.user ?? previous?.owner;
+    const ownerId = normalizeUserId(ownerIdRaw) || (typeof ownerIdRaw === 'string' ? ownerIdRaw.trim() || null : null) || previousOwner || null;
     const colorToApply = color || previous?.color || null;
     updatePatternCell(row, col, on);
     const cell = document.querySelector(`.step[data-r="${row}"][data-c="${col}"]`);
@@ -4209,10 +4241,11 @@ stopBtn.addEventListener('click', () => {
       updateSingleCellFollowState(cell);
     }
     if (on) {
-      sessionGridState.set(key, { userId: ownerId, color: colorToApply || null });
+      sessionGridState.set(key, { userId: ownerId, color: colorToApply || null, on: true });
     } else {
       sessionGridState.delete(key);
     }
+    syncSessionPatternFromGrid({ bank: typeof currentBank !== 'undefined' ? currentBank : 0 });
   }
 
   function refreshStepOwnerColors(){
