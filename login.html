@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>beatloop — Sign In</title>
   <meta name="description" content="Sign in to beatloop to access the creator network, comment on tracks and share your own." />
+  <meta name="beatloop-api-base" content="https://beatloop-api.onrender.com" />
   <link rel="stylesheet" href="./styles/tailwind.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,7 +44,38 @@
 
 <!-- API + auth helpers -->
 <script>
-  const API_BASE = localStorage.getItem('beatloop_api') || 'https://api.beatloop.co';
+  const resolveApiBase = () => {
+    const normalize = (value) => {
+      if (typeof value !== 'string') return '';
+      const trimmed = value.trim();
+      if (!trimmed) return '';
+      if (!/^https?:\/\//i.test(trimmed)) return '';
+      return trimmed.replace(/\/+$/, '');
+    };
+
+    const candidates = [];
+    try { candidates.push(localStorage.getItem('beatloop_api')); } catch {}
+    try { candidates.push(document.querySelector('meta[name="beatloop-api-base"]')?.content); } catch {}
+    candidates.push('https://beatloop-api.onrender.com');
+    candidates.push('https://api.beatloop.co');
+    candidates.push('http://localhost:10000');
+
+    for (const candidate of candidates) {
+      const normalized = normalize(candidate);
+      if (normalized) {
+        return normalized;
+      }
+    }
+
+    return 'http://localhost:10000';
+  };
+
+  const API_BASE = resolveApiBase();
+  try {
+    if (API_BASE) {
+      localStorage.setItem('beatloop_api', API_BASE);
+    }
+  } catch {}
   const AUTH = {
     token: localStorage.getItem('jwt') || '',
     set(t){ this.token = t; localStorage.setItem('jwt', t); },
