@@ -195,9 +195,18 @@ function toIdString(value) {
     return Number.isFinite(value) ? String(value) : null;
   }
   if (typeof value === 'object') {
+    if (value instanceof mongoose.Types.ObjectId) {
+      return value.toHexString();
+    }
     if (typeof value.$oid === 'string') return toIdString(value.$oid);
-    if (typeof value._id !== 'undefined') return toIdString(value._id);
-    if (typeof value.id !== 'undefined') return toIdString(value.id);
+    if (typeof value._id !== 'undefined') {
+      const nested = value._id;
+      if (nested && nested !== value) return toIdString(nested);
+    }
+    if (typeof value.id !== 'undefined') {
+      const nested = value.id;
+      if (nested && nested !== value) return toIdString(nested);
+    }
     if (typeof value.toHexString === 'function') return toIdString(value.toHexString());
     if (typeof value.toString === 'function' && value.toString !== Object.prototype.toString) {
       const str = value.toString();
