@@ -4923,6 +4923,7 @@ setInterval(() => {
         try { socket.removeAllListeners(); socket.disconnect(); } catch {}
       }
       socket = io(API, { auth: { token: AUTH.token }});
+      socket.emit('session:join', { sessionId: id });
 
       const tempoHandler = ({ tempo }) => {
         const bpm = document.getElementById('blBpm');
@@ -4976,9 +4977,6 @@ setInterval(() => {
       socket.on('presence:update', ({ roster }) => renderParticipants(roster));
       socket.on('user:joined', ({ roster }) => renderParticipants(roster));
       socket.on('user:left',    ({ roster }) => renderParticipants(roster));
-      const tagHandler = ({ url, at }) => scheduleTagPlayback(url, at);
-      socket.on('tag:play', tagHandler);
-
       const leave = async ({ silent = false, skipServer = false, useBeacon = false } = {}) => {
         const activeSession = currentSessionId;
         if (!activeSession) return;
@@ -5039,6 +5037,9 @@ setInterval(() => {
         refreshSessions();
       };
 
+      const tagHandler = ({ url, at }) => scheduleTagPlayback(url, at);
+      socket.on('tag:play', tagHandler);
+
       const endedHandler = async () => {
         alert('This session has ended.');
         await leave({ silent: true });
@@ -5089,8 +5090,6 @@ setInterval(() => {
       sessionCleanupFns.push(() => { socket && socket.off('grid:update', gridHandler); });
       sessionCleanupFns.push(() => { socket && socket.off('tag:play', tagHandler); });
       sessionCleanupFns.push(() => { socket && socket.off('session:ended', endedHandler); });
-
-      socket.emit('session:join', { sessionId: id });
     } catch (err) {
       sessionWarn('Failed to join session', err);
       alert('Could not join session');
