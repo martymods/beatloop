@@ -113,7 +113,7 @@ function normalizeOrigin(value) {
 
 const FRONTENDS = new Set(
   FRONTEND_ORIGINS
-    .split(',')
+    .split(/[\s,]+/)
     .map(s => normalizeOrigin(s.trim()))
     .filter(Boolean)
 );
