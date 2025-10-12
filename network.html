@@ -3531,6 +3531,102 @@ let lastBar = -1;             // arranger playhead column
     renderAssetPicker(instrumentsWrap, INSTRUMENTS, selectedInstruments);
   }
 
+  function flattenLibraryEntries(library){
+    const items = [];
+    if (!library || typeof library !== 'object') return items;
+    Object.entries(library).forEach(([pack, files]) => {
+      if (!Array.isArray(files)) return;
+      files.forEach(file => {
+        items.push({ pack, file });
+      });
+    });
+    return items;
+  }
+
+  function renderAssetPreviewList(target, library, { limit = 8 } = {}){
+    if (!target) return;
+    const capped = Math.max(1, Number(limit) || 8);
+    const items = flattenLibraryEntries(library);
+    const total = items.length;
+    target.innerHTML = '';
+
+    if (!total) {
+      const empty = document.createElement('p');
+      empty.className = 'text-xs text-white/50';
+      empty.textContent = 'Add files in Beatloop Studio to see them here.';
+      target.appendChild(empty);
+      return;
+    }
+
+    items.slice(0, capped).forEach(({ pack, file }) => {
+      const packLabel = (typeof pack === 'string' && pack.length)
+        ? pack[0].toUpperCase() + pack.slice(1)
+        : 'Pack';
+      const row = document.createElement('div');
+      row.className = 'flex items-center justify-between rounded-md bg-white/5 px-2 py-1 text-xs text-white/80';
+      const name = document.createElement('span');
+      name.className = 'truncate pr-2';
+      name.textContent = filenameLabel(file);
+      const tag = document.createElement('span');
+      tag.className = 'shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-white/60';
+      tag.textContent = packLabel;
+      row.appendChild(name);
+      row.appendChild(tag);
+      target.appendChild(row);
+    });
+
+    if (total > capped) {
+      const more = document.createElement('p');
+      more.className = 'text-[0.65rem] text-white/50';
+      more.textContent = `+${total - capped} more available inside Beatloop Studio`;
+      target.appendChild(more);
+    }
+  }
+
+  async function renderMidiPreviewList(target, { limit = 10 } = {}){
+    if (!target) return;
+    const capped = Math.max(1, Number(limit) || 10);
+    target.innerHTML = '<p class="text-xs text-white/60">Loading MIDI catalog…</p>';
+    try {
+      const catalog = await ensureMidiIndex();
+      const items = Array.isArray(catalog) ? catalog : [];
+      target.innerHTML = '';
+      if (!items.length) {
+        const empty = document.createElement('p');
+        empty.className = 'text-xs text-white/50';
+        empty.textContent = 'Upload MIDI files in Beatloop Studio to populate this list.';
+        target.appendChild(empty);
+        return;
+      }
+
+      items.slice(0, capped).forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'truncate rounded-md bg-white/5 px-2 py-1 text-xs text-white/80';
+        row.textContent = item.displayName || item.file || item.path || 'MIDI file';
+        target.appendChild(row);
+      });
+
+      if (items.length > capped) {
+        const more = document.createElement('p');
+        more.className = 'text-[0.65rem] text-white/50';
+        more.textContent = `+${items.length - capped} more ready in the full MIDI browser`;
+        target.appendChild(more);
+      }
+    } catch (err) {
+      target.innerHTML = '';
+      const error = document.createElement('p');
+      error.className = 'text-xs text-rose-300/80';
+      error.textContent = 'Unable to load MIDI library preview right now.';
+      target.appendChild(error);
+    }
+  }
+
+  function renderSessionLibraryPreview(){
+    renderAssetPreviewList(document.getElementById('sessionLoopsPreview'), LOOPS, { limit: 8 });
+    renderAssetPreviewList(document.getElementById('sessionInstrumentsPreview'), INSTRUMENTS, { limit: 8 });
+    renderMidiPreviewList(document.getElementById('sessionMidiPreview'), { limit: 12 });
+  }
+
   // ---------- MIDI Browser ----------
   let midiBrowserInitialized = false;
 
@@ -4833,8 +4929,26 @@ stopBtn.addEventListener('click', () => {
           <button id="btnNewSession" class="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold">Start Session</button>
         </div>
       </div>
-      <div id="sessionsList" class="mt-3 grid gap-2"></div>`;
+      <div id="sessionsList" class="mt-3 grid gap-2"></div>
+      <div class="mt-4 grid gap-3 md:grid-cols-2">
+        <section class="rounded-xl border border-white/10 bg-white/5 p-3">
+          <h4 class="text-sm font-semibold text-white">Loops Library</h4>
+          <p class="mt-1 text-xs text-white/60">Preview a handful of the loops waiting inside Beatloop Studio.</p>
+          <div id="sessionLoopsPreview" class="mt-2 space-y-1"></div>
+        </section>
+        <section class="rounded-xl border border-white/10 bg-white/5 p-3">
+          <h4 class="text-sm font-semibold text-white">Instruments Library</h4>
+          <p class="mt-1 text-xs text-white/60">Key-mapped instruments ready to trigger from the grid.</p>
+          <div id="sessionInstrumentsPreview" class="mt-2 space-y-1"></div>
+        </section>
+        <section class="md:col-span-2 rounded-xl border border-white/10 bg-white/5 p-3">
+          <h4 class="text-sm font-semibold text-white">MIDI Library</h4>
+          <p class="mt-1 text-xs text-white/60">Popular MIDI starters available even before you join a room.</p>
+          <div id="sessionMidiPreview" class="mt-2 space-y-1"></div>
+        </section>
+      </div>`;
     feed.prepend(sessionsCard);
+    renderSessionLibraryPreview();
   }
 
   // --- Helpers to fetch + paint the sessions list ---
