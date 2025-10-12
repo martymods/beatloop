@@ -67,6 +67,16 @@
   .step.playhead{box-shadow:inset 0 0 12px rgba(255,255,255,.65),0 0 12px rgba(255,255,255,.35)}
   .step.dimmed{opacity:.28;filter:saturate(.4)}
 
+  .play-pause-wrapper{display:flex;align-items:center;justify-content:center;width:100%}
+  .play-pause-button{position:relative;display:grid;place-items:center;width:48px;height:48px;border-radius:999px;background:#3b29cc;border:none;cursor:pointer;transition:transform .12s,box-shadow .12s}
+  .play-pause-button:hover{transform:scale(1.03)}
+  .play-pause-button:active{transform:scale(.97)}
+  .play-pause-button:focus-visible{outline:2px solid rgba(255,255,255,.7);outline-offset:2px}
+  .play_pause_icon{--w:50%;width:var(--w);height:var(--w);background:white;transition:clip-path .2s ease-in-out,transform .2s ease-in-out}
+  .play_pause_icon.play{clip-path:polygon(20% 0,20% 100%,90% 50%,90% 50%,90% 50%,90% 50%,90% 50%,90% 50%,90% 50%);transform:translateX(6%)}
+  .play-pause-wrapper.is-playing .play_pause_icon{clip-path:polygon(0 0,0 100%,33.33% 100%,33.33% 0,66.66% 0,100% 0,100% 100%,66.66% 100%,66.66% 0);transform:none}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
   /* single dial */
   .dial{display:inline-flex;align-items:center;gap:.25rem;font-size:.7rem;color:#bbb;max-width:80px}
   .dial input[type=range]{appearance:none;width:72px;height:6px;background:#2b2b34;border-radius:999px;outline:none}
@@ -281,7 +291,12 @@
         <div class="mt-1 text-sm"><span id="blBpmVal">92</span> BPM</div>
 
         <div class="mt-4 grid grid-cols-2 gap-2">
-          <button id="blPlay" class="rounded-lg bg-primary px-3 py-2 text-sm font-semibold shadow-glow">Play</button>
+          <div id="blPlayPause" class="play-pause-wrapper">
+            <button id="blPlayPauseBtn" type="button" class="play-pause-button shadow-glow" aria-pressed="false">
+              <span id="blPlayPauseIcon" class="play_pause_icon play" aria-hidden="true"></span>
+              <span class="sr-only">Play</span>
+            </button>
+          </div>
           <button id="blStop" class="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/15">Stop</button>
           <button id="blClear" class="col-span-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/15">Clear Pattern</button>
         </div>
@@ -493,6 +508,13 @@
 
     function normalizeUserId(raw) {
       if (!raw) return null;
+      if (Array.isArray(raw)) {
+        for (const entry of raw) {
+          const normalized = normalizeUserId(entry);
+          if (normalized) return normalized;
+        }
+        return null;
+      }
       if (typeof raw === 'string') {
         const trimmed = raw.trim();
         if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === '[object Object]') {
@@ -506,13 +528,28 @@
         return Number.isFinite(raw) ? String(raw) : null;
       }
       if (typeof raw === 'object') {
-        if (typeof raw.$oid === 'string') return normalizeUserId(raw.$oid);
-        if (typeof raw._id === 'string') return normalizeUserId(raw._id);
-        if (typeof raw.id === 'string') return normalizeUserId(raw.id);
+        const directKeys = ['$oid', '_id', 'id'];
+        for (const key of directKeys) {
+          if (typeof raw[key] === 'string') {
+            const normalized = normalizeUserId(raw[key]);
+            if (normalized) return normalized;
+          }
+        }
+        const nestedKeys = ['userId', 'ownerId', 'user', 'owner', 'createdBy', 'created_by', 'creator', 'creatorId', 'participant', 'participantId', 'uid', 'user_id', 'owner_id', 'author', 'by', 'actor', 'sourceUser', 'source_user_id', 'sender', 'senderId', 'sender_id', 'triggeredBy', 'triggered_by'];
+        for (const key of nestedKeys) {
+          if (key in raw) {
+            const value = raw[key];
+            if (value && value !== raw) {
+              const normalized = normalizeUserId(value);
+              if (normalized) return normalized;
+            }
+          }
+        }
         if (typeof raw.toHexString === 'function') return normalizeUserId(raw.toHexString());
         if (typeof raw.toString === 'function' && raw.toString !== Object.prototype.toString) {
           return normalizeUserId(raw.toString());
         }
+        return null;
       }
       const str = String(raw);
       if (!str || str === 'null' || str === 'undefined' || str === '[object Object]') return null;
@@ -1639,7 +1676,9 @@ const AI_MELODY_SCALES = {
   const gridWrap  = document.getElementById('blGrid');
   const bpmRange  = document.getElementById('blBpm');
   const bpmVal    = document.getElementById('blBpmVal');
-  const playBtn   = document.getElementById('blPlay');
+  const playPauseBtn = document.getElementById('blPlayPauseBtn');
+  const playPauseWrapper = document.getElementById('blPlayPause');
+  const playPauseIcon = document.getElementById('blPlayPauseIcon');
   const stopBtn   = document.getElementById('blStop');
   const clearBtn  = document.getElementById('blClear');
   const kitSel    = document.getElementById('blKit');
@@ -3569,6 +3608,15 @@ currentStep = (currentStep + 1) % STEPS;
     }, '16n');
   }
 
+  function setPlayPauseState(playing){
+    if (!playPauseWrapper || !playPauseBtn || !playPauseIcon) return;
+    const isPlaying = !!playing;
+    playPauseWrapper.classList.toggle('is-playing', isPlaying);
+    playPauseIcon.classList.toggle('play', !isPlaying);
+    playPauseBtn.setAttribute('aria-pressed', isPlaying ? 'true' : 'false');
+    playPauseBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+  }
+
   // ---------- Controls ----------
   bpmRange.addEventListener('input', () => {
     bpmVal.textContent = bpmRange.value;
@@ -3674,7 +3722,7 @@ songToggle?.addEventListener('click', ()=>{
     const totalMs = Math.ceil((bars*secPerBar + 0.1) * 1000);
 
     setTimeout(async ()=>{
-      if(loop) loop.stop(); Tone.Transport.stop(); mode='pattern';
+      if(loop) loop.stop(); Tone.Transport.stop(); setPlayPauseState(false); mode='pattern';
       const blob=await recorder.stop();
       isRecording = false;
       const url=URL.createObjectURL(blob);
@@ -3683,28 +3731,48 @@ songToggle?.addEventListener('click', ()=>{
     }, totalMs);
   });
 
-playBtn.addEventListener('click', async () => {
+playPauseBtn?.addEventListener('click', async () => {
+  const state = Tone.Transport.state;
+  if (state === 'started') {
+    if (loop) loop.stop();
+    Tone.Transport.pause();
+    if (recorder && isRecording) {
+      try { await recorder.stop(); } catch {}
+      isRecording = false;
+    }
+    setPlayPauseState(false);
+    return;
+  }
+
   await window.ensureToneStarted?.();
   ensureLoop();
 
-  // decide playback mode
+  const wasPaused = state === 'paused';
   const inSongUI = !arrangerWrap.classList.contains('hidden') && hasArrangement();
   mode = inSongUI ? 'song' : 'pattern';
 
-  if (mode === 'song') {
-    userBankBeforeSong = currentBank; // remember the pattern you were on
-    currentStep = 0;
-    songIdx = 0;
-    paintArrangerPlayhead(0);         // show playhead on the Song grid
+  if (!wasPaused) {
+    if (mode === 'song') {
+      userBankBeforeSong = currentBank;
+      currentStep = 0;
+      songIdx = 0;
+      paintArrangerPlayhead(0);
+    } else {
+      paintArrangerPlayhead(-1);
+    }
   } else {
-    paintArrangerPlayhead(-1);        // hide Song playhead in pattern mode
+    if (mode === 'song') {
+      paintArrangerPlayhead(songIdx);
+    } else {
+      paintArrangerPlayhead(-1);
+    }
   }
 
   if (!recorder) recorder = new Tone.Recorder();
   Tone.Destination.connect(recorder);
 
   Tone.Transport.bpm.value = +bpmRange.value;
-  loop.start(0);
+  if (loop?.state !== 'started') loop.start(0);
 
   if (Tone.Transport.state !== 'started') {
     if (isRecording) {
@@ -3715,12 +3783,15 @@ playBtn.addEventListener('click', async () => {
     isRecording = true;
     Tone.Transport.start('+0.03');
   }
+
+  setPlayPauseState(true);
 });
 
 
 stopBtn.addEventListener('click', () => {
   if (loop) loop.stop();
   Tone.Transport.stop();
+  setPlayPauseState(false);
   if (recorder && isRecording) {
     recorder.stop().then(()=>{ isRecording = false; }).catch(()=>{ isRecording = false; });
   }
@@ -4571,10 +4642,47 @@ setInterval(() => {
         const bpm = document.getElementById('blBpm');
         if (bpm) { bpm.value = tempo; document.getElementById('blBpmVal').textContent = tempo; }
       };
-      const gridHandler = ({ row, col, on, color, userId, owner, createdBy }) => {
-        const resolvedOwner = normalizeUserId(userId ?? owner ?? createdBy ?? null);
-        sessionDebug('Grid update received from server', { row, col, on, color, userId: resolvedOwner || userId });
-        applySessionStep(row, col, on, color || null, resolvedOwner || null);
+      const gridHandler = (payload = {}) => {
+        const { row, col, on, color } = payload;
+        const ownerHints = [
+          payload.userId,
+          payload.owner,
+          payload.createdBy,
+          payload.created_by,
+          payload.creator,
+          payload.creatorId,
+          payload.user,
+          payload.participantId,
+          payload.participant,
+          payload.sourceUserId,
+          payload.source,
+          payload.sourceUser,
+          payload.source_user_id,
+          payload.actor,
+          payload.sender,
+          payload.senderId,
+          payload.sender_id,
+          payload.triggeredBy,
+          payload.triggered_by,
+          payload.author,
+          payload.by
+        ];
+        let resolvedOwner = null;
+        for (const hint of ownerHints) {
+          const normalized = normalizeUserId(hint);
+          if (normalized) {
+            resolvedOwner = normalized;
+            break;
+          }
+        }
+        sessionDebug('Grid update received from server', {
+          row,
+          col,
+          on,
+          color,
+          userId: resolvedOwner || normalizeUserId(payload.userId) || null
+        });
+        applySessionStep(row, col, on, color || null, resolvedOwner);
       };
       socket.on('tempo:update', tempoHandler);
       socket.on('grid:update', gridHandler);
@@ -4586,6 +4694,9 @@ setInterval(() => {
         const activeSession = currentSessionId;
         if (!activeSession) return;
         sessionInfo('Leaving session', { sessionId: activeSession, silent, skipServer });
+        if (loop) loop.stop();
+        try { Tone.Transport.stop(); } catch {}
+        setPlayPauseState(false);
         runSessionCleanup();
         if (!skipServer) {
           try { socket && socket.emit('session:leave', { sessionId: activeSession }); } catch {}
