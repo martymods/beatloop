@@ -2930,6 +2930,11 @@ const AI_MELODY_SCALES = {
 
   // 16 pattern banks: each is rows x STEPS
   let patterns = Array.from({length: MAX_BANKS}, () => []);
+  Object.defineProperty(window, 'patterns', {
+    configurable: true,
+    get() { return patterns; },
+    set(value) { patterns = value; }
+  });
   let currentBank = 0;                       // 0..15 (UI shows 1..16)
   let arrangement = Array(STEPS).fill(-1);   // 16 bars, -1 empty or 0..15 pattern index
 
@@ -2950,6 +2955,11 @@ const AI_MELODY_SCALES = {
 
   // transport
   let loop = null, currentStep = 0, lastStep = -1, recorder = null, isRecording = false;
+  Object.defineProperty(window, '__beatloopLoop', {
+    configurable: true,
+    get() { return loop; },
+    set(value) { loop = value; }
+  });
   let mode = 'pattern';     // 'pattern' | 'song'
   let songIdx = 0;          // which bar in arrangement we’re on
 let userBankBeforeSong = 0;   // remember the bank before entering Song Mode
@@ -3027,6 +3037,7 @@ let lastBar = -1;             // arranger playhead column
     const old = patterns[bank] || [];
     patterns[bank] = Array.from({length: rows}, (_,r)=> old[r]?.slice(0,STEPS) || Array(STEPS).fill(false));
   }
+  window.ensurePatternForBank = ensurePatternForBank;
   function resizeAllBanks(rows){ for (let b=0;b<MAX_BANKS;b++) ensurePatternForBank(b, rows); }
   const activePattern = ()=> patterns[currentBank];
 
@@ -4365,8 +4376,20 @@ stopBtn.addEventListener('click', () => {
       if (!rows) return;
       const candidateBank = Number.isFinite(bank) ? bank : Number(bank);
       const targetBank = Number.isFinite(candidateBank) ? candidateBank : (typeof currentBank !== 'undefined' ? currentBank : 0);
-      ensurePatternForBank(targetBank, rows);
-      const pat = patterns[targetBank] || [];
+      const ensurePattern = typeof window.ensurePatternForBank === 'function'
+        ? window.ensurePatternForBank
+        : null;
+      if (!ensurePattern) {
+        sessionWarn('Unable to rebuild session pattern from grid state', new ReferenceError('ensurePatternForBank unavailable'));
+        return;
+      }
+      ensurePattern(targetBank, rows);
+      const patternSource = typeof patterns !== 'undefined' ? patterns : window.patterns;
+      if (!patternSource || !Array.isArray(patternSource)) {
+        sessionWarn('Unable to rebuild session pattern from grid state', new ReferenceError('patterns store unavailable'));
+        return;
+      }
+      const pat = patternSource[targetBank] || [];
       for (let r = 0; r < rows; r++){
         if (!Array.isArray(pat[r])) {
           pat[r] = Array(STEPS).fill(false);
@@ -4904,7 +4927,10 @@ setInterval(() => {
         const activeSession = currentSessionId;
         if (!activeSession) return;
         sessionInfo('Leaving session', { sessionId: activeSession, silent, skipServer });
-        if (loop) loop.stop();
+        const transportLoop = window.__beatloopLoop;
+        if (transportLoop && typeof transportLoop.stop === 'function') {
+          try { transportLoop.stop(); } catch {}
+        }
         try { Tone.Transport.stop(); } catch {}
         setPlayPauseState(false);
         runSessionCleanup();
