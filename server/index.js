@@ -222,6 +222,38 @@ function toIdString(value) {
   return match ? match[1].toLowerCase() : str;
 }
 
+function toFallbackId(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw === 'null' || raw === 'undefined' || raw === '[object Object]') return null;
+  return raw;
+}
+
+function removeParticipantFromSession(sessionDoc, userValue) {
+  if (!sessionDoc) return false;
+  if (!Array.isArray(sessionDoc.participants)) {
+    sessionDoc.participants = [];
+    return false;
+  }
+  const primary = toIdString(userValue);
+  const fallback = toFallbackId(userValue);
+  const before = sessionDoc.participants.length;
+  sessionDoc.participants = sessionDoc.participants.filter(p => {
+    const normalized = toIdString(p);
+    if (normalized && primary) return normalized !== primary;
+    if (fallback) {
+      const raw = toFallbackId(p);
+      if (!raw) return true;
+      return raw !== fallback;
+    }
+    return true;
+  });
+  const changed = sessionDoc.participants.length !== before;
+  if (changed && sessionDoc.participants.length === 0) {
+    sessionDoc.lastEmptyAt = new Date();
+  }
+  return changed;
+}
+
 function ensureGridShape(sessionDoc) {
   if (!sessionDoc.grid || typeof sessionDoc.grid !== 'object') {
     sessionDoc.grid = { rows: 8, cols: 16, map: {} };
@@ -620,22 +652,11 @@ app.get('/api/sessions/:id', auth, async (req, res) => {
 app.post('/api/sessions/:id/leave', auth, async (req, res) => {
   const s = await Session.findById(req.params.id);
   if (!s) return res.json({ ok: true });
-  const targetId = toIdString(req.user._id);
-  const fallback = (() => {
-    const raw = String(req.user._id ?? '').trim();
-    if (!raw || raw === 'null' || raw === 'undefined' || raw === '[object Object]') return null;
-    return raw;
-  })();
-  s.participants = s.participants.filter(p => {
-    const normalized = toIdString(p);
-    if (normalized && targetId) return normalized !== targetId;
-    if (fallback) return String(p) !== fallback;
-    return true;
-  });
-  if (s.participants.length === 0) {
-    s.lastEmptyAt = new Date();
+  const changed = removeParticipantFromSession(s, req.user._id);
+  if (changed) {
+    await s.save();
+    await broadcastRoster(s._id);
   }
-  await s.save();
   res.json({ ok: true });
 });
 
@@ -744,21 +765,14 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: true, participants: 0 });
       return;
     }
-    s.participants = s.participants.filter(p => {
-      const normalized = toIdString(p);
-      const target = toIdString(socket.data.user._id);
-      if (normalized && target) return normalized !== target;
-      const fallback = String(socket.data.user._id ?? '').trim();
-      if (!fallback || fallback === 'null' || fallback === 'undefined' || fallback === '[object Object]') {
-        return true;
-      }
-      return String(p) !== fallback;
-    });
-    if (s.participants.length === 0) s.lastEmptyAt = new Date();
-    await s.save();
-    await broadcastRoster(sessionId);
+    const changed = removeParticipantFromSession(s, socket.data.user._id);
+    if (changed) {
+      await s.save();
+      await broadcastRoster(sessionId);
+    }
+    const count = Array.isArray(s.participants) ? s.participants.length : 0;
     if (typeof ack === 'function') {
-      ack({ ok: true, participants: s.participants.length });
+      ack({ ok: true, participants: count });
     }
   });
 
@@ -768,18 +782,22 @@ io.on('connection', (socket) => {
     for (const sessionId of sessionIds) {
       const s = await Session.findById(sessionId);
       if (!s) continue;
+      let changed = removeParticipantFromSession(s, socket.data.user?._id);
       const room = io.sockets.adapter.rooms.get(`session:${sessionId}`);
       const liveCount = room ? room.size : 0;
       if (liveCount === 0) {
         if (!s.lastEmptyAt) {
           s.lastEmptyAt = new Date();
-          await s.save();
+          changed = true;
         }
       } else if (s.lastEmptyAt) {
         s.lastEmptyAt = undefined;
-        await s.save();
+        changed = true;
       }
-      await broadcastRoster(sessionId);
+      if (changed) {
+        await s.save();
+        await broadcastRoster(sessionId);
+      }
     }
     socket.data.sessions?.clear?.();
   });
