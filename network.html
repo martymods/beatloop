@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>beatloop — Creator Network</title>
   <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
+  <meta name="beatloop-api-base" content="https://beatloop-api.onrender.com" />
 
   <link rel="stylesheet" href="./styles/tailwind.css" />
   <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
@@ -397,6 +398,9 @@
     */
 
     // ---------- API base helpers ----------
+    const metaApiBase = (() => {
+      try { return document.querySelector('meta[name="beatloop-api-base"]')?.content || null; } catch { return null; }
+    })();
     const storedApiOverride = (() => {
       try { return localStorage.getItem('beatloop_api'); } catch { return null; }
     })();
@@ -406,9 +410,8 @@
         const host = (window.location.hostname || '').toLowerCase();
 
         // Allow a meta tag to explicitly set the API host when embedding Beatloop.
-        const metaApi = document.querySelector('meta[name="beatloop-api-base"]')?.content;
-        if (metaApi) {
-          return metaApi.replace(/\/$/, '');
+        if (metaApiBase) {
+          return metaApiBase.replace(/\/$/, '');
         }
 
         if (origin && origin.startsWith('http')) {
@@ -416,7 +419,7 @@
           // site is served from beatloop.co we should keep using the deployed API
           // backend instead of the marketing site origin to avoid 404s on /api/*.
           if (/\.beatloop\.co$/i.test(host)) {
-            return 'https://api.beatloop.co';
+            return 'https://beatloop-api.onrender.com';
           }
 
           return origin.replace(/\/$/, '');
@@ -456,9 +459,11 @@
     };
 
     registerApiBase(API_BASE_DEFAULT);
+    registerApiBase(metaApiBase);
     registerApiBase(storedApiOverride);
     registerApiBase(derivedApiBase);
     try { registerApiBase(window.location.origin); } catch {}
+    registerApiBase('https://beatloop-api.onrender.com');
     registerApiBase('https://api.beatloop.co');
     registerApiBase('http://localhost:10000');
 
