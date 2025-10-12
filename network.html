@@ -6,6 +6,7 @@
   <title>beatloop — Creator Network</title>
   <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
   <meta name="beatloop-api-base" content="https://beatloop-api.onrender.com" />
+  <meta name="beatloop-assets-base" content="https://www.beatloop.co" />
 
   <link rel="stylesheet" href="./styles/tailwind.css" />
   <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
@@ -197,7 +198,7 @@
       <!-- Composer -->
       <article class="glass rounded-2xl p-4 ring-1 ring-white/10">
         <div class="flex gap-3">
-          <img id="composerAvatar" src="/img/avatar-default.svg" onerror="this.src='/img/avatar-default.svg'" class="h-10 w-10 rounded-full ring-1 ring-white/10 object-cover" alt="">
+          <img id="composerAvatar" src="https://www.beatloop.co/img/avatar-default.svg" onerror="this.src='https://www.beatloop.co/img/avatar-default.svg'" class="h-10 w-10 rounded-full ring-1 ring-white/10 object-cover" alt="">
           <div class="flex-1">
             <textarea id="composerText" rows="2" placeholder="What’s happening?" class="w-full resize-none rounded-xl border border-white/10 bg-white/5 p-3 text-white placeholder:text-white/50 focus:outline-none focus:ring-[var(--ring)]"></textarea>
             <div class="mt-2 flex items-center justify-between">
@@ -577,8 +578,66 @@
       return originalFetch(resource, options);
     };
 
+    // ---------- Asset base helpers ----------
+    const normalizeAssetBase = (value) => {
+      if (typeof value !== 'string') return '';
+      const trimmed = value.trim();
+      if (!trimmed) return '';
+      if (!/^https?:\/\//i.test(trimmed)) return '';
+      return trimmed.replace(/\/+$/, '');
+    };
+
+    const metaAssetsBase = (() => {
+      try { return document.querySelector('meta[name="beatloop-assets-base"]')?.content || null; } catch { return null; }
+    })();
+
+    const derivedAssetsBase = (() => {
+      try {
+        const origin = window.location.origin;
+        const host = (window.location.hostname || '').toLowerCase();
+
+        if (!origin || origin === 'null' || origin === 'undefined') {
+          return 'https://www.beatloop.co';
+        }
+
+        if (host === 'localhost' || host === '127.0.0.1') {
+          const port = window.location.port ? `:${window.location.port}` : '';
+          return `${window.location.protocol}//${host}${port}`;
+        }
+
+        if (host.includes('beatloop-api')) {
+          return 'https://www.beatloop.co';
+        }
+
+        return origin;
+      } catch {}
+      return 'https://www.beatloop.co';
+    })();
+
+    const DEFAULT_ASSETS_BASE = 'https://www.beatloop.co';
+    const ASSETS_BASE = normalizeAssetBase(metaAssetsBase)
+      || normalizeAssetBase(derivedAssetsBase)
+      || DEFAULT_ASSETS_BASE;
+    window.ASSETS_BASE = ASSETS_BASE;
+
+    const toAssetUrl = (path) => {
+      if (!path || typeof path !== 'string') return path;
+      if (/^https?:\/\//i.test(path)) return path;
+      if (/^(data:|blob:|filesystem:)/i.test(path)) return path;
+      if (path.startsWith('//')) {
+        try { return `${window.location.protocol}${path}`; } catch { return `https:${path}`; }
+      }
+      const base = ASSETS_BASE || '';
+      if (!base) return path;
+      const normalizedBase = base.replace(/\/+$/, '');
+      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      return `${normalizedBase}${normalizedPath}`;
+    };
+
+    window.toAssetUrl = toAssetUrl;
+
     // ---------- Predefined tracks
-    const TRACKS = [
+    const TRACK_LIBRARY = [
       { id: 'reggae-trap',   title: 'Reggae Trap',       artist: 'Slim Pattie',           bpm: 92, url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
       { id: 'stack',         title: 'STACK',             artist: 'lilwoo',                bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
       { id: 'cleanup-woman', title: 'Da Cleanup Woman',  artist: 't-dub',                 bpm: 95, url: '/audio/cleanup-woman.mp3',  cover: '/img/covers/cleanup.jpg' },
@@ -587,8 +646,14 @@
       { id: 'it-is-what',    title: 'It is what it is',  artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',          cover: '/img/covers/it-is.jpg' }
     ]
 
+    const TRACKS = TRACK_LIBRARY.map(track => ({
+      ...track,
+      url: toAssetUrl(track.url),
+      cover: track.cover ? toAssetUrl(track.cover) : track.cover
+    }));
+
     // Defaults (leave fallbackAvatar as-is)
-    const fallbackAvatar = '/img/avatar-default.svg';
+    const fallbackAvatar = toAssetUrl('/img/avatar-default.svg');
 
     const SESSION_LOG_PREFIX = '[Beatloop Session]';
     const sessionInfo  = (...args) => console.info(SESSION_LOG_PREFIX, ...args);
@@ -810,7 +875,7 @@
           } catch {}
         } else if (t && typeof t.url === 'string') {
           // keep light http/file references as-is (not blobs)
-          metas.push({ id: t.id, title: t.title, artist: t.artist, bpm: t.bpm || 0, db: false, url: t.url, cover: t.cover || DEFAULT_TRACK_COVER })
+          metas.push({ id: t.id, title: t.title, artist: t.artist, bpm: t.bpm || 0, db: false, url: toAssetUrl(t.url), cover: t.cover ? toAssetUrl(t.cover) : DEFAULT_TRACK_COVER })
         }
       }
       if (changed) setJSON('custom_tracks', metas)
@@ -871,7 +936,7 @@ function ensureLoggedIn() {
   if (!u) {
     const legacy = localStorage.getItem('current_user') || localStorage.getItem('currentUser');
     if (legacy) {
-      u = { name: legacy.split('@')[0], email: legacy, avatar: '/img/avatar-default.svg' };
+      u = { name: legacy.split('@')[0], email: legacy, avatar: fallbackAvatar };
       localStorage.setItem('user', JSON.stringify(u));
     }
   }
@@ -1169,7 +1234,9 @@ function createPost(track) {
         return { ...meta, url, cover: coverUrl }
       } else {
         // built-in or legacy lightweight entry
-        return { ...meta, cover: meta.cover || DEFAULT_TRACK_COVER }
+        const normalizedUrl = meta.url ? toAssetUrl(meta.url) : meta.url
+        const normalizedCover = meta.cover ? toAssetUrl(meta.cover) : DEFAULT_TRACK_COVER
+        return { ...meta, url: normalizedUrl, cover: normalizedCover }
       }
     }
 
@@ -1493,6 +1560,13 @@ uploadTrackInput.addEventListener('change', async (e) => {
       // migrate any legacy data: URLs out of localStorage
       await migrateLegacyIfNeeded()
       customMeta = getJSON('custom_tracks', '[]')
+      if (!Array.isArray(customMeta)) customMeta = []
+      else customMeta = customMeta.map(meta => {
+        if (!meta || typeof meta !== 'object') return meta
+        const withUrl = meta.url ? toAssetUrl(meta.url) : meta.url
+        const withCover = meta.cover ? toAssetUrl(meta.cover) : meta.cover
+        return { ...meta, url: withUrl, cover: withCover || DEFAULT_TRACK_COVER }
+      })
 
       // Set composer avatar
       if (composerAvatarEl) {
@@ -3138,7 +3212,7 @@ const AI_MELODY_SCALES = {
   let loopSources=[];
   const selectedLoops = new Set();
   const selectedInstruments = new Set();
-  const MIDI_INDEX_URL = '/audio/music/midi-index.json';
+  const MIDI_INDEX_URL = toAssetUrl('/audio/music/midi-index.json');
   let midiIndex = [];
   let midiIndexLoaded = false;
   let midiFiltered = [];
@@ -3360,22 +3434,23 @@ let lastBar = -1;             // arranger playhead column
       drawGrid([]);
       return;
     }
-    const files = kit.files;
-    kitRowCount = files.length;
+    const rawFiles = Array.isArray(kit.files) ? kit.files : [];
+    const kitFiles = rawFiles.map(toAssetUrl);
+    kitRowCount = rawFiles.length;
 
     const loopFiles = Array.from(selectedLoops);
     const instrumentFiles = Array.from(selectedInstruments);
     const extraEntries = [
-      ...loopFiles.map(file => ({ type: 'loop', file })),
-      ...instrumentFiles.map(file => ({ type: 'instrument', file })),
+      ...loopFiles.map(file => ({ type: 'loop', file, url: toAssetUrl(file) })),
+      ...instrumentFiles.map(file => ({ type: 'instrument', file, url: toAssetUrl(file) })),
     ];
-    loopSources = extraEntries.map(entry => entry.file);
+    loopSources = extraEntries.map(entry => entry.url);
     const labels = [...kit.names, ...extraEntries.map(entry => filenameLabel(entry.file))];
     resizeAllBanks(labels.length);    // keep all banks in-sync with row count
     syncRowState(labels.length);
 
     // kit chains (Sampler -> Pan -> Vol)
-    for (let i=0;i<files.length;i++){
+    for (let i=0;i<kitFiles.length;i++){
       await new Promise(resolve=>{
         const vol=new Tone.Volume(0);
         const routeId = ensureRouteForRow(i);
@@ -3387,7 +3462,7 @@ let lastBar = -1;             // arranger playhead column
         dist.wet.value = state.mix;
         dist.connect(pan);
         const gain=new Tone.Gain(state.gain).connect(dist);
-        const s=new Tone.Sampler({C3:files[i]}, ()=>resolve()).connect(gain);
+        const s=new Tone.Sampler({C3:kitFiles[i]}, ()=>resolve()).connect(gain);
         kitSamplers[i]=s; volumes[i]=vol; panners[i]=pan; pitches[i]=0; rowGains[i]=gain; rowDistortions[i]=dist;
         applyPluginState(i);
       });
@@ -3408,7 +3483,7 @@ let lastBar = -1;             // arranger playhead column
         dist.connect(pan);
         const gain=new Tone.Gain(state.gain).connect(dist);
         const p=new Tone.Player({
-          url: encodeURI(extraEntries[j].file), autostart:false, loop:false, fadeOut:0.01,
+          url: encodeURI(extraEntries[j].url), autostart:false, loop:false, fadeOut:0.01,
           onload: ()=>resolve(), onerror:(e)=>reject(e)
         }).connect(gain);
         loopPlayers[j]=p; volumes[row]=vol; panners[row]=pan; pitches[row]=0; rowGains[row]=gain; rowDistortions[row]=dist;
@@ -3992,6 +4067,8 @@ currentStep = (currentStep + 1) % STEPS;
     playPauseBtn.setAttribute('aria-pressed', isPlaying ? 'true' : 'false');
     playPauseBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
   }
+
+  window.setPlayPauseState = setPlayPauseState;
 
   // ---------- Controls ----------
   bpmRange.addEventListener('input', () => {
@@ -4713,7 +4790,7 @@ stopBtn.addEventListener('click', () => {
   if (!user) {
     const legacyEmail = localStorage.getItem('current_user') || localStorage.getItem('currentUser');
     if (legacyEmail) {
-      user = { name: legacyEmail.split('@')[0], email: legacyEmail, avatar: '/img/avatar-default.svg' };
+      user = { name: legacyEmail.split('@')[0], email: legacyEmail, avatar: fallbackAvatar };
       localStorage.setItem('user', JSON.stringify(user));
     }
   }
