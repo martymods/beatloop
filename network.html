@@ -609,6 +609,11 @@
     .bl-who-suggestion.following{background:rgba(124,58,237,.12);border-color:rgba(124,58,237,.35)}
     .bl-who-suggestion.following .bl-who-cta{color:rgba(255,255,255,.7)}
     @media (max-width:900px){.bl-who-dialog{grid-template-columns:1fr;padding:1.25rem}.bl-who-overlay .user-profile{width:min(320px,100%);height:min(320px,72vw)}.bl-who-overlay .user-info{width:min(280px,90%)}.bl-who-overlay .follow-btn{width:min(240px,85%)}}
+    .track-cover-editable{cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease}
+    .track-cover-editable:hover{transform:scale(1.03);box-shadow:0 0 0 2px rgba(124,58,237,.45)}
+    .track-cover-editable[aria-busy="true"]{opacity:.6;pointer-events:none}
+    #profileOverlay .profile-dialog{position:relative;width:100%;max-width:min(920px,94vw);border-radius:1.25rem;border:1px solid rgba(255,255,255,.08);background:linear-gradient(145deg,rgba(24,24,36,.96),rgba(12,12,20,.92));box-shadow:0 25px 60px rgba(0,0,0,.45);padding:clamp(1.5rem,3vw,2rem)}
+    #profileOverlay .profile-panel{background:rgba(17,17,26,.78);border-radius:1rem;border:1px solid rgba(255,255,255,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);padding:clamp(1.25rem,2.5vw,1.75rem);color:#fff}
   </style>
 </head>
 <body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
@@ -1626,6 +1631,16 @@
         rq.onerror = () => rej(rq.error)
       })
     }
+    async function deleteBlob(store, key) {
+      if (!key) return
+      const db = await openDB()
+      await new Promise((res, rej) => {
+        const tx = db.transaction(store, 'readwrite')
+        tx.objectStore(store).delete(key)
+        tx.oncomplete = () => res()
+        tx.onerror = () => rej(tx.error)
+      })
+    }
 
     // ---------- Small JSON helpers
     const getJSON = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || d) } catch { return JSON.parse(d) } }
@@ -2121,6 +2136,11 @@ let sessionsCard = null;
     const composerPostBtn = document.getElementById('composerPost')
     const uploadTrackInput = document.getElementById('uploadTrack')
     const uploadCoverInput = document.getElementById('uploadCover')
+    const trackCoverUpdateInput = document.createElement('input')
+    trackCoverUpdateInput.type = 'file'
+    trackCoverUpdateInput.accept = 'image/*'
+    trackCoverUpdateInput.className = 'hidden'
+    document.body.appendChild(trackCoverUpdateInput)
     const recordBtn = document.getElementById('recordTrack')
     const recordingStatus = document.getElementById('recordingStatus')
     const whoToFollowEl = document.getElementById('whoToFollow')
@@ -2389,6 +2409,7 @@ let sessionsCard = null;
 
     // ---------- Pending selections
     let pendingMeta = null          // lightweight meta for last uploaded/recorded track
+    let pendingCoverUpdate = null   // { track, coverImg }
     let pendingCoverKey = null      // IDB key for optional cover
 
     // ---------- Render comments & pins
@@ -2490,6 +2511,8 @@ let sessionsCard = null;
           track.userId || (authorCandidate && (authorCandidate.id ?? authorCandidate._id)) || track.ownerId || track.owner
         )
         const activeUserId = normalizeUserId(currentUserId || currentUser?.id || currentUser?._id)
+        const coverKey = track.coverKey || track.cover_key || null
+        const isOwner = Boolean(track.db || (ownerId && activeUserId && ownerId === activeUserId))
         if (authorCandidate && typeof authorCandidate === 'object') {
           author = {
             ...authorCandidate,
@@ -2528,11 +2551,15 @@ let sessionsCard = null;
           id: id || `track-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
           url: normalizedUrl,
           cover: normalizedCover,
+          coverUrl: track.coverUrl || track.cover || normalizedCover,
+          coverKey: coverKey,
           artist,
           caption,
           createdAt: createdAtTs,
           originalUrl: resolvedUrl,
           localFallbackApplied,
+          ownerId: ownerId || null,
+          isOwner,
           stats: track.stats ? normalizeStats(track.stats) : undefined,
           comments: Array.isArray(track.comments) ? track.comments.map(normalizeComment).filter(Boolean) : undefined,
           user: author ? {
@@ -2706,6 +2733,27 @@ function createPost(track, { prepend = false } = {}) {
       coverImg.onerror = () => { coverImg.src = DEFAULT_TRACK_COVER }
       coverImg.alt = 'cover'
       coverImg.className = 'h-10 w-10 rounded-md ring-1 ring-white/10 object-cover'
+      if (normalized.isOwner) {
+        coverImg.classList.add('track-cover-editable')
+        coverImg.setAttribute('role', 'button')
+        coverImg.setAttribute('aria-label', 'Update cover art')
+        coverImg.tabIndex = 0
+        const triggerCoverPicker = (event) => {
+          if (event) {
+            event.preventDefault()
+            event.stopPropagation()
+          }
+          pendingCoverUpdate = { track: normalized, coverImg }
+          trackCoverUpdateInput.value = ''
+          trackCoverUpdateInput.click()
+        }
+        coverImg.addEventListener('click', triggerCoverPicker)
+        coverImg.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            triggerCoverPicker(event)
+          }
+        })
+      }
       trackRow.appendChild(coverImg)
       const metaDiv = document.createElement('div')
       metaDiv.className = 'min-w-0'
@@ -2841,7 +2889,7 @@ function createPost(track, { prepend = false } = {}) {
       })
 
       const actions = document.createElement('div')
-      actions.className = 'mt-2 flex items-center gap-4 text-white/60 text-sm'
+      actions.className = 'mt-2 flex flex-wrap items-center gap-4 text-white/60 text-sm'
       const commentBtn = document.createElement('button')
       commentBtn.className = 'hover:text-white'
       commentBtn.dataset.act = 'comment'
@@ -2860,6 +2908,76 @@ function createPost(track, { prepend = false } = {}) {
       actions.appendChild(commentBtn)
       actions.appendChild(repostBtn)
       actions.appendChild(likeBtn)
+      let deleteInFlight = false
+      if (normalized.isOwner) {
+        const deleteBtn = document.createElement('button')
+        deleteBtn.className = 'ml-auto text-red-400 hover:text-red-300'
+        deleteBtn.dataset.act = 'delete'
+        deleteBtn.dataset.id = normalized.id
+        deleteBtn.textContent = '🗑️ Delete'
+        actions.appendChild(deleteBtn)
+        deleteBtn.addEventListener('click', async (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          if (deleteInFlight) return
+          if (!window.confirm('Delete this track? This cannot be undone.')) return
+          deleteInFlight = true
+          const originalLabel = deleteBtn.textContent
+          deleteBtn.textContent = 'Deleting…'
+          deleteBtn.disabled = true
+          deleteBtn.setAttribute('aria-busy', 'true')
+          try {
+            if (normalized.db) {
+              await deleteBlob('tracks', normalized.id).catch(() => {})
+              if (normalized.coverKey) {
+                try { await deleteBlob('covers', normalized.coverKey) } catch {}
+              }
+              customMeta = (customMeta || []).filter(meta => !meta || meta.id !== normalized.id)
+              setJSON('custom_tracks', customMeta)
+            } else {
+              const apiBase = getActiveApiBase()
+              const response = await fetch(`${apiBase}/api/tracks/${encodeURIComponent(normalized.id)}`, {
+                method: 'DELETE',
+                headers: AUTH.hdr()
+              })
+              if (!response.ok) {
+                let detail = ''
+                try {
+                  const data = await response.json()
+                  detail = data?.error || data?.message || ''
+                } catch {
+                  try { detail = await response.text() } catch {}
+                }
+                const message = detail ? String(detail).trim() : `HTTP ${response.status}`
+                throw new Error(message)
+              }
+            }
+            if (pendingMeta && pendingMeta.id === normalized.id) {
+              pendingMeta = null
+            }
+            if (pendingCoverUpdate && pendingCoverUpdate.track.id === normalized.id) {
+              pendingCoverUpdate = null
+            }
+            persistComments(normalized.id, [])
+            remoteStatsCache.delete(normalized.id)
+            remoteCommentsCache.delete(normalized.id)
+            leaderboardRegistry.delete(normalized.id)
+            renderedTrackIds.delete(normalized.id)
+            card.remove()
+            scheduleLeaderboardRefresh()
+          } catch (err) {
+            console.error('Track delete failed', err)
+            alert('Delete failed: ' + (err?.message || err))
+            deleteBtn.textContent = originalLabel
+            deleteBtn.disabled = false
+            deleteBtn.removeAttribute('aria-busy')
+            deleteInFlight = false
+            return
+          }
+          deleteBtn.removeAttribute('aria-busy')
+          deleteInFlight = false
+        })
+      }
       trackWrapper.appendChild(actions)
 
       const commentsList = document.createElement('div')
@@ -3763,6 +3881,84 @@ uploadTrackInput.addEventListener('change', async (e) => {
         alert('Cover save failed: ' + err.message)
       } finally {
         e.target.value = ''
+      }
+    })
+
+    trackCoverUpdateInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0]
+      trackCoverUpdateInput.value = ''
+      const context = pendingCoverUpdate
+      pendingCoverUpdate = null
+      if (!context || !file) return
+
+      const { track, coverImg } = context
+      if (coverImg) coverImg.setAttribute('aria-busy', 'true')
+
+      try {
+        if (track.db) {
+          const optimized = await compressAvatarImage(file, { maxDimension: 1024, quality: 0.85 })
+          const key = 'cover-' + Date.now()
+          await putBlob('covers', key, optimized)
+          if (track.coverKey && track.coverKey !== key) {
+            try { await deleteBlob('covers', track.coverKey) } catch {}
+          }
+          track.coverKey = key
+          const blobUrl = await getBlobUrl('covers', key)
+          if (blobUrl && coverImg) {
+            coverImg.src = blobUrl
+            track.cover = blobUrl
+          } else if (!blobUrl && coverImg) {
+            coverImg.src = DEFAULT_TRACK_COVER
+            track.cover = DEFAULT_TRACK_COVER
+          }
+          customMeta = (customMeta || []).map(meta => {
+            if (!meta || meta.id !== track.id) return meta
+            return { ...meta, coverKey: key }
+          })
+          setJSON('custom_tracks', customMeta)
+          scheduleLeaderboardRefresh()
+        } else {
+          const optimized = await compressAvatarImage(file, { maxDimension: 1024, quality: 0.85 })
+          const fd = new FormData()
+          fd.append('cover', optimized, optimized.name || 'cover.webp')
+          const apiBase = getActiveApiBase()
+          const response = await fetch(`${apiBase}/api/tracks/${encodeURIComponent(track.id)}/cover`, {
+            method: 'POST',
+            headers: AUTH.hdr(),
+            body: fd
+          })
+          if (!response.ok) {
+            let detail = ''
+            try {
+              const data = await response.json()
+              detail = data?.error || data?.message || ''
+            } catch {
+              try { detail = await response.text() } catch {}
+            }
+            const message = detail ? String(detail).trim() : `HTTP ${response.status}`
+            throw new Error(message)
+          }
+          const payload = await response.json().catch(() => ({}))
+          const coverUrl = (payload && payload.coverUrl) || ''
+          const nextCover = coverUrl
+            ? (coverUrl.includes('?') ? `${coverUrl}&v=${Date.now()}` : `${coverUrl}?v=${Date.now()}`)
+            : DEFAULT_TRACK_COVER
+          if (coverImg) coverImg.src = nextCover
+          track.cover = nextCover
+          track.coverUrl = coverUrl || track.coverUrl
+          registerLeaderboardTrack({ ...track, cover: coverUrl || track.cover }, { ownerId: track.ownerId, userOverride: track.user })
+          scheduleLeaderboardRefresh()
+          customMeta = (customMeta || []).map(meta => {
+            if (!meta || meta.id !== track.id) return meta
+            return coverUrl ? { ...meta, cover: coverUrl } : meta
+          })
+          setJSON('custom_tracks', customMeta)
+        }
+      } catch (err) {
+        console.error('Cover update failed', err)
+        alert('Cover update failed: ' + (err?.message || err))
+      } finally {
+        if (coverImg) coverImg.removeAttribute('aria-busy')
       }
     })
 
@@ -6661,9 +6857,9 @@ stopBtn.addEventListener('click', () => {
 <!-- Profile overlay -->
 <div id="profileOverlay" class="fixed inset-0 z-[80] hidden flex items-center justify-center overflow-y-auto p-4 sm:p-6">
   <div class="profile-overlay-backdrop absolute inset-0 bg-black/70 backdrop-blur"></div>
-  <div class="relative w-full max-w-md">
+  <div class="profile-dialog glass relative">
     <button id="profileCloseButton" type="button" class="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/40 text-lg text-white transition hover:bg-black/60 focus:outline-none focus:ring-2 focus:ring-primary" aria-label="Close profile">×</button>
-    <div id="profilePanel" class="rounded-2xl border border-white/10 bg-[#11111a] p-5 shadow-2xl ring-1 ring-white/10 sm:p-6">
+    <div id="profilePanel" class="profile-panel">
       <div class="flex flex-col gap-5">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
