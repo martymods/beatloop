@@ -870,6 +870,91 @@
     const getJSON = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || d) } catch { return JSON.parse(d) } }
     const setJSON = (k, v) => localStorage.setItem(k, JSON.stringify(v))
 
+    function persistUserDirectoryEntry(entry, fallbackEmail, options = {}) {
+      if (!entry) return null
+      const rawEmail = (typeof entry.email === 'string' && entry.email) ? entry.email : (typeof fallbackEmail === 'string' ? fallbackEmail : '')
+      const emailKey = rawEmail.trim().toLowerCase()
+      if (!emailKey) return null
+
+      let directory = options.directory
+      const hasProvidedDir = directory && typeof directory === 'object' && !Array.isArray(directory)
+      if (!hasProvidedDir) {
+        directory = getJSON('users', '{}')
+        if (!directory || typeof directory !== 'object' || Array.isArray(directory)) directory = {}
+      }
+
+      const previousValue = directory[emailKey]
+      const existing = (previousValue && typeof previousValue === 'object') ? previousValue : {}
+      const avatarCandidate = (typeof entry.avatar === 'string' && entry.avatar)
+        || (typeof entry.avatarUrl === 'string' && entry.avatarUrl)
+        || (typeof existing.avatar === 'string' ? existing.avatar : '')
+      const tagCandidate = (typeof entry.tagUrl === 'string' && entry.tagUrl)
+        || (typeof existing.tagUrl === 'string' ? existing.tagUrl : '')
+
+      const next = {
+        ...existing,
+        id: entry.id || entry._id || existing.id || null,
+        name: entry.name || entry.displayName || existing.name || emailKey,
+        email: emailKey,
+        avatar: avatarCandidate,
+        tagUrl: tagCandidate,
+        joinedAt: entry.joinedAt || entry.createdAt || existing.joinedAt || Date.now(),
+        totalOnlineSec: typeof entry.totalOnlineSec === 'number'
+          ? entry.totalOnlineSec
+          : (typeof existing.totalOnlineSec === 'number' ? existing.totalOnlineSec : 0)
+      }
+
+      directory[emailKey] = next
+
+      const shouldCommit = options.commit === true || (options.commit === undefined && !hasProvidedDir)
+      if (shouldCommit) {
+        setJSON('users', directory)
+      }
+
+      return { key: emailKey, value: next, previous: previousValue, directory }
+    }
+
+    function mergeDirectoryEntries(entries) {
+      if (!Array.isArray(entries) || entries.length === 0) return null
+      let directory = getJSON('users', '{}')
+      if (!directory || typeof directory !== 'object' || Array.isArray(directory)) directory = {}
+      let changed = false
+      for (const entry of entries) {
+        const result = persistUserDirectoryEntry(entry, entry?.email, { directory, commit: false })
+        if (result && result.previous !== result.value) {
+          changed = true
+        }
+      }
+      if (changed) {
+        try {
+          setJSON('users', directory)
+        } catch (err) {
+          console.warn('Unable to persist sanitized user profile', err)
+        }
+        return directory
+      }
+      return null
+    }
+
+    async function refreshUserDirectory() {
+      try {
+        const apiBase = (typeof window.getApiBase === 'function'
+          ? window.getApiBase()
+          : (window.API_BASE || API_BASE_DEFAULT))
+        const auth = window.AUTH && typeof window.AUTH.hdr === 'function' ? window.AUTH : null
+        const headers = auth ? { ...auth.hdr() } : {}
+        const response = await fetch(apiBase + '/api/users/directory', { headers })
+        if (!response.ok) throw new Error('directory request failed')
+        const payload = await response.json().catch(() => null)
+        const entries = Array.isArray(payload?.users) ? payload.users : []
+        if (!entries.length) return null
+        return mergeDirectoryEntries(entries)
+      } catch (err) {
+        console.warn('User directory fetch failed', err)
+        return null
+      }
+    }
+
     // ---------- Load / migrate custom tracks metadata (no big data URLs)
     let customMeta = [] // [{id,title,artist,bpm,db:true,coverKey?:string}]
 
@@ -972,6 +1057,7 @@ function ensureLoggedIn() {
   }
   try {
     localStorage.setItem('user', JSON.stringify(currentUser));
+    persistUserDirectoryEntry(currentUser);
   } catch (err) {
     console.warn('Unable to persist sanitized user profile', err);
   }
@@ -1581,6 +1667,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
       }
 
       ensureLoggedIn()
+      await refreshUserDirectory()
 
       // migrate any legacy data: URLs out of localStorage
       await migrateLegacyIfNeeded()
@@ -4452,6 +4539,7 @@ stopBtn.addEventListener('click', () => {
         const updated = (payload && payload.user) ? payload.user : payload;
         if (updated) {
           localStorage.setItem('user', JSON.stringify(updated));
+          try { persistUserDirectoryEntry(updated); } catch (err) { console.warn('Unable to persist sanitized user profile', err); }
           if (window.updateCurrentUserFromProfile) window.updateCurrentUserFromProfile(updated);
         }
       }
@@ -4829,7 +4917,12 @@ stopBtn.addEventListener('click', () => {
   if (hasAuthToken(token) && (!user.name || !user.email)) {
     fetch(resolveApiBase() + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => d?.user && localStorage.setItem('user', JSON.stringify(d.user)))
+      .then(d => {
+        if (d?.user) {
+          try { localStorage.setItem('user', JSON.stringify(d.user)); } catch (err) { console.warn('Unable to persist sanitized user profile', err); }
+          try { persistUserDirectoryEntry(d.user); } catch (err) { console.warn('Unable to persist sanitized user profile', err); }
+        }
+      })
       .catch(()=>{});
   }
 
@@ -4970,6 +5063,7 @@ stopBtn.addEventListener('click', () => {
       ? list.map(p => ({ ...p, id: normalizeUserId(p?.id ?? p?._id) }))
       : [];
     const count = participants.length;
+    try { mergeDirectoryEntries(participants); } catch (err) { console.warn('Unable to persist sanitized user profile', err); }
     const cap = currentSessionCap || 8;
     sessionInfo('Participants roster updated', {
       count,
@@ -5086,6 +5180,7 @@ stopBtn.addEventListener('click', () => {
     }
     try {
       localStorage.setItem('user', JSON.stringify(currentUser));
+      persistUserDirectoryEntry(currentUser);
     } catch (err) {
       console.warn('Unable to persist sanitized user profile', err);
     }
