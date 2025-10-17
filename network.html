@@ -1189,6 +1189,35 @@
     const STATIC_MEDIA_PREFIX = /^\/?(?:audio|img)\//i;
     const API_MEDIA_PREFIX = /^\/?(?:uploads|api\/uploads)\//i;
 
+    const buildUploadUrlCandidates = (path) => {
+      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      const list = [];
+      if (ASSETS_BASE) {
+        list.push(`${ASSETS_BASE.replace(/\/+$/, '')}${normalizedPath}`);
+      }
+      const currentBase = getCurrentApiBase();
+      if (currentBase) {
+        list.push(`${currentBase.replace(/\/+$/, '')}${normalizedPath}`);
+      }
+      try {
+        const origin = (window.location && window.location.origin) || '';
+        if (origin && origin !== 'null' && origin !== 'undefined') {
+          list.push(`${origin.replace(/\/+$/, '')}${normalizedPath}`);
+        }
+      } catch {}
+      return list;
+    };
+
+    const resolveUploadUrl = (path) => {
+      const candidates = buildUploadUrlCandidates(path);
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        const normalized = ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(candidate));
+        if (normalized) return normalized;
+      }
+      return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(path));
+    };
+
     const resolveTrackMediaUrl = (raw) => {
       if (!raw || typeof raw !== 'string') return raw;
       const value = raw.trim();
@@ -1199,7 +1228,7 @@
         try { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${window.location.protocol}${value}`)); } catch { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`https:${value}`)); }
       }
       if (API_MEDIA_PREFIX.test(value)) {
-        return toApiUrl(value);
+        return resolveUploadUrl(value);
       }
       if (STATIC_MEDIA_PREFIX.test(value)) {
         return toAssetUrl(value);
@@ -1396,11 +1425,11 @@
       } catch {}
 
       const candidateBases = [];
+      if (ASSETS_BASE) candidateBases.push(ASSETS_BASE);
       try {
         const apiBase = typeof window.getApiBase === 'function' ? window.getApiBase() : '';
         if (apiBase) candidateBases.push(apiBase);
       } catch {}
-      if (ASSETS_BASE) candidateBases.push(ASSETS_BASE);
       if (window.location && window.location.origin) candidateBases.push(window.location.origin);
 
       for (const base of candidateBases) {
