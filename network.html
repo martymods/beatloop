@@ -2422,10 +2422,11 @@ function createPost(track, { prepend = false } = {}) {
       let localFallbackActive = normalized.localFallbackApplied
       const tryApplyRuntimeFallback = (reason, extra = {}) => {
         if (localFallbackActive) return false
+        const fallbackOptions = IS_LOCAL_DEV_ENV ? { ignoreEnv: true } : undefined
         const fallbackResult = resolveLocalTrackFallback(
           normalized.id,
           normalized.originalUrl || normalized.url,
-          { ignoreEnv: true }
+          fallbackOptions
         )
         if (!fallbackResult || !fallbackResult.fallbackApplied) return false
         const nextSrc = fallbackResult.url
@@ -2447,7 +2448,7 @@ function createPost(track, { prepend = false } = {}) {
         localFallbackActive = true
         normalized.localFallbackApplied = true
         normalized.url = nextSrc
-        if (normalized.cover && shouldUseLocalMediaFallback(normalized.cover, { ignoreEnv: true })) {
+        if (normalized.cover && shouldUseLocalMediaFallback(normalized.cover, fallbackOptions)) {
           normalized.cover = DEFAULT_TRACK_COVER
           coverImg.src = DEFAULT_TRACK_COVER
         }
