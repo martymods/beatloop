@@ -938,13 +938,29 @@
       const tagCandidate = (typeof entry.tagUrl === 'string' && entry.tagUrl)
         || (typeof existing.tagUrl === 'string' ? existing.tagUrl : '')
 
+      const nameValue = (typeof entry.name === 'string' && entry.name)
+        || (typeof existing.name === 'string' ? existing.name : '')
+        || emailKey
+      const displayNameValue = (typeof entry.displayName === 'string' && entry.displayName)
+        || (typeof existing.displayName === 'string' && existing.displayName)
+        || nameValue
+      const firstNameValue = (typeof entry.firstName === 'string' ? entry.firstName : existing.firstName) || ''
+      const lastNameValue = (typeof entry.lastName === 'string' ? entry.lastName : existing.lastName) || ''
+      const tagDurationValue = typeof entry.tagDurationSec === 'number'
+        ? entry.tagDurationSec
+        : (typeof existing.tagDurationSec === 'number' ? existing.tagDurationSec : null)
+
       const next = {
         ...existing,
         id: entry.id || entry._id || existing.id || null,
-        name: entry.name || entry.displayName || existing.name || emailKey,
+        name: nameValue,
+        displayName: displayNameValue,
+        firstName: firstNameValue,
+        lastName: lastNameValue,
         email: emailKey,
         avatar: avatarCandidate,
         tagUrl: tagCandidate,
+        tagDurationSec: tagDurationValue,
         joinedAt: entry.joinedAt || entry.createdAt || existing.joinedAt || Date.now(),
         totalOnlineSec: typeof entry.totalOnlineSec === 'number'
           ? entry.totalOnlineSec
@@ -1017,7 +1033,7 @@
             const blob = await fetch(t.url).then(r => r.blob())
             const id = t.id || ('custom-' + Date.now() + Math.random().toString(36).slice(2,8))
             await putBlob('tracks', id, blob)
-            metas.push({ id, title: t.title || 'Untitled', artist: t.artist || 'me', bpm: t.bpm || 0, db: true, coverKey: null })
+            metas.push({ id, title: t.title || 'Untitled', artist: t.artist || 'me', bpm: t.bpm || 0, db: true, coverKey: null, createdAt: Date.now() })
             changed = true
           } catch {}
         } else if (t && typeof t.url === 'string') {
@@ -1143,6 +1159,14 @@ const feedEl = document.getElementById('feed');
     const leaderboardMEl = document.getElementById('leaderboardM')
     const trendsEl = document.getElementById('trends')
     const trendsMEl = document.getElementById('trendsM')
+
+    const renderedTrackIds = new Set()
+    let remoteCursor = null
+    let remoteHasMore = true
+    let remoteLoading = false
+    let staticTrackIndex = 0
+    let customTrackIndex = 0
+    let feedIsLoading = false
 
     const profileRefs = {
       overlay: null,
@@ -1316,7 +1340,7 @@ const feedEl = document.getElementById('feed');
         profileRefs.card.style.backgroundImage = sanitizedAvatar ? `url('${sanitizedAvatar}')` : ''
       }
 
-      const displayName = activeProfileUser.name || activeProfileUser.email || 'Beatloop creator'
+      const displayName = activeProfileUser.displayName || activeProfileUser.name || activeProfileUser.email || 'Beatloop creator'
       if (profileRefs.name) profileRefs.name.textContent = displayName
 
       const joinedDate = parseDateValue(activeProfileUser.joinedAt)
@@ -1398,7 +1422,7 @@ const feedEl = document.getElementById('feed');
     let pendingCoverKey = null      // IDB key for optional cover
 
     // ---------- Render comments & pins
-    function renderComments(trackId, listContainer, pinsContainer, duration) {
+      function renderComments(trackId, listContainer, pinsContainer, duration) {
       const comments = getComments(trackId)
       listContainer.innerHTML = ''
       pinsContainer.innerHTML = ''
@@ -1435,18 +1459,125 @@ const feedEl = document.getElementById('feed');
       })
     }
 
+      function coerceTimestamp(value) {
+        if (value == null) return null
+        if (value instanceof Date) {
+          const ms = value.getTime()
+          return Number.isFinite(ms) ? ms : null
+        }
+        if (typeof value === 'number') {
+          if (!Number.isFinite(value) || value <= 0) return null
+          if (value > 1e12) return Math.floor(value)
+          if (value > 1e9) return Math.floor(value * 1000)
+          return Math.floor(value)
+        }
+        if (typeof value === 'string') {
+          const trimmed = value.trim()
+          if (!trimmed) return null
+          if (/^\d+(\.\d+)?$/.test(trimmed)) {
+            return coerceTimestamp(Number(trimmed))
+          }
+          const parsed = Date.parse(trimmed)
+          if (!Number.isNaN(parsed)) return parsed
+        }
+        return null
+      }
+
+      function extractTimestampFromId(raw) {
+        if (!raw || typeof raw !== 'string') return null
+        const match = raw.match(/(\d{10,})/)
+        if (!match) return null
+        return coerceTimestamp(match[1])
+      }
+
+      function resolveTrackCreatedAt(track) {
+        if (!track || typeof track !== 'object') return Date.now()
+        const direct = coerceTimestamp(track.createdAt ?? track.created_at ?? track.timestamp ?? track.date)
+        if (direct) return direct
+        const alt = coerceTimestamp(track.createdAtMs ?? track.createdAtSec ?? track.createdAtSeconds)
+        if (alt) return alt
+        const fromId = extractTimestampFromId(
+          track.id || track._id || track.metaId || track.localId || track.tempId || ''
+        )
+        if (fromId) return fromId
+        return Date.now()
+      }
+
+      function normalizeTrackForRendering(track) {
+        if (!track || typeof track !== 'object') return null
+        const id = track.id || track._id || track.metaId || null
+        const url = track.url || track.audioUrl || ''
+        if (!url) return null
+
+        const coverRaw = track.coverUrl || track.cover || ''
+        const caption = typeof track.caption === 'string' ? track.caption : (typeof track.text === 'string' ? track.text : '')
+
+        const createdAtTs = resolveTrackCreatedAt(track)
+
+        let author = null
+        const authorCandidate = track.user || track.author || track.owner || track.createdBy || null
+        const ownerId = normalizeUserId(
+          track.userId || (authorCandidate && (authorCandidate.id ?? authorCandidate._id)) || track.ownerId || track.owner
+        )
+        const activeUserId = normalizeUserId(currentUserId || currentUser?.id || currentUser?._id)
+        if (authorCandidate && typeof authorCandidate === 'object') {
+          author = {
+            ...authorCandidate,
+            avatar: sanitizeAvatar(authorCandidate.avatar || authorCandidate.avatarUrl)
+          }
+        } else if ((track.db || (ownerId && activeUserId && ownerId === activeUserId)) && currentUser) {
+          const fallback = currentUser || (function(){ try { return JSON.parse(localStorage.getItem('user')||'null') } catch { return null } })()
+          if (fallback) {
+            author = {
+              ...fallback,
+              avatar: sanitizeAvatar(fallback.avatar || fallback.avatarUrl)
+            }
+          }
+        } else {
+          const artistName = track.artist || ''
+          const userEmail = track.userEmail || track.email || ''
+          author = {
+            displayName: artistName || 'Beatloop creator',
+            name: artistName || '',
+            email: userEmail,
+            avatar: fallbackAvatar
+          }
+        }
+
+        const artist = track.artist || (author && (author.displayName || author.name || author.email)) || 'Beatloop creator'
+
+        return {
+        ...track,
+        id: id || `track-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+        url: toAssetUrl(url),
+        cover: coverRaw ? toAssetUrl(coverRaw) : DEFAULT_TRACK_COVER,
+        artist,
+        caption,
+        createdAt: createdAtTs,
+        user: author ? {
+          ...author,
+          displayName: author.displayName || author.name || ''
+        } : null
+      }
+    }
+
     // ---------- Build a feed card
-function createPost(track) {
-  const me = currentUser || (function(){ try { return JSON.parse(localStorage.getItem('user')||'null') } catch{} return null })() || {};
-  const meAvatar = sanitizeAvatar(me.avatar);
-  const stats = getStats(track.id)
+function createPost(track, { prepend = false } = {}) {
+  const normalized = normalizeTrackForRendering(track)
+  if (!normalized) return null
+  if (normalized.id && renderedTrackIds.has(normalized.id)) return null
+
+  const stats = getStats(normalized.id)
   const card = document.createElement('article')
   card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
+  card.dataset.trackId = normalized.id
 
   const header = document.createElement('div')
   header.className = 'flex gap-3'
   const avatar = document.createElement('img')
-  avatar.src = meAvatar
+  const author = normalized.user || {}
+  const authorAvatar = sanitizeAvatar(author.avatar || fallbackAvatar)
+  avatar.src = authorAvatar
   avatar.onerror = () => { avatar.src = fallbackAvatar }
   avatar.alt = 'avatar'
   avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
@@ -1458,19 +1589,24 @@ function createPost(track) {
   topRow.className = 'flex items-center gap-2 text-sm'
   const nameEl = document.createElement('span')
   nameEl.className = 'font-semibold truncate'
-  nameEl.textContent = me.name || me.email || 'me'
+  nameEl.textContent = author.displayName || author.name || author.email || normalized.artist
   const handleEl = document.createElement('span')
   handleEl.className = 'text-white/50 truncate'
-  const handle = (me.name || me.email || 'me').toLowerCase().replace(/[^a-z0-9_]/g, '')
-  handleEl.textContent = '@' + handle
+  const handle = buildHandle(author) || buildHandle({ name: normalized.artist, email: '' }) || '@beatloop'
+  handleEl.textContent = handle
   const timeEl = document.createElement('span')
   timeEl.className = 'text-white/40'
-  timeEl.textContent = '· ' + timeAgo(Date.now())
+  timeEl.textContent = '· ' + timeAgo(normalized.createdAt || Date.now())
   topRow.appendChild(nameEl)
   topRow.appendChild(handleEl)
   topRow.appendChild(timeEl)
   info.appendChild(topRow)
-  info.appendChild(document.createElement('p'))
+  if (normalized.caption) {
+    const captionEl = document.createElement('p')
+    captionEl.className = 'mt-1 text-sm text-white/80 whitespace-pre-line break-words'
+    captionEl.textContent = normalized.caption
+    info.appendChild(captionEl)
+  }
   header.appendChild(info)
   card.appendChild(header)
 
@@ -1480,7 +1616,7 @@ function createPost(track) {
       const trackRow = document.createElement('div')
       trackRow.className = 'flex items-center gap-3'
       const coverImg = document.createElement('img')
-      coverImg.src = track.cover || DEFAULT_TRACK_COVER
+      coverImg.src = normalized.cover || DEFAULT_TRACK_COVER
       coverImg.onerror = () => { coverImg.src = DEFAULT_TRACK_COVER }
       coverImg.alt = 'cover'
       coverImg.className = 'h-10 w-10 rounded-md ring-1 ring-white/10 object-cover'
@@ -1489,10 +1625,10 @@ function createPost(track) {
       metaDiv.className = 'min-w-0'
       const artistEl = document.createElement('div')
       artistEl.className = 'text-sm text-white/70 truncate'
-      artistEl.textContent = track.artist
+      artistEl.textContent = normalized.artist
       const titleEl = document.createElement('div')
       titleEl.className = 'truncate font-semibold'
-      titleEl.textContent = track.title
+      titleEl.textContent = normalized.title || 'Untitled'
       metaDiv.appendChild(artistEl)
       metaDiv.appendChild(titleEl)
       trackRow.appendChild(metaDiv)
@@ -1513,7 +1649,7 @@ function createPost(track) {
       trackWrapper.appendChild(waveContainer)
 
       const audio = document.createElement('audio')
-      audio.src = track.url
+      audio.src = normalized.url
       audio.preload = 'metadata'
       audio.controls = true
       audio.className = 'w-full mt-2'
@@ -1524,17 +1660,17 @@ function createPost(track) {
       const commentBtn = document.createElement('button')
       commentBtn.className = 'hover:text-white'
       commentBtn.dataset.act = 'comment'
-      commentBtn.dataset.id = track.id
+      commentBtn.dataset.id = normalized.id
       commentBtn.textContent = '💬 ' + (stats.comments || 0)
       const repostBtn = document.createElement('button')
       repostBtn.className = 'hover:text-white'
       repostBtn.dataset.act = 'repost'
-      repostBtn.dataset.id = track.id
+      repostBtn.dataset.id = normalized.id
       repostBtn.textContent = '🔁 ' + (stats.reposts || 0)
       const likeBtn = document.createElement('button')
       likeBtn.className = 'hover:text-white'
       likeBtn.dataset.act = 'like'
-      likeBtn.dataset.id = track.id
+      likeBtn.dataset.id = normalized.id
       likeBtn.textContent = '❤️ ' + (stats.likes || 0)
       actions.appendChild(commentBtn)
       actions.appendChild(repostBtn)
@@ -1559,11 +1695,16 @@ function createPost(track) {
       trackWrapper.appendChild(formWrapper)
       card.appendChild(trackWrapper)
 
-      feedEl.appendChild(card)
+      if (prepend && feedEl?.firstChild) {
+        feedEl.insertBefore(card, feedEl.firstChild)
+      } else {
+        feedEl.appendChild(card)
+      }
+      renderedTrackIds.add(normalized.id)
 
       function renderAll() {
-        renderComments(track.id, commentsList, pinsContainer, audio.duration || 0)
-        const stat = getStats(track.id)
+        renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0)
+        const stat = getStats(normalized.id)
         commentBtn.textContent = '💬 ' + (stat.comments || 0)
         likeBtn.textContent    = '❤️ ' + (stat.likes || 0)
       }
@@ -1581,26 +1722,26 @@ function createPost(track) {
       })
       audio.addEventListener('play', () => {
         const meta = {
-          title: track.title,
-          artist: track.artist,
+          title: normalized.title,
+          artist: normalized.artist,
           artwork: [
-            { src: track.cover || DEFAULT_TRACK_COVER, sizes: '256x256', type: 'image/png' },
-            { src: track.cover || DEFAULT_TRACK_COVER, sizes: '512x512', type: 'image/png' }
+            { src: normalized.cover || DEFAULT_TRACK_COVER, sizes: '256x256', type: 'image/png' },
+            { src: normalized.cover || DEFAULT_TRACK_COVER, sizes: '512x512', type: 'image/png' }
           ]
         }
         if ('mediaSession' in navigator) {
           try { navigator.mediaSession.metadata = new MediaMetadata(meta) } catch {}
         }
-        const s = getStats(track.id)
+        const s = getStats(normalized.id)
         s.plays = (s.plays || 0) + 1
-        setStats(track.id, s)
+        setStats(normalized.id, s)
         updateLeaderboard()
       })
       btn.addEventListener('click', () => {
         const text = input.value.trim()
         if (!text) return
         const time = audio.currentTime || 0
-        saveComment(track.id, {
+        saveComment(normalized.id, {
           text,
           time,
           user: currentUser.email,
@@ -1610,9 +1751,9 @@ function createPost(track) {
         renderAll()
       })
       likeBtn.addEventListener('click', () => {
-        const s = getStats(track.id)
+        const s = getStats(normalized.id)
         s.likes = (s.likes || 0) + 1
-        setStats(track.id, s)
+        setStats(normalized.id, s)
         likeBtn.textContent = '❤️ ' + s.likes
         updateLeaderboard()
       })
@@ -1625,34 +1766,99 @@ function createPost(track) {
     // ---------- Materialize meta -> playable track (resolve IDB blob URLs)
     async function materialize(meta) {
       if (!meta) return null
-      if (meta.db) {
-        const url = await getBlobUrl('tracks', meta.id)
-        const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
-        return { ...meta, url, cover: coverUrl }
-      } else {
-        // built-in or legacy lightweight entry
-        const normalizedUrl = meta.url ? toAssetUrl(meta.url) : meta.url
-        const normalizedCover = meta.cover ? toAssetUrl(meta.cover) : DEFAULT_TRACK_COVER
-        return { ...meta, url: normalizedUrl, cover: normalizedCover }
+        if (meta.db) {
+          const url = await getBlobUrl('tracks', meta.id)
+          const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
+          return { ...meta, url, cover: coverUrl, createdAt: resolveTrackCreatedAt(meta) }
+        } else {
+          // built-in or legacy lightweight entry
+          const normalizedUrl = meta.url ? toAssetUrl(meta.url) : meta.url
+          const normalizedCover = meta.cover ? toAssetUrl(meta.cover) : DEFAULT_TRACK_COVER
+          return { ...meta, url: normalizedUrl, cover: normalizedCover, createdAt: resolveTrackCreatedAt(meta) }
+        }
+      }
+
+    // ---------- Infinite feed
+    const BATCH_SIZE = 4
+
+    async function fetchRemoteTracksBatch(limit) {
+      if (!remoteHasMore || remoteLoading) return []
+      remoteLoading = true
+      try {
+        const apiBase = getApiBase()
+        const params = new URLSearchParams({ limit: String(limit) })
+        if (remoteCursor) params.set('cursor', remoteCursor)
+        const resp = await fetch(`${apiBase}/api/tracks?${params.toString()}`, { headers: { ...AUTH.hdr() } })
+        if (!resp.ok) throw new Error('failed to load tracks')
+        const payload = await resp.json().catch(() => null) || {}
+        const tracks = Array.isArray(payload.tracks) ? payload.tracks : []
+        const nextCursor = typeof payload.nextCursor === 'string' && payload.nextCursor ? payload.nextCursor : null
+        remoteCursor = nextCursor
+        if (!nextCursor || tracks.length < limit) remoteHasMore = false
+        tracks.forEach(track => {
+          if (track && track.user) {
+            try { persistUserDirectoryEntry(track.user, track.user.email); } catch {}
+          }
+        })
+        return tracks
+      } catch (err) {
+        console.warn('Track fetch failed', err)
+        remoteHasMore = false
+        return []
+      } finally {
+        remoteLoading = false
       }
     }
 
-    // ---------- Infinite feed
-    let feedIndex = 0
-    const BATCH_SIZE = 3
+    function resetFeedState({ clearDom = false } = {}) {
+      remoteCursor = null
+      remoteHasMore = true
+      remoteLoading = false
+      staticTrackIndex = 0
+      customTrackIndex = 0
+      feedIsLoading = false
+      renderedTrackIds.clear()
+      if (clearDom && feedEl) feedEl.innerHTML = ''
+    }
+
     async function loadMore() {
-      const all = [...TRACKS, ...customMeta]
-      if (feedIndex >= all.length) return
+      if (feedIsLoading) return
+      feedIsLoading = true
       loadingEl.classList.remove('hidden')
-      const slice = []
-      for (let i = 0; i < BATCH_SIZE && feedIndex < all.length; i++) {
-        slice.push(all[feedIndex++])
+
+      let remaining = BATCH_SIZE
+
+      if (remoteHasMore) {
+        const remoteTracks = await fetchRemoteTracksBatch(BATCH_SIZE)
+        for (const remote of remoteTracks) {
+          const card = createPost(remote)
+          if (card) {
+            remaining -= 1
+            if (remaining <= 0) break
+          }
+        }
       }
-      for (const item of slice) {
-        const t = await materialize(item)
-        if (t && t.url) createPost(t)
+
+      while (remaining > 0 && staticTrackIndex < TRACKS.length) {
+        const baseTrack = TRACKS[staticTrackIndex++] || null
+        const materialized = await materialize(baseTrack)
+        if (materialized && materialized.url) {
+          createPost(materialized)
+          remaining -= 1
+        }
       }
+
+      while (remaining > 0 && customTrackIndex < customMeta.length) {
+        const customTrack = customMeta[customTrackIndex++] || null
+        const materialized = await materialize(customTrack)
+        if (materialized && materialized.url) {
+          createPost(materialized)
+          remaining -= 1
+        }
+      }
+
       loadingEl.classList.add('hidden')
+      feedIsLoading = false
     }
 
     // ---------- Scroll / top button
@@ -1667,8 +1873,7 @@ function createPost(track) {
     })
     scrollTopBtn.addEventListener('click', () => {
       window.scrollTo({ top: 0, behavior: 'smooth' })
-      feedIndex = 0
-      feedEl.innerHTML = ''
+      resetFeedState({ clearDom: true })
       loadingEl.classList.add('hidden')
       loadMore()
     })
@@ -1746,7 +1951,7 @@ function createPost(track) {
         row.className = 'bl-who-suggestion'
         const isFollowing = following.has(user.normalizedEmail)
         if (isFollowing) row.classList.add('following')
-        row.setAttribute('aria-label', 'View profile for ' + (user.name || user.email))
+        row.setAttribute('aria-label', 'View profile for ' + (user.displayName || user.name || user.email))
 
         const av = document.createElement('img')
         av.src = user.avatar || fallbackAvatar
@@ -1756,7 +1961,7 @@ function createPost(track) {
         info.className = 'bl-who-meta'
         const name = document.createElement('p')
         name.className = 'bl-who-name'
-        name.textContent = user.name || user.email
+        name.textContent = user.displayName || user.name || user.email
         const handle = document.createElement('p')
         handle.className = 'bl-who-handle'
         const handleText = buildHandle(user) || user.email
@@ -1871,7 +2076,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
     id: idLocal,
     title: file.name.replace(/\.[^/.]+$/, ''),
     artist: (currentUser?.name || currentUser?.email || 'me'),
-    bpm: 0, db: true, coverKey: pendingCoverKey || null
+    bpm: 0, db: true, coverKey: pendingCoverKey || null, createdAt: Date.now()
   }
 
   try {
@@ -1899,15 +2104,8 @@ uploadTrackInput.addEventListener('change', async (e) => {
       // server returns {id,title,artist,bpm,coverUrl,audioUrl}
       const saved = await r.json()
       // Show the post immediately with server URLs
-      createPost({
-        id: saved.id || metaLocal.id,
-        title: saved.title || metaLocal.title,
-        artist: saved.artist || metaLocal.artist,
-        bpm: saved.bpm || 0,
-        db: false,
-        url: saved.audioUrl,
-        cover: saved.coverUrl || DEFAULT_TRACK_COVER
-      })
+      saved.caption = saved.caption || (composerTextEl ? composerTextEl.value.trim() : '')
+      createPost(saved, { prepend: true })
       updateLeaderboard()
       pendingMeta = null
       pendingCoverKey = null
@@ -1926,7 +2124,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
 
       const coverUrl = metaLocal.coverKey ? (await getBlobUrl('covers', metaLocal.coverKey)) : DEFAULT_TRACK_COVER
       const url = URL.createObjectURL(file)
-      createPost({ ...metaLocal, url, cover: coverUrl })
+      createPost({ ...metaLocal, url, cover: coverUrl }, { prepend: true })
       updateLeaderboard()
       pendingMeta = metaLocal
     } catch (saveErr) {
@@ -1970,17 +2168,18 @@ uploadTrackInput.addEventListener('change', async (e) => {
             const id = 'rec-' + Date.now()
             try {
               await putBlob('tracks', id, blob)
+              const createdAt = Date.now()
               const meta = {
                 id,
                 title: 'Recording ' + new Date().toLocaleTimeString(),
                 artist: (currentUser?.name || currentUser?.email || 'me'),
-                bpm: 0, db: true, coverKey: pendingCoverKey || null
+                bpm: 0, db: true, coverKey: pendingCoverKey || null, createdAt
               }
               customMeta.push(meta); if (customMeta.length > 30) customMeta.shift()
               setJSON('custom_tracks', customMeta)
               const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
               const url = URL.createObjectURL(blob)
-              createPost({ ...meta, url, cover: coverUrl })
+              createPost({ ...meta, url, cover: coverUrl, createdAt }, { prepend: true })
               updateLeaderboard()
               pendingMeta = meta
             } catch (err) {
@@ -2010,7 +2209,8 @@ uploadTrackInput.addEventListener('change', async (e) => {
         }
         const playable = await materialize(pendingMeta)
         if (textVal) playable.caption = textVal
-        createPost(playable)
+        playable.createdAt = Date.now()
+        createPost(playable, { prepend: true })
         updateLeaderboard()
         if (composerTextEl) composerTextEl.value = ''
         pendingMeta = null
@@ -2056,6 +2256,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
       renderTrendsInto(trendsMEl)
       updateLeaderboard()
       // Load initial feed
+      resetFeedState({ clearDom: true })
       loadMore()
     })
   </script>
@@ -4843,19 +5044,90 @@ stopBtn.addEventListener('click', () => {
 
 <!-- Profile overlay -->
 <div id="profileOverlay" class="fixed inset-0 z-[80] hidden">
-  <div class="absolute inset-0 bg-black/70 backdrop-blur"></div>
-  <div class="relative mx-auto mt-20 w-[min(520px,92vw)] rounded-2xl border border-white/10 bg-[#0f0f15] p-4 ring-1 ring-white/10">
-    <h3 class="text-lg font-semibold mb-3">Edit Profile</h3>
-    <label class="block text-xs text-white/60 mb-1">Display name</label>
-    <input id="profName" class="w-full rounded-md bg-white/10 px-2 py-1 mb-3" placeholder="Your name">
-    <label class="block text-xs text-white/60 mb-1">Profile photo</label>
-    <input id="profAvatar" type="file" accept="image/*" class="w-full text-xs mb-4">
-    <label class="block text-xs text-white/60 mb-1">Brand sound tag (max 3s)</label>
-    <input id="profTag" type="file" accept="audio/*" class="w-full text-xs">
-    <p id="profTagInfo" class="mt-1 text-[11px] text-white/40">No tag uploaded.</p>
-    <div class="flex justify-end gap-2">
-      <button id="profCancel" class="rounded-md bg-white/10 px-3 py-1.5">Cancel</button>
-      <button id="profSave" class="rounded-md bg-primary px-3 py-1.5 font-semibold">Save</button>
+  <div class="profile-overlay-backdrop absolute inset-0 bg-black/70 backdrop-blur"></div>
+  <div class="relative mx-auto my-12 w-[min(760px,94vw)]">
+    <div id="profilePanel" class="rounded-2xl border border-white/10 bg-[#11111a] p-6 shadow-2xl ring-1 ring-white/10">
+      <div class="flex flex-col gap-6">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p class="text-xs uppercase tracking-[0.25em] text-white/40">Profile</p>
+            <h3 id="profileWelcomeName" class="mt-1 text-2xl font-semibold text-white">Welcome, Creator</h3>
+          </div>
+          <div class="flex gap-2">
+            <button id="profileCancelButton" class="hidden rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15">❌ Cancel</button>
+            <button id="profileEditButton" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary/80">✏️ Edit account details</button>
+          </div>
+        </div>
+        <div class="grid gap-6 md:grid-cols-[220px,1fr]">
+          <div class="flex flex-col items-center gap-4 md:items-start">
+            <img id="profileAvatarImage" src="" alt="Profile avatar" class="h-40 w-40 rounded-2xl object-cover ring-2 ring-primary/40" />
+            <button id="profileAvatarUploadBtn" type="button" class="hidden w-full rounded-lg bg-primary/80 px-4 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary">⬆️ Upload profile photo</button>
+            <input id="profileAvatarInput" type="file" accept="image/*" class="hidden" />
+            <div class="w-full rounded-xl border border-white/10 bg-white/5 p-4">
+              <p class="text-xs uppercase tracking-wide text-white/50">Sound tag</p>
+              <p id="profileTagStatus" class="mt-1 text-sm text-white/80">No sound tag uploaded.</p>
+              <div class="mt-3 flex flex-col gap-2">
+                <button id="profileTagPreview" type="button" class="hidden rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10">▶️ Preview current tag</button>
+                <button id="profileTagUploadBtn" type="button" class="hidden rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/15">🎵 Upload sound tag</button>
+                <input id="profileTagInput" type="file" accept="audio/*" class="hidden" />
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-col gap-5">
+            <div id="profileViewSection" class="flex flex-col gap-4">
+              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p class="text-xs uppercase tracking-wide text-white/50">First name</p>
+                <p id="profileViewFirstName" class="mt-1 text-lg font-semibold text-white">—</p>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p class="text-xs uppercase tracking-wide text-white/50">Last name</p>
+                <p id="profileViewLastName" class="mt-1 text-lg font-semibold text-white">—</p>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p class="text-xs uppercase tracking-wide text-white/50">Display name</p>
+                <p id="profileViewDisplayName" class="mt-1 text-lg font-semibold text-white">—</p>
+                <p class="mt-2 text-xs text-white/50">Your display name is shown on your posts and public activity.</p>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p class="text-xs uppercase tracking-wide text-white/50">Username</p>
+                <p id="profileViewUsername" class="mt-1 text-lg font-semibold text-white">—</p>
+                <p class="mt-2 text-xs text-white/50">Log in using your user name.</p>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p class="text-xs uppercase tracking-wide text-white/50">Email address</p>
+                <p id="profileViewEmail" class="mt-1 text-lg font-semibold text-white break-all">—</p>
+              </div>
+            </div>
+            <div id="profileEditSection" class="hidden flex flex-col gap-4">
+              <label class="flex flex-col gap-2">
+                <span class="text-xs uppercase tracking-wide text-white/50">First name</span>
+                <input id="profileFirstNameInput" type="text" class="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary" />
+              </label>
+              <label class="flex flex-col gap-2">
+                <span class="text-xs uppercase tracking-wide text-white/50">Last name</span>
+                <input id="profileLastNameInput" type="text" class="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary" />
+              </label>
+              <label class="flex flex-col gap-2">
+                <span class="text-xs uppercase tracking-wide text-white/50">Display name</span>
+                <input id="profileDisplayNameInput" type="text" class="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary" />
+                <span class="text-xs text-white/50">Your display name is shown on your posts and public activity.</span>
+              </label>
+              <label class="flex flex-col gap-2">
+                <span class="text-xs uppercase tracking-wide text-white/50">User name</span>
+                <input id="profileUsernameInput" type="text" disabled class="cursor-not-allowed rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/70" />
+                <span class="text-xs text-white/50">Log in using your user name.</span>
+              </label>
+              <label class="flex flex-col gap-2">
+                <span class="text-xs uppercase tracking-wide text-white/50">Email address</span>
+                <input id="profileEmailInput" type="email" disabled class="cursor-not-allowed rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/70" />
+              </label>
+              <div class="flex justify-end">
+                <button id="profileSaveButton" type="button" class="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary/80">✅ Save changes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -4930,102 +5202,391 @@ stopBtn.addEventListener('click', () => {
     }
   }
 
-  document.addEventListener('click', (e)=>{
-    if (e.target.matches('a[href="#profile"], button#openProfile, .open-profile')){
-      e.preventDefault();
-      const u = JSON.parse(localStorage.getItem('user')||'{}');
-      const overlay = document.getElementById('profileOverlay');
-      const nameInput = document.getElementById('profName');
-      const avatarInput = document.getElementById('profAvatar');
-      const tagInput = document.getElementById('profTag');
-      const tagInfo = document.getElementById('profTagInfo');
-      if (nameInput) nameInput.value = u?.name || '';
-      if (avatarInput) avatarInput.value = '';
-      if (tagInput) tagInput.value = '';
-      if (tagInfo) {
-        tagInfo.innerHTML = '';
-        const current = u?.tagUrl;
-        if (current) {
-          const label = document.createElement('span');
-          label.textContent = 'Current tag:';
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.dataset.tagPreview = current;
-          btn.className = 'ml-2 rounded bg-white/10 px-2 py-0.5 text-[11px] hover:bg-white/15';
-          btn.textContent = 'Preview';
-          tagInfo.appendChild(label);
-          tagInfo.appendChild(btn);
-        } else {
-          tagInfo.textContent = 'No tag uploaded.';
-        }
-      }
-      overlay?.classList.remove('hidden');
-    }
-    if (e.target.matches('[data-tag-preview]')){
-      const url = e.target.dataset.tagPreview;
-      if (url) {
-        try {
-          const audio = new Audio(url);
-          audio.volume = 0.85;
-          audio.play().catch(()=>{});
-        } catch {}
-      }
-    }
-    if (e.target.id === 'profCancel' || e.target.id==='profileOverlay'){
-      document.getElementById('profileOverlay').classList.add('hidden');
-    }
-  }, true);
-
   const resolveApiBase = getApiBase;
 
-  document.getElementById('profSave').onclick = async ()=>{
-    const apiBase = resolveApiBase();
-    const name = document.getElementById('profName').value.trim();
-    const avatarFile = document.getElementById('profAvatar').files[0];
-    const tagFile = document.getElementById('profTag').files[0];
-    // update name
-    if (name){
-      await fetch(apiBase + '/api/users/profile', { method:'PUT', headers: {'Content-Type':'application/json', ...AUTH.hdr()}, body: JSON.stringify({ name }) }).catch(()=>{});
-    }
-    // upload avatar
-    if (avatarFile){
-      const processedAvatar = await compressAvatarImage(avatarFile);
-      const fd = new FormData(); fd.append('avatar', processedAvatar);
-      await fetch(apiBase + '/api/users/avatar', { method:'POST', headers: { ...AUTH.hdr() }, body: fd }).catch(()=>{});
-    }
-    if (tagFile){
-      const fdTag = new FormData(); fdTag.append('tag', tagFile);
-      const tagRes = await fetch(apiBase + '/api/users/tag', { method:'POST', headers: { ...AUTH.hdr() }, body: fdTag });
-      if (!tagRes.ok) {
-        const err = await tagRes.json().catch(()=>null);
-        alert((err && err.error) || 'Could not upload sound tag.');
-      }
-    }
-    // refresh local user
-    try {
-      const r = await fetch(apiBase + '/api/users/me', { headers: { ...AUTH.hdr() }});
-      if (r.ok){
-        const payload = await r.json().catch(() => null);
-        const updated = (payload && payload.user) ? payload.user : payload;
-        if (updated) {
-          localStorage.setItem('user', JSON.stringify(updated));
-          try { persistUserDirectoryEntry(updated); } catch (err) { console.warn('Unable to persist sanitized user profile', err); }
-          if (window.updateCurrentUserFromProfile) window.updateCurrentUserFromProfile(updated);
-        }
-      }
-    } catch {}
-    document.getElementById('profileOverlay').classList.add('hidden');
-    // also refresh session roster if we are inside a session
-    try {
-      if (currentSessionId) {
-        const rosterResp = await fetch(`${apiBase}/api/sessions/${currentSessionId}`, { headers:{...AUTH.hdr()} });
-        if (rosterResp.ok) {
-          const d = await rosterResp.json();
-          renderRoster(d.roster||[]);
-        }
-      }
-    } catch {}
+  const profileOverlayEl = document.getElementById('profileOverlay');
+  const profileEditButton = document.getElementById('profileEditButton');
+  const profileCancelButton = document.getElementById('profileCancelButton');
+  const profileSaveButton = document.getElementById('profileSaveButton');
+  const profileWelcomeName = document.getElementById('profileWelcomeName');
+  const profileAvatarImage = document.getElementById('profileAvatarImage');
+  const profileAvatarUploadBtn = document.getElementById('profileAvatarUploadBtn');
+  const profileAvatarInput = document.getElementById('profileAvatarInput');
+  const profileTagStatus = document.getElementById('profileTagStatus');
+  const profileTagPreview = document.getElementById('profileTagPreview');
+  const profileTagUploadBtn = document.getElementById('profileTagUploadBtn');
+  const profileTagInput = document.getElementById('profileTagInput');
+  const profileViewFirstName = document.getElementById('profileViewFirstName');
+  const profileViewLastName = document.getElementById('profileViewLastName');
+  const profileViewDisplayName = document.getElementById('profileViewDisplayName');
+  const profileViewUsername = document.getElementById('profileViewUsername');
+  const profileViewEmail = document.getElementById('profileViewEmail');
+  const profileViewSection = document.getElementById('profileViewSection');
+  const profileEditSection = document.getElementById('profileEditSection');
+  const profileFirstNameInput = document.getElementById('profileFirstNameInput');
+  const profileLastNameInput = document.getElementById('profileLastNameInput');
+  const profileDisplayNameInput = document.getElementById('profileDisplayNameInput');
+  const profileUsernameInput = document.getElementById('profileUsernameInput');
+  const profileEmailInput = document.getElementById('profileEmailInput');
+
+  const profileState = {
+    user: null,
+    mode: 'view',
+    pendingAvatar: null,
+    pendingAvatarPreviewUrl: null,
+    pendingTag: null,
+    pendingTagUrl: null,
+    previousOverflow: ''
   };
+
+  function getStoredProfileUser() {
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch {
+      return null;
+    }
+  }
+
+  function sanitizeProfileUser(user) {
+    if (!user || typeof user !== 'object') return null;
+    const avatar = sanitizeAvatar(user.avatar || user.avatarUrl);
+    const displayName = typeof user.displayName === 'string' ? user.displayName : '';
+    const firstName = typeof user.firstName === 'string' ? user.firstName : '';
+    const lastName = typeof user.lastName === 'string' ? user.lastName : '';
+    const name = typeof user.name === 'string' ? user.name : '';
+    const email = typeof user.email === 'string' ? user.email : '';
+    const tagUrl = typeof user.tagUrl === 'string' ? user.tagUrl : '';
+    const tagDurationSec = typeof user.tagDurationSec === 'number' ? user.tagDurationSec : null;
+    return { ...user, avatar, displayName, firstName, lastName, name, email, tagUrl, tagDurationSec };
+  }
+
+  function clearPendingAvatarPreview() {
+    if (profileState.pendingAvatarPreviewUrl) {
+      URL.revokeObjectURL(profileState.pendingAvatarPreviewUrl);
+      profileState.pendingAvatarPreviewUrl = null;
+    }
+  }
+
+  function clearPendingTagPreview() {
+    if (profileState.pendingTagUrl) {
+      URL.revokeObjectURL(profileState.pendingTagUrl);
+      profileState.pendingTagUrl = null;
+    }
+  }
+
+  function resetPendingMedia() {
+    profileState.pendingAvatar = null;
+    profileState.pendingTag = null;
+    clearPendingAvatarPreview();
+    clearPendingTagPreview();
+  }
+
+  function computeWelcomeName(user) {
+    if (!user) return 'Creator';
+    const display = (user.displayName || '').trim();
+    if (display) return display;
+    const first = (user.firstName || '').trim();
+    const last = (user.lastName || '').trim();
+    const combined = [first, last].filter(Boolean).join(' ').trim();
+    if (combined) return combined;
+    if (user.name) return user.name;
+    if (user.email) return user.email.split('@')[0];
+    return 'Creator';
+  }
+
+  function populateProfile(user) {
+    if (!user) return;
+    resetPendingMedia();
+    if (profileWelcomeName) profileWelcomeName.textContent = `Welcome, ${computeWelcomeName(user)}`;
+    if (profileAvatarImage) {
+      profileAvatarImage.onerror = () => { profileAvatarImage.onerror = null; profileAvatarImage.src = fallbackAvatar; };
+      profileAvatarImage.src = sanitizeAvatar(user.avatar);
+    }
+    if (profileViewFirstName) profileViewFirstName.textContent = user.firstName ? user.firstName : '—';
+    if (profileViewLastName) profileViewLastName.textContent = user.lastName ? user.lastName : '—';
+    const display = computeWelcomeName({ ...user, displayName: user.displayName || '' });
+    if (profileViewDisplayName) profileViewDisplayName.textContent = user.displayName ? user.displayName : display;
+    if (profileViewUsername) profileViewUsername.textContent = user.name ? user.name : '—';
+    if (profileViewEmail) profileViewEmail.textContent = user.email ? user.email : '—';
+
+    if (profileFirstNameInput) profileFirstNameInput.value = user.firstName || '';
+    if (profileLastNameInput) profileLastNameInput.value = user.lastName || '';
+    if (profileDisplayNameInput) profileDisplayNameInput.value = user.displayName || display;
+    if (profileUsernameInput) profileUsernameInput.value = user.name || '';
+    if (profileEmailInput) profileEmailInput.value = user.email || '';
+
+    const hasTag = !!user.tagUrl;
+    if (profileTagStatus) {
+      if (profileState.pendingTag) {
+        profileTagStatus.textContent = `New sound tag ready: ${profileState.pendingTag.name || 'selected file'}`;
+      } else if (hasTag) {
+        const seconds = typeof user.tagDurationSec === 'number' && user.tagDurationSec > 0
+          ? ` (${user.tagDurationSec.toFixed(2)}s)`
+          : '';
+        profileTagStatus.textContent = `Current tag ready${seconds}.`;
+      } else {
+        profileTagStatus.textContent = 'No sound tag uploaded yet.';
+      }
+    }
+
+    if (profileTagPreview) {
+      if (profileState.pendingTag && profileState.pendingTagUrl) {
+        profileTagPreview.dataset.url = profileState.pendingTagUrl;
+        profileTagPreview.textContent = '▶️ Preview new tag';
+        profileTagPreview.classList.remove('hidden');
+      } else if (hasTag) {
+        profileTagPreview.dataset.url = user.tagUrl;
+        profileTagPreview.textContent = '▶️ Preview current tag';
+        profileTagPreview.classList.remove('hidden');
+      } else {
+        profileTagPreview.classList.add('hidden');
+        delete profileTagPreview.dataset.url;
+      }
+    }
+  }
+
+  function setProfileMode(mode) {
+    profileState.mode = mode;
+    if (profileViewSection) profileViewSection.classList.toggle('hidden', mode === 'edit');
+    if (profileEditSection) profileEditSection.classList.toggle('hidden', mode !== 'edit');
+    if (profileEditButton) profileEditButton.classList.toggle('hidden', mode === 'edit');
+    if (profileCancelButton) profileCancelButton.classList.toggle('hidden', mode !== 'edit');
+    if (profileAvatarUploadBtn) profileAvatarUploadBtn.classList.toggle('hidden', mode !== 'edit');
+    if (profileTagUploadBtn) profileTagUploadBtn.classList.toggle('hidden', mode !== 'edit');
+  }
+
+  function closeProfileOverlay() {
+    if (!profileOverlayEl) return;
+    profileOverlayEl.classList.add('hidden');
+    document.body.style.overflow = profileState.previousOverflow || '';
+    profileState.previousOverflow = '';
+    resetPendingMedia();
+    if (profileState.user) populateProfile(profileState.user);
+  }
+
+  function openProfileOverlay() {
+    const rawUser = getStoredProfileUser();
+    const user = sanitizeProfileUser(rawUser || window.currentUser || null);
+    if (!user) {
+      alert('Please sign in to view your profile.');
+      return;
+    }
+    profileState.user = user;
+    populateProfile(user);
+    setProfileMode('view');
+    if (profileOverlayEl) {
+      profileState.previousOverflow = document.body.style.overflow || '';
+      document.body.style.overflow = 'hidden';
+      profileOverlayEl.classList.remove('hidden');
+    }
+  }
+
+  if (profileEditButton) {
+    profileEditButton.addEventListener('click', () => {
+      setProfileMode('edit');
+      setTimeout(() => { profileFirstNameInput?.focus?.(); }, 0);
+    });
+  }
+
+  if (profileCancelButton) {
+    profileCancelButton.addEventListener('click', () => {
+      resetPendingMedia();
+      if (profileState.user) populateProfile(profileState.user);
+      setProfileMode('view');
+    });
+  }
+
+  if (profileAvatarUploadBtn) {
+    profileAvatarUploadBtn.addEventListener('click', () => profileAvatarInput?.click?.());
+  }
+
+  if (profileAvatarInput) {
+    profileAvatarInput.addEventListener('change', (event) => {
+      const file = event.target?.files?.[0] || null;
+      clearPendingAvatarPreview();
+        if (file) {
+          profileState.pendingAvatar = file;
+          profileState.pendingAvatarPreviewUrl = URL.createObjectURL(file);
+          if (profileAvatarImage) {
+            profileAvatarImage.src = profileState.pendingAvatarPreviewUrl;
+          }
+        } else {
+          profileState.pendingAvatar = null;
+          if (profileState.user && profileAvatarImage) {
+            profileAvatarImage.src = sanitizeAvatar(profileState.user.avatar);
+          } else if (profileAvatarImage) {
+            profileAvatarImage.src = fallbackAvatar;
+          }
+        }
+      if (event.target) event.target.value = '';
+    });
+  }
+
+  if (profileTagUploadBtn) {
+    profileTagUploadBtn.addEventListener('click', () => profileTagInput?.click?.());
+  }
+
+  if (profileTagInput) {
+    profileTagInput.addEventListener('change', (event) => {
+      const file = event.target?.files?.[0] || null;
+      clearPendingTagPreview();
+      profileState.pendingTag = null;
+      if (file) {
+        profileState.pendingTag = file;
+        profileState.pendingTagUrl = URL.createObjectURL(file);
+        if (profileTagStatus) profileTagStatus.textContent = `New sound tag ready: ${file.name}`;
+        if (profileTagPreview) {
+          profileTagPreview.dataset.url = profileState.pendingTagUrl;
+          profileTagPreview.textContent = '▶️ Preview new tag';
+          profileTagPreview.classList.remove('hidden');
+        }
+      } else if (profileState.user) {
+        populateProfile(profileState.user);
+      }
+      if (event.target) event.target.value = '';
+    });
+  }
+
+  if (profileTagPreview) {
+    profileTagPreview.addEventListener('click', () => {
+      const url = profileTagPreview.dataset.url;
+      if (!url) return;
+      try {
+        const audio = new Audio(url);
+        audio.volume = 0.85;
+        audio.play().catch(()=>{});
+      } catch {}
+    });
+  }
+
+  async function refreshCurrentUserFromServer(apiBase) {
+    try {
+      const response = await fetch(apiBase + '/api/users/me', { headers: { ...AUTH.hdr() }});
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null);
+      return (payload && payload.user) ? payload.user : payload;
+    } catch (err) {
+      console.warn('Unable to refresh profile', err);
+      return null;
+    }
+  }
+
+  function persistUpdatedUser(user) {
+    if (!user) return;
+    try { localStorage.setItem('user', JSON.stringify(user)); } catch {}
+    try { persistUserDirectoryEntry(user); } catch (err) { console.warn('Unable to persist sanitized user profile', err); }
+    if (window.updateCurrentUserFromProfile) window.updateCurrentUserFromProfile(user);
+  }
+
+  if (profileSaveButton) {
+    profileSaveButton.addEventListener('click', async () => {
+      if (!profileState.user) return;
+      const apiBase = resolveApiBase();
+      const originalText = profileSaveButton.textContent;
+      profileSaveButton.disabled = true;
+      profileSaveButton.textContent = 'Saving…';
+      try {
+        const updates = {};
+        const first = profileFirstNameInput?.value?.trim() || '';
+        const last = profileLastNameInput?.value?.trim() || '';
+        const display = profileDisplayNameInput?.value?.trim() || '';
+        if (first !== (profileState.user.firstName || '')) updates.firstName = first;
+        if (last !== (profileState.user.lastName || '')) updates.lastName = last;
+        if (display !== (profileState.user.displayName || '')) updates.displayName = display;
+
+        if (Object.keys(updates).length) {
+          const resp = await fetch(apiBase + '/api/users/profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...AUTH.hdr() },
+            body: JSON.stringify(updates)
+          });
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => null);
+            throw new Error((err && err.error) || 'Could not update profile');
+          }
+        }
+
+        if (profileState.pendingAvatar) {
+          const processed = await compressAvatarImage(profileState.pendingAvatar);
+          const fd = new FormData();
+          fd.append('avatar', processed);
+          const avatarResp = await fetch(apiBase + '/api/users/avatar', {
+            method: 'POST',
+            headers: { ...AUTH.hdr() },
+            body: fd
+          });
+          if (!avatarResp.ok) {
+            const err = await avatarResp.json().catch(() => null);
+            throw new Error((err && err.error) || 'Could not upload avatar');
+          }
+        }
+
+        if (profileState.pendingTag) {
+          const fdTag = new FormData();
+          fdTag.append('tag', profileState.pendingTag);
+          const tagResp = await fetch(apiBase + '/api/users/tag', {
+            method: 'POST',
+            headers: { ...AUTH.hdr() },
+            body: fdTag
+          });
+          if (!tagResp.ok) {
+            const err = await tagResp.json().catch(() => null);
+            throw new Error((err && err.error) || 'Could not upload sound tag');
+          }
+        }
+
+        const refreshed = await refreshCurrentUserFromServer(apiBase);
+        if (refreshed) {
+          persistUpdatedUser(refreshed);
+          profileState.user = sanitizeProfileUser(refreshed);
+          populateProfile(profileState.user);
+          setProfileMode('view');
+        }
+
+        resetPendingMedia();
+
+        try {
+          const activeSession = typeof window.currentSessionId !== 'undefined' ? window.currentSessionId : null;
+          if (activeSession) {
+            const rosterResp = await fetch(`${apiBase}/api/sessions/${activeSession}`, { headers: { ...AUTH.hdr() } });
+            if (rosterResp.ok) {
+              const data = await rosterResp.json().catch(() => null);
+              if (data && data.roster && typeof window.renderRoster === 'function') {
+                window.renderRoster(data.roster || []);
+              }
+            }
+          }
+        } catch {}
+      } catch (err) {
+        alert(err?.message || 'Profile save failed.');
+      } finally {
+        profileSaveButton.disabled = false;
+        profileSaveButton.textContent = originalText;
+      }
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest?.('a[href="#profile"], #openProfile, .open-profile');
+    if (trigger) {
+      event.preventDefault();
+      openProfileOverlay();
+    }
+  });
+
+  if (profileOverlayEl) {
+    profileOverlayEl.addEventListener('click', (event) => {
+      if (event.target === profileOverlayEl || event.target.classList.contains('profile-overlay-backdrop')) {
+        closeProfileOverlay();
+      }
+    });
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && profileOverlayEl && !profileOverlayEl.classList.contains('hidden')) {
+      closeProfileOverlay();
+    }
+  });
 </script>
 
 </body>
