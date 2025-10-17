@@ -12,6 +12,7 @@ import { parseFile } from 'music-metadata';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import dns from 'dns/promises';
 
 /* ============================ ENV ============================ */
 const {
@@ -19,7 +20,9 @@ const {
   JWT_SECRET = 'dev_secret_change_me',
   MONGODB_URI,
   PUBLIC_BASE_URL = `http://localhost:${PORT}`,
-  FRONTEND_ORIGINS = 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,https://beatloop.co,http://localhost:8080'
+  FRONTEND_ORIGINS = 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,https://beatloop.co,http://localhost:8080',
+  API_FALLBACK_BASE_URLS = 'https://beatloop-api.onrender.com',
+  RENDER_EXTERNAL_URL
 } = process.env;
 
 if (!MONGODB_URI) {
@@ -207,6 +210,17 @@ const BEATLOOP_HOST_CHECK = host => {
   const lower = host.toLowerCase();
   return lower === 'beatloop.co' || lower === 'www.beatloop.co' || lower.endsWith('.beatloop.co');
 };
+const FALLBACK_BASE_CANDIDATES = new Set(
+  (API_FALLBACK_BASE_URLS || '')
+    .split(/[\s,]+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+);
+if (RENDER_EXTERNAL_URL) {
+  FALLBACK_BASE_CANDIDATES.add(RENDER_EXTERNAL_URL);
+}
+
+const UNIQUE_FALLBACKS = new Set();
 
 function ensureHttpsForBeatloopHost(urlString) {
   if (!urlString || typeof urlString !== 'string') return urlString;
@@ -227,11 +241,47 @@ function ensureHttpsForBeatloopHost(urlString) {
   }
 }
 
+function safeHostname(value) {
+  if (!value || typeof value !== 'string') return '';
+  try {
+    const parsed = new URL(value);
+    return (parsed.hostname || '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function sanitizeBaseCandidate(value) {
+  if (!value || typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(ensureHttpsForBeatloopHost(trimmed));
+    const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
+    const rebuilt = `${parsed.protocol}//${parsed.host}${pathname}${parsed.search || ''}${parsed.hash || ''}`;
+    return rebuilt.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+async function hostResolves(host) {
+  if (!host) return false;
+  try {
+    await dns.lookup(host);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const RAW_PUBLIC_BASE = (PUBLIC_BASE_URL || '').trim();
 let ENV_PUBLIC_BASE = '';
 let ENV_PUBLIC_HOST = '';
 let ENV_PUBLIC_IS_LOCAL = false;
 let ENV_PUBLIC_IS_MARKETING = false;
+let ENV_PUBLIC_RESOLVES = true;
+let VERIFIED_FALLBACK_BASES = [];
 
 if (RAW_PUBLIC_BASE) {
   if (/^https?:\/\//i.test(RAW_PUBLIC_BASE)) {
@@ -251,6 +301,42 @@ if (RAW_PUBLIC_BASE) {
     ENV_PUBLIC_IS_MARKETING = MARKETING_HOSTS.has(ENV_PUBLIC_HOST);
   }
 }
+
+if (ENV_PUBLIC_HOST && !ENV_PUBLIC_IS_LOCAL) {
+  ENV_PUBLIC_RESOLVES = await hostResolves(ENV_PUBLIC_HOST);
+  if (!ENV_PUBLIC_RESOLVES) {
+    console.warn(`⚠️  PUBLIC_BASE_URL host failed DNS lookup: ${ENV_PUBLIC_HOST}`);
+  }
+}
+
+async function buildVerifiedFallbacks() {
+  const result = [];
+  for (const candidate of FALLBACK_BASE_CANDIDATES) {
+    const sanitized = sanitizeBaseCandidate(candidate);
+    if (!sanitized) continue;
+    if (UNIQUE_FALLBACKS.has(sanitized)) continue;
+    if (ENV_PUBLIC_BASE && sanitized === ensureHttpsForBeatloopHost(ENV_PUBLIC_BASE)) continue;
+
+    const hostname = safeHostname(sanitized);
+    if (!hostname) continue;
+
+    let resolves = true;
+    if (!LOCALHOST_RE.test(sanitized)) {
+      resolves = await hostResolves(hostname);
+    }
+
+    if (!resolves) {
+      console.warn(`⚠️  API fallback skipped (DNS failed): ${sanitized}`);
+      continue;
+    }
+
+    UNIQUE_FALLBACKS.add(sanitized);
+    result.push(sanitized);
+  }
+  return result;
+}
+
+VERIFIED_FALLBACK_BASES = await buildVerifiedFallbacks();
 
 function requestBaseFromHeaders(req) {
   const headerValue = value => (typeof value === 'string' ? value.split(',')[0].trim() : '');
@@ -273,15 +359,33 @@ function requestBaseFromHeaders(req) {
 function effectivePublicBase(req) {
   const requestBase = requestBaseFromHeaders(req);
   const requestIsLocal = requestBase ? LOCALHOST_RE.test(requestBase) : false;
+  const requestHostname = requestBase ? safeHostname(requestBase) : '';
+  const envMatchesRequest =
+    !!ENV_PUBLIC_HOST && !!requestHostname && ENV_PUBLIC_HOST === requestHostname;
 
-  if (ENV_PUBLIC_BASE && !ENV_PUBLIC_IS_LOCAL) {
-    if (!ENV_PUBLIC_IS_MARKETING || !requestBase || requestIsLocal) {
-      return ensureHttpsForBeatloopHost(ENV_PUBLIC_BASE);
-    }
+  const canUseEnvBase = Boolean(
+    ENV_PUBLIC_BASE &&
+      (!ENV_PUBLIC_IS_MARKETING || !requestBase || requestIsLocal) &&
+      (ENV_PUBLIC_IS_LOCAL || ENV_PUBLIC_RESOLVES) &&
+      (!requestHostname || envMatchesRequest)
+  );
+
+  if (canUseEnvBase) {
+    return ensureHttpsForBeatloopHost(ENV_PUBLIC_BASE);
   }
 
-  if (requestBase) return ensureHttpsForBeatloopHost(requestBase);
-  if (ENV_PUBLIC_BASE) return ensureHttpsForBeatloopHost(ENV_PUBLIC_BASE);
+  if (requestBase) {
+    return ensureHttpsForBeatloopHost(requestBase);
+  }
+
+  if (VERIFIED_FALLBACK_BASES.length > 0) {
+    return VERIFIED_FALLBACK_BASES[0];
+  }
+
+  if (ENV_PUBLIC_BASE) {
+    return ensureHttpsForBeatloopHost(ENV_PUBLIC_BASE);
+  }
+
   return `http://localhost:${PORT}`;
 }
 
