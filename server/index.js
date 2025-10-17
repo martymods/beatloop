@@ -1261,6 +1261,102 @@ app.post('/api/tracks', auth, (req, res) => {
   });
 });
 
+app.post('/api/tracks/:id/cover', auth, (req, res) => {
+  trackUpload.single('cover')(req, res, async (err) => {
+    if (err) {
+      const message = err.message || 'upload failed';
+      return res.status(400).json({ error: message });
+    }
+
+    const trackId = asObjectId(req.params?.id);
+    if (!trackId) {
+      if (req.file?.path) safeUnlink(req.file.path);
+      return res.status(400).json({ error: 'invalid track id' });
+    }
+
+    let trackDoc = null;
+    try {
+      trackDoc = await Track.findById(trackId);
+    } catch (ex) {
+      console.error('Track lookup failed during cover update', ex);
+    }
+
+    if (!trackDoc) {
+      if (req.file?.path) safeUnlink(req.file.path);
+      return res.status(404).json({ error: 'track not found' });
+    }
+
+    if (!trackDoc.userId || trackDoc.userId.toString() !== req.user._id.toString()) {
+      if (req.file?.path) safeUnlink(req.file.path);
+      return res.status(403).json({ error: 'not your track' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'missing file' });
+    }
+
+    if (req.file.size > 10 * 1024 * 1024) {
+      safeUnlink(req.file.path);
+      return res.status(400).json({ error: 'cover art must be 10MB or less' });
+    }
+
+    try {
+      const previous = resolveUploadPath(trackDoc.coverUrl, 'covers');
+      if (previous) safeUnlink(previous);
+
+      const coverUrl = publicUploadUrl(req, 'covers', req.file.filename);
+      trackDoc.coverUrl = coverUrl;
+      await trackDoc.save();
+
+      res.json({ ok: true, coverUrl });
+    } catch (ex) {
+      console.error('Track cover update failed', ex);
+      if (req.file?.path) safeUnlink(req.file.path);
+      res.status(500).json({ error: 'could not save cover' });
+    }
+  });
+});
+
+app.delete('/api/tracks/:id', auth, async (req, res) => {
+  const trackId = asObjectId(req.params?.id);
+  if (!trackId) {
+    return res.status(400).json({ error: 'invalid track id' });
+  }
+
+  let trackDoc = null;
+  try {
+    trackDoc = await Track.findById(trackId);
+  } catch (ex) {
+    console.error('Track lookup failed during delete', ex);
+  }
+
+  if (!trackDoc) {
+    return res.status(404).json({ error: 'track not found' });
+  }
+
+  if (!trackDoc.userId || trackDoc.userId.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ error: 'not your track' });
+  }
+
+  const audioPath = resolveUploadPath(trackDoc.audioUrl, 'tracks');
+  const coverPath = resolveUploadPath(trackDoc.coverUrl, 'covers');
+
+  try {
+    await Track.deleteOne({ _id: trackDoc._id });
+    await TrackStats.deleteOne({ trackId: trackDoc._id });
+    await TrackEvent.deleteMany({ trackId: trackDoc._id });
+    await TrackComment.deleteMany({ trackId: trackDoc._id });
+  } catch (ex) {
+    console.error('Track delete failed', ex);
+    return res.status(500).json({ error: 'could not delete track' });
+  }
+
+  safeUnlink(audioPath);
+  safeUnlink(coverPath);
+
+  res.json({ ok: true });
+});
+
 app.get('/api/tracks', async (req, res) => {
   try {
     const limitParam = Number.parseInt(req.query?.limit, 10);
