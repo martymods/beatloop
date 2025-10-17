@@ -1119,20 +1119,6 @@
       return value;
     };
 
-    const toAssetUrl = (path) => {
-      if (!path || typeof path !== 'string') return path;
-      if (/^https?:\/\//i.test(path)) return ensureHttpsMediaUrl(path);
-      if (/^(data:|blob:|filesystem:)/i.test(path)) return path;
-      if (path.startsWith('//')) {
-        try { return ensureHttpsMediaUrl(`${window.location.protocol}${path}`); } catch { return ensureHttpsMediaUrl(`https:${path}`); }
-      }
-      const base = ASSETS_BASE || '';
-      if (!base) return path;
-      const normalizedBase = base.replace(/\/+$/, '');
-      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-      return ensureHttpsMediaUrl(`${normalizedBase}${normalizedPath}`);
-    };
-
     const getCurrentApiBase = () => {
       const base = (typeof window.getApiBase === 'function'
         ? window.getApiBase()
@@ -1140,18 +1126,64 @@
       return typeof base === 'string' ? base.trim() : '';
     };
 
-    const toApiUrl = (path) => {
+    const maybeRewriteToActiveApiBase = (value) => {
+      if (!value || typeof value !== 'string') return value;
+      if (!/^https?:\/\//i.test(value)) return value;
+      try {
+        const parsed = new URL(value);
+        const hostname = (parsed.hostname || '').toLowerCase();
+        const isApiHost = hostname === 'api.beatloop.co'
+          || hostname === 'beatloop-api.onrender.com';
+        if (!isApiHost) return value;
+
+        const currentBase = getCurrentApiBase();
+        if (!currentBase || typeof currentBase !== 'string') return value;
+
+        let normalizedBase = '';
+        try {
+          const baseUrl = new URL(currentBase);
+          normalizedBase = baseUrl.origin.replace(/\/+$/, '');
+        } catch {
+          if (/^https?:\/\//i.test(currentBase)) {
+            normalizedBase = currentBase.replace(/\/+$/, '');
+          }
+        }
+
+        if (!normalizedBase) return value;
+
+        const target = `${normalizedBase}${parsed.pathname || ''}${parsed.search || ''}${parsed.hash || ''}`;
+        return target;
+      } catch {
+        return value;
+      }
+    };
+
+    const toAssetUrl = (path) => {
       if (!path || typeof path !== 'string') return path;
-      if (/^https?:\/\//i.test(path)) return ensureHttpsMediaUrl(path);
+      if (/^https?:\/\//i.test(path)) return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(path));
       if (/^(data:|blob:|filesystem:)/i.test(path)) return path;
       if (path.startsWith('//')) {
-        try { return ensureHttpsMediaUrl(`${window.location.protocol}${path}`); } catch { return ensureHttpsMediaUrl(`https:${path}`); }
+        try { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${window.location.protocol}${path}`)); } catch { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`https:${path}`)); }
+      }
+      const base = ASSETS_BASE || '';
+      if (!base) return path;
+      const normalizedBase = base.replace(/\/+$/, '');
+      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${normalizedBase}${normalizedPath}`));
+    };
+
+    const toApiUrl = (path) => {
+      if (!path || typeof path !== 'string') return path;
+      if (/^https?:\/\//i.test(path)) return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(path));
+      if (/^(data:|blob:|filesystem:)/i.test(path)) return path;
+      if (path.startsWith('//')) {
+        try { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${window.location.protocol}${path}`)); } catch { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`https:${path}`)); }
       }
       const base = getCurrentApiBase();
       if (!base) return path;
       const normalizedBase = base.replace(/\/+$/, '');
       const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-      return ensureHttpsMediaUrl(`${normalizedBase}${normalizedPath}`);
+      return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${normalizedBase}${normalizedPath}`));
     };
 
     const STATIC_MEDIA_PREFIX = /^\/?(?:audio|img)\//i;
@@ -1162,9 +1194,9 @@
       const value = raw.trim();
       if (!value) return value;
       if (/^(data:|blob:|filesystem:)/i.test(value)) return value;
-      if (/^https?:\/\//i.test(value)) return ensureHttpsMediaUrl(value);
+      if (/^https?:\/\//i.test(value)) return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(value));
       if (value.startsWith('//')) {
-        try { return ensureHttpsMediaUrl(`${window.location.protocol}${value}`); } catch { return ensureHttpsMediaUrl(`https:${value}`); }
+        try { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${window.location.protocol}${value}`)); } catch { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`https:${value}`)); }
       }
       if (API_MEDIA_PREFIX.test(value)) {
         return toApiUrl(value);
