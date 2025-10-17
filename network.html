@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Amatic+SC&family=Roboto+Condensed:wght@300;400;600&display=swap" rel="stylesheet">
   <style>
     html, body { font-family: Inter, ui-sans-serif, system-ui, -apple-system; }
     .glass { background: rgba(18, 18, 24, .55); backdrop-filter: blur(10px); }
@@ -48,6 +49,402 @@
     }
     body.studio-embed #blClose {
       display: none !important;
+    }
+  </style>
+
+  <style>
+    .bl-leaderboard {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+      color: #fff;
+      font-family: 'Roboto Condensed', 'Inter', ui-sans-serif, system-ui;
+      padding: 0.75rem 1rem 1.25rem;
+      border-radius: 0.9rem;
+      background: linear-gradient(145deg, rgba(15, 9, 25, .94), rgba(5, 5, 10, .92));
+      box-shadow: 7px 9px 24px rgba(0, 0, 0, .45);
+      --leaderboard-row-height: 54px;
+    }
+
+    .bl-leaderboard::before {
+      content: '';
+      position: absolute;
+      inset: 0.65rem;
+      border-radius: inherit;
+      border: 1px solid rgba(255,255,255,.04);
+      pointer-events: none;
+    }
+
+    .bl-leaderboard-top {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.5rem;
+      align-items: flex-end;
+      justify-items: center;
+      padding-top: 3.5rem;
+      min-height: 170px;
+    }
+
+    .bl-leaderboard-topCard {
+      --card-size: 96px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.45rem;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: inherit;
+      padding: 0;
+      text-align: center;
+      transition: transform .18s ease, filter .18s ease;
+    }
+
+    .bl-leaderboard-topCard:nth-child(1) {
+      --card-size: 132px;
+      order: 2;
+      z-index: 3;
+    }
+
+    .bl-leaderboard-topCard:nth-child(2) {
+      --card-size: 112px;
+      order: 1;
+      margin-bottom: 26px;
+      z-index: 2;
+    }
+
+    .bl-leaderboard-topCard:nth-child(3) {
+      --card-size: 112px;
+      order: 3;
+      margin-bottom: 26px;
+      z-index: 2;
+    }
+
+    .bl-leaderboard-topCard:focus-visible {
+      outline: 2px solid rgba(124,58,237,.65);
+      outline-offset: 3px;
+    }
+
+    .bl-leaderboard-topCard:hover {
+      transform: translateY(-4px);
+      filter: brightness(1.08);
+    }
+
+    .bl-leaderboard-avatar {
+      position: relative;
+      width: var(--card-size);
+      height: var(--card-size);
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid rgba(177, 89, 255, .8);
+      background: radial-gradient(circle at 30% 30%, rgba(177, 89, 255, .45), rgba(5,5,10,.9));
+      display: grid;
+      place-items: center;
+      box-shadow: 0 6px 18px rgba(0,0,0,.45);
+    }
+
+    .bl-leaderboard-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .bl-leaderboard-topCard::after {
+      content: attr(data-rank);
+      position: absolute;
+      bottom: -22px;
+      right: calc(50% - 18px);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #7c3aed;
+      color: #0f0f15;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 1rem;
+      font-family: 'Amatic SC', cursive;
+      box-shadow: 0 6px 14px rgba(0,0,0,.5);
+    }
+
+    .bl-leaderboard-topCard[data-rank="1"]::after {
+      background: #ffc500;
+    }
+
+    .bl-leaderboard-topCard[data-rank="2"]::after {
+      background: #d4d4d4;
+    }
+
+    .bl-leaderboard-topCard[data-rank="3"]::after {
+      background: #ab6528;
+    }
+
+    .bl-leaderboard-crown {
+      position: absolute;
+      top: calc(var(--card-size) * -0.28);
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(var(--card-size) * 0.6);
+      pointer-events: none;
+    }
+
+    .bl-leaderboard-crown svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .bl-leaderboard-topCard[data-rank="1"] .bl-leaderboard-crown svg {
+      fill: #ffc500;
+    }
+
+    .bl-leaderboard-topCard[data-rank="2"] .bl-leaderboard-crown svg {
+      fill: #d4d4d4;
+    }
+
+    .bl-leaderboard-topCard[data-rank="3"] .bl-leaderboard-crown svg {
+      fill: #ab6528;
+    }
+
+    .bl-leaderboard-topName {
+      font-size: 1.35rem;
+      color: #f9f9ff;
+      max-width: 100%;
+      font-family: 'Amatic SC', cursive;
+      letter-spacing: 0.02em;
+    }
+
+    .bl-leaderboard-topMeta {
+      font-size: 0.82rem;
+      color: rgba(255,255,255,.68);
+      max-width: 220px;
+    }
+
+    .bl-leaderboard-topCard.is-self .bl-leaderboard-avatar {
+      border-color: rgba(14,165,233,.95);
+      box-shadow: 0 0 0 3px rgba(14,165,233,.45), 0 12px 24px rgba(14,165,233,.35);
+    }
+
+    .bl-leaderboard-topCard.is-self .bl-leaderboard-topName {
+      color: #67e8f9;
+    }
+
+    .bl-leaderboard-body {
+      background: rgba(12,12,18,.78);
+      border-radius: 0.9rem;
+      border: 1px solid rgba(255,255,255,.08);
+      padding: 0.85rem;
+      overflow-x: auto;
+    }
+
+    .bl-leaderboard-table {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      min-width: 560px;
+    }
+
+    .bl-leaderboard-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.55fr) minmax(0, 3fr) repeat(4, minmax(0, 1fr)) minmax(0, 1.05fr) minmax(0, 1.2fr);
+      align-items: center;
+      gap: 0.65rem;
+      text-align: center;
+    }
+
+    .bl-leaderboard-grid > span {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .bl-leaderboard-grid > span:first-child {
+      font-family: 'Amatic SC', cursive;
+      font-size: 1rem;
+    }
+
+    .bl-leaderboard-header {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,.6);
+      font-weight: 600;
+    }
+
+    .bl-leaderboard-header span {
+      font-family: 'Amatic SC', cursive;
+      letter-spacing: 0.1em;
+    }
+
+    .bl-leaderboard-list {
+      max-height: calc(var(--leaderboard-row-height) * 8);
+      overflow-y: auto;
+      overflow-x: hidden;
+      border-radius: 0.75rem;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(100,100,100,.65) rgba(255,255,255,.08);
+    }
+
+    .bl-leaderboard-list::-webkit-scrollbar-track {
+      background-color: rgba(255,255,255,.08);
+      border-radius: 999px;
+      box-shadow: inset 0 0 6px rgba(0,0,0,.3);
+    }
+
+    .bl-leaderboard-list::-webkit-scrollbar {
+      width: 6px;
+      background-color: rgba(255,255,255,.04);
+    }
+
+    .bl-leaderboard-list::-webkit-scrollbar-thumb {
+      background-color: rgba(100,100,100,.65);
+      border-radius: 999px;
+    }
+
+    .bl-leaderboard-player {
+      border: none;
+      background: rgba(124,58,237,.18);
+      color: inherit;
+      padding: 0.45rem 0.6rem;
+      margin: 0;
+      width: 100%;
+      cursor: pointer;
+      transition: background .18s ease, transform .18s ease, box-shadow .18s ease;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+      font-size: 0.88rem;
+      min-height: var(--leaderboard-row-height);
+    }
+
+    .bl-leaderboard-player span:first-child {
+      font-weight: 600;
+      color: #ffc500;
+    }
+
+    .bl-leaderboard-player:nth-child(even) {
+      background: rgba(49,11,119,.32);
+    }
+
+    .bl-leaderboard-player:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 26px rgba(124,58,237,.28);
+    }
+
+    .bl-leaderboard-player:focus-visible {
+      outline: 2px solid rgba(124,58,237,.65);
+      outline-offset: 2px;
+    }
+
+    .bl-leaderboard-player.is-self {
+      background: rgba(14,165,233,.22);
+      box-shadow: inset 0 0 0 1px rgba(14,165,233,.45), 0 0 0 3px rgba(14,165,233,.18);
+    }
+
+    .bl-leaderboard-track {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      min-width: 0;
+      justify-self: stretch;
+    }
+
+    .bl-leaderboard-cover {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1.5px solid rgba(255,255,255,.5);
+      flex-shrink: 0;
+      box-shadow: 0 4px 10px rgba(0,0,0,.35);
+    }
+
+    .bl-leaderboard-trackTitles {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      font-size: 0.9rem;
+    }
+
+    .bl-leaderboard-trackTitles strong {
+      font-size: 1rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bl-leaderboard-trackTitles span {
+      font-size: 0.74rem;
+      color: rgba(255,255,255,.65);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bl-leaderboard-rating {
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #ffc500;
+      text-align: right;
+    }
+
+    .bl-leaderboard-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,.55);
+      padding: 2.5rem 1.5rem;
+      border-radius: 0.75rem;
+      background: rgba(255,255,255,.05);
+      font-style: italic;
+    }
+
+    @media (max-width: 768px) {
+      .bl-leaderboard {
+        padding: 0.65rem 0.75rem 1rem;
+        --leaderboard-row-height: 50px;
+      }
+
+      .bl-leaderboard-top {
+        min-height: 150px;
+        gap: 1.1rem;
+        padding-top: 3rem;
+      }
+
+      .bl-leaderboard-topCard:nth-child(1) {
+        --card-size: 118px;
+      }
+
+      .bl-leaderboard-table {
+        min-width: 520px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .bl-leaderboard {
+        padding: 0.6rem 0.55rem 0.9rem;
+        --leaderboard-row-height: 48px;
+      }
+
+      .bl-leaderboard-top {
+        gap: 0.75rem;
+        padding-top: 2.75rem;
+      }
+
+      .bl-leaderboard-topCard:nth-child(1) {
+        --card-size: 110px;
+      }
+
+      .bl-leaderboard-topCard:nth-child(2),
+      .bl-leaderboard-topCard:nth-child(3) {
+        --card-size: 96px;
+        margin-bottom: 10px;
+      }
+
+      .bl-leaderboard-table {
+        min-width: 480px;
+      }
     }
   </style>
 
@@ -285,7 +682,7 @@
         </div>
         <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
           <h3 class="font-semibold">Leaderboard</h3>
-          <ol id="leaderboardM" class="mt-3 list-decimal list-inside space-y-1 text-sm text-white/80"></ol>
+          <div id="leaderboardM" class="mt-4 bl-leaderboard" data-leaderboard></div>
         </div>
       </div>
 
@@ -306,7 +703,7 @@
         </div>
         <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
           <h3 class="font-semibold">Leaderboard</h3>
-          <ol id="leaderboard" class="mt-3 list-decimal list-inside space-y-1 text-sm text-white/80"></ol>
+          <div id="leaderboard" class="mt-4 bl-leaderboard" data-leaderboard></div>
         </div>
         <div class="glass rounded-2xl p-4 ring-1 ring-white/10">
           <h3 class="font-semibold">Trends</h3>
@@ -1097,12 +1494,41 @@
     // ---------- Stats
     function getStats(id) {
       const stats = getJSON('track_stats', '{}')
-      return stats[id] || { plays: 0, likes: 0, comments: 0 }
+      const existing = stats[id]
+      if (existing) {
+        if (typeof existing.reposts !== 'number') existing.reposts = Number(existing.reposts) || 0
+        if (typeof existing.likes !== 'number') existing.likes = Number(existing.likes) || 0
+        if (typeof existing.comments !== 'number') existing.comments = Number(existing.comments) || 0
+        if (typeof existing.plays !== 'number') existing.plays = Number(existing.plays) || 0
+        return existing
+      }
+      return { plays: 0, likes: 0, comments: 0, reposts: 0 }
     }
     function setStats(id, data) {
       const stats = getJSON('track_stats', '{}')
       stats[id] = data
       setJSON('track_stats', stats)
+    }
+
+    const LEADERBOARD_THRESHOLDS = Object.freeze({ likes: 12, reposts: 4 })
+    const LEADERBOARD_WEIGHTS = Object.freeze({ plays: 15, comments: 9, likes: 2, reposts: 3 })
+    const LEADERBOARD_REMOTE_TTL = 15000
+    const leaderboardRegistry = new Map()
+    let leaderboardRefreshScheduled = false
+    let leaderboardRemoteCache = { fetchedAt: 0, top: [] }
+
+    function scheduleLeaderboardRefresh() {
+      if (leaderboardRefreshScheduled) return
+      leaderboardRefreshScheduled = true
+      const runner = () => {
+        leaderboardRefreshScheduled = false
+        try { updateLeaderboard() } catch (err) { console.warn('Leaderboard refresh failed', err) }
+      }
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(runner)
+      } else {
+        setTimeout(runner, 16)
+      }
     }
 
     // ---------- Time helpers
@@ -1192,7 +1618,7 @@ function ensureLoggedIn() {
       arr.push(comment)
       setJSON('comments_' + key, arr)
       const s = getStats(key); s.comments = (s.comments || 0) + 1; setStats(key, s)
-      updateLeaderboard()
+      scheduleLeaderboardRefresh()
     }
 
 // ---------- Elements
@@ -1617,6 +2043,95 @@ let sessionsCard = null;
     }
 
     // ---------- Build a feed card
+function normalizeLeaderboardUser(rawUser, fallbackName, fallbackEmail) {
+  if (!rawUser || typeof rawUser !== 'object') {
+    const email = typeof fallbackEmail === 'string' ? fallbackEmail.trim() : ''
+    const normalizedEmail = email ? email.toLowerCase() : ''
+    const label = fallbackName || (normalizedEmail ? email.split('@')[0] : 'Beatloop creator')
+    return {
+      displayName: label,
+      name: label,
+      email,
+      normalizedEmail,
+      avatar: fallbackAvatar
+    }
+  }
+  const emailRaw = rawUser.email || rawUser.normalizedEmail || ''
+  const normalizedEmail = emailRaw ? emailRaw.toLowerCase() : ''
+  const displayName = rawUser.displayName || rawUser.name || fallbackName || (normalizedEmail ? emailRaw.split('@')[0] : 'Beatloop creator')
+  return {
+    ...rawUser,
+    displayName,
+    email: rawUser.email || emailRaw,
+    normalizedEmail,
+    avatar: sanitizeAvatar(rawUser.avatar || rawUser.avatarUrl)
+  }
+}
+
+function registerLeaderboardTrack(rawTrack, options = {}) {
+  if (!rawTrack || typeof rawTrack !== 'object') return null
+  const id = rawTrack.id || rawTrack._id || rawTrack.metaId
+  if (!id) return null
+
+  const previous = leaderboardRegistry.get(id) || null
+  const coverSource = rawTrack.cover || rawTrack.coverUrl || ''
+  let cover = typeof coverSource === 'string' && coverSource ? toAssetUrl(coverSource) : ''
+  if (!cover || typeof cover !== 'string') {
+    cover = previous?.track?.cover && previous.track.cover !== DEFAULT_TRACK_COVER
+      ? previous.track.cover
+      : DEFAULT_TRACK_COVER
+  }
+
+  const title = rawTrack.title || rawTrack.name || previous?.track?.title || 'Untitled'
+  const artist = rawTrack.artist
+    || rawTrack.author
+    || previous?.track?.artist
+    || (rawTrack.user && (rawTrack.user.displayName || rawTrack.user.name || rawTrack.user.email))
+    || options.artist
+    || 'Beatloop creator'
+
+  const emailHint = (rawTrack.user && (rawTrack.user.email || rawTrack.user.normalizedEmail))
+    || rawTrack.userEmail
+    || rawTrack.email
+    || options.email
+    || previous?.user?.email
+    || ''
+
+  const ownerId = options.ownerId
+    || normalizeUserId(rawTrack.ownerId || rawTrack.userId || (rawTrack.user && (rawTrack.user.id || rawTrack.user._id)))
+    || previous?.ownerId
+    || null
+
+  const userOverride = options.userOverride
+    || (rawTrack.user && normalizeLeaderboardUser(rawTrack.user, artist, emailHint))
+    || previous?.user
+    || normalizeLeaderboardUser(null, artist, emailHint)
+
+  const record = {
+    id,
+    track: {
+      id,
+      title,
+      artist,
+      cover
+    },
+    user: userOverride,
+    ownerId
+  }
+
+  leaderboardRegistry.set(id, record)
+  return record
+}
+
+function getRegisteredLeaderboardTrack(id) {
+  return leaderboardRegistry.get(id) || null
+}
+
+function markLeaderboardTracks(tracks = []) {
+  if (!Array.isArray(tracks)) return
+  tracks.forEach(track => { try { registerLeaderboardTrack(track || {}) } catch {} })
+}
+
 function createPost(track, { prepend = false } = {}) {
   const normalized = normalizeTrackForRendering(track)
   if (!normalized) return null
@@ -1756,12 +2271,15 @@ function createPost(track, { prepend = false } = {}) {
         feedEl.appendChild(card)
       }
       renderedTrackIds.add(normalized.id)
+      registerLeaderboardTrack(normalized)
+      scheduleLeaderboardRefresh()
 
       function renderAll() {
         renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0)
         const stat = getStats(normalized.id)
         commentBtn.textContent = '💬 ' + (stat.comments || 0)
         likeBtn.textContent    = '❤️ ' + (stat.likes || 0)
+        repostBtn.textContent = '🔁 ' + (stat.reposts || 0)
       }
       renderAll()
 
@@ -1790,7 +2308,7 @@ function createPost(track, { prepend = false } = {}) {
         const s = getStats(normalized.id)
         s.plays = (s.plays || 0) + 1
         setStats(normalized.id, s)
-        updateLeaderboard()
+        scheduleLeaderboardRefresh()
       })
       btn.addEventListener('click', () => {
         const text = input.value.trim()
@@ -1804,16 +2322,21 @@ function createPost(track, { prepend = false } = {}) {
         })
         input.value = ''
         renderAll()
+        scheduleLeaderboardRefresh()
       })
       likeBtn.addEventListener('click', () => {
         const s = getStats(normalized.id)
         s.likes = (s.likes || 0) + 1
         setStats(normalized.id, s)
         likeBtn.textContent = '❤️ ' + s.likes
-        updateLeaderboard()
+        scheduleLeaderboardRefresh()
       })
       repostBtn.addEventListener('click', () => {
-        alert('Repost functionality coming soon!')
+        const s = getStats(normalized.id)
+        s.reposts = (s.reposts || 0) + 1
+        setStats(normalized.id, s)
+        repostBtn.textContent = '🔁 ' + s.reposts
+        scheduleLeaderboardRefresh()
       })
       return card
     }
@@ -1893,6 +2416,7 @@ function createPost(track, { prepend = false } = {}) {
         const sortedRemote = Array.isArray(remoteTracks)
           ? remoteTracks.slice().sort((a, b) => resolveTrackCreatedAt(b) - resolveTrackCreatedAt(a))
           : []
+        if (sortedRemote.length) markLeaderboardTracks(sortedRemote)
         for (const remote of sortedRemote) {
           const card = createPost(remote)
           if (card) {
@@ -2071,56 +2595,312 @@ function createPost(track, { prepend = false } = {}) {
       })
     }
 
+
     // ---------- Leaderboard (uses meta titles/artists)
 async function updateLeaderboard() {
-  const listEl = document.getElementById('leaderboardList') || document.querySelector('[data-leaderboard]');
-  if (!listEl) return;
-  listEl.innerHTML = '';
-  try {
-    const apiBase = (typeof window.getApiBase === 'function'
-      ? window.getApiBase()
-      : (window.API_BASE || API_BASE_DEFAULT));
-    const r = await fetch(apiBase + '/api/leaderboard', {
-      headers: { ...AUTH.hdr() }
-    });
-    if (!r.ok) throw 0;
-    const { top = [] } = await r.json(); // [{track:{id,title,artist,cover}, score}, ...]
-    top.slice(0,5).forEach(({track, score}) => {
-      const li = document.createElement('li');
-      li.className = 'flex items-center gap-3';
-      const cover = document.createElement('img');
-      cover.src = (track && track.cover) || DEFAULT_TRACK_COVER;
-      cover.className = 'h-8 w-8 rounded ring-1 ring-white/10 object-cover';
-      const name = document.createElement('div');
-      name.className = 'min-w-0';
-      name.innerHTML = `<p class="font-semibold truncate">${(track?.title)||'Untitled'}</p>
-                        <p class="text-xs text-white/50 truncate">${(track?.artist)||'unknown'} • ${score}</p>`;
-      li.appendChild(cover); li.appendChild(name);
-      listEl.appendChild(li);
-    });
-  } catch {
-    // Fallback to your existing local leaderboard
-    const stats = getJSON('track_stats', '{}');
-    const all = [...TRACKS, ...customMeta];
-    const list = all.map(t => {
-      const s = stats?.[t.id] || {};
-      const score = (s.likes || 0) + (s.plays || 0) + (s.comments || 0);
-      return { track: t, score };
-    }).sort((a,b) => b.score - a.score).slice(0,5);
-    list.forEach(({track, score}) => {
-      const li = document.createElement('li');
-      li.className = 'flex items-center gap-3';
-      const cover = document.createElement('img');
-      cover.src = track.cover || DEFAULT_TRACK_COVER;
-      cover.className = 'h-8 w-8 rounded ring-1 ring-white/10 object-cover';
-      const name = document.createElement('div');
-      name.className = 'min-w-0';
-      name.innerHTML = `<p class="font-semibold truncate">${track.title || 'Untitled'}</p>
-                        <p class="text-xs text-white/50 truncate">${track.artist || 'unknown'} • ${score}</p>`;
-      li.appendChild(cover); li.appendChild(name);
-      listEl.appendChild(li);
-    });
+  const containers = Array.from(document.querySelectorAll('[data-leaderboard]'))
+  if (!containers.length) return
+
+  const statsStore = getJSON('track_stats', '{}') || {}
+  const entriesMap = new Map()
+  const coerceStat = (value) => {
+    const num = Number(value)
+    return Number.isFinite(num) && num > 0 ? num : 0
   }
+
+  function addEntry(rawTrack, metrics = {}, extras = {}) {
+    if (!rawTrack || typeof rawTrack !== 'object') return
+    const registryRecord = registerLeaderboardTrack(rawTrack, extras) || getRegisteredLeaderboardTrack(rawTrack.id || rawTrack._id || rawTrack.metaId)
+    if (!registryRecord) return
+
+    const id = registryRecord.id
+    const baseEntry = entriesMap.get(id) || {
+      id,
+      track: { ...registryRecord.track },
+      stats: { plays: 0, comments: 0, likes: 0, reposts: 0 },
+      user: registryRecord.user || null,
+      ownerId: registryRecord.ownerId || null,
+      remoteScore: null
+    }
+
+    const storedStats = statsStore[id] || {}
+    const metricSource = metrics || {}
+    const mergedStats = {
+      plays: Math.max(baseEntry.stats.plays, coerceStat(storedStats.plays), coerceStat(metricSource.plays ?? metricSource.playCount ?? metricSource.play_count ?? metricSource.playsCount)),
+      comments: Math.max(baseEntry.stats.comments, coerceStat(storedStats.comments), coerceStat(metricSource.comments ?? metricSource.commentCount ?? metricSource.comment_count)),
+      likes: Math.max(baseEntry.stats.likes, coerceStat(storedStats.likes), coerceStat(metricSource.likes ?? metricSource.likeCount ?? metricSource.like_count ?? metricSource.favorites)),
+      reposts: Math.max(baseEntry.stats.reposts, coerceStat(storedStats.reposts), coerceStat(metricSource.reposts ?? metricSource.repostCount ?? metricSource.repost_count ?? metricSource.shares))
+    }
+
+    baseEntry.track = { ...baseEntry.track, ...registryRecord.track }
+    baseEntry.user = registryRecord.user || baseEntry.user
+    baseEntry.ownerId = registryRecord.ownerId || baseEntry.ownerId
+    baseEntry.stats = mergedStats
+
+    const remoteScore = extras.remoteScore
+    if (typeof remoteScore === 'number' && Number.isFinite(remoteScore)) {
+      baseEntry.remoteScore = Math.max(baseEntry.remoteScore || 0, remoteScore)
+    }
+
+    entriesMap.set(id, baseEntry)
+  }
+
+  const now = Date.now()
+  let topFromApi = []
+  if (now - leaderboardRemoteCache.fetchedAt > LEADERBOARD_REMOTE_TTL) {
+    try {
+      const apiBase = (typeof window.getApiBase === 'function'
+        ? window.getApiBase()
+        : (window.API_BASE || API_BASE_DEFAULT))
+      const resp = await fetch(apiBase + '/api/leaderboard', { headers: { ...AUTH.hdr() } })
+      if (!resp.ok) throw new Error('leaderboard request failed')
+      const payload = await resp.json().catch(() => null) || {}
+      const remoteTop = Array.isArray(payload.top) ? payload.top : []
+      leaderboardRemoteCache = { fetchedAt: now, top: remoteTop }
+      topFromApi = remoteTop
+    } catch (err) {
+      console.warn('Remote leaderboard unavailable', err)
+      leaderboardRemoteCache = { fetchedAt: now, top: [] }
+      topFromApi = []
+    }
+  } else {
+    topFromApi = Array.isArray(leaderboardRemoteCache.top) ? leaderboardRemoteCache.top : []
+  }
+
+  topFromApi.forEach(item => {
+    if (!item) return
+    const track = item.track || item
+    const metrics = item.metrics || item.stats || track?.stats || {}
+    const extras = {}
+    if (track && track.user) {
+      extras.userOverride = normalizeLeaderboardUser(track.user, track.artist, track.user.email || track.user.normalizedEmail || '')
+    }
+    if (track && (track.userId || track.ownerId)) {
+      extras.ownerId = normalizeUserId(track.userId || track.ownerId)
+    }
+    const remoteScore = Number(item.score)
+    if (Number.isFinite(remoteScore)) extras.remoteScore = remoteScore
+    addEntry(track, metrics, extras)
+  })
+
+  leaderboardRegistry.forEach(record => {
+    const trackPayload = { ...record.track, user: record.user || undefined, ownerId: record.ownerId || undefined, userId: record.ownerId || undefined }
+    addEntry(trackPayload, statsStore[record.id] || {}, { userOverride: record.user, ownerId: record.ownerId })
+  })
+
+  Object.keys(statsStore).forEach(id => {
+    if (entriesMap.has(id)) return
+    const registryRecord = getRegisteredLeaderboardTrack(id)
+    const fallbackTrack = registryRecord?.track || { id, title: 'Untitled track', artist: 'Beatloop creator', cover: DEFAULT_TRACK_COVER }
+    addEntry({ ...fallbackTrack, id }, statsStore[id], { userOverride: registryRecord?.user, ownerId: registryRecord?.ownerId })
+  })
+
+  const entries = Array.from(entriesMap.values())
+  if (!entries.length) {
+    containers.forEach(container => {
+      container.innerHTML = ''
+      const empty = document.createElement('div')
+      empty.className = 'bl-leaderboard-empty'
+      empty.textContent = 'No songs on the board yet. Drop a track to claim the spotlight.'
+      container.appendChild(empty)
+    })
+    return
+  }
+
+  const repostQualifiedCount = entries.reduce((count, entry) => count + (coerceStat(entry.stats.reposts) >= LEADERBOARD_THRESHOLDS.reposts ? 1 : 0), 0)
+  const allowRepostReward = repostQualifiedCount >= 2
+  const viewerId = normalizeUserId(currentUserId || currentUser?.id || currentUser?._id)
+  const viewerEmails = new Set()
+  if (currentUser && currentUser.email) viewerEmails.add(currentUser.email.toLowerCase())
+  if (currentUser && currentUser.normalizedEmail) viewerEmails.add(currentUser.normalizedEmail.toLowerCase())
+
+  entries.forEach(entry => {
+    const plays = coerceStat(entry.stats.plays)
+    const comments = coerceStat(entry.stats.comments)
+    const likes = coerceStat(entry.stats.likes)
+    const reposts = coerceStat(entry.stats.reposts)
+    const likeQualified = likes >= LEADERBOARD_THRESHOLDS.likes
+    const repostQualified = allowRepostReward && reposts >= LEADERBOARD_THRESHOLDS.reposts
+    const playsScore = plays * LEADERBOARD_WEIGHTS.plays
+    const commentsScore = comments * LEADERBOARD_WEIGHTS.comments
+    const likesScore = likeQualified ? likes * LEADERBOARD_WEIGHTS.likes : 0
+    const repostScore = repostQualified ? reposts * LEADERBOARD_WEIGHTS.reposts : 0
+    const baseScore = playsScore + commentsScore + likesScore + repostScore
+    let categoriesActive = 0
+    if (plays > 0) categoriesActive += 1
+    if (comments > 0) categoriesActive += 1
+    if (likeQualified) categoriesActive += 1
+    if (repostQualified) categoriesActive += 1
+    const synergyBonus = categoriesActive >= 2
+      ? Math.round((playsScore + commentsScore) * 0.1 * (categoriesActive - 1))
+      : 0
+    const fanComboBonus = (likeQualified && repostQualified)
+      ? Math.round((likesScore + repostScore) * 0.6)
+      : 0
+    const momentumBonus = categoriesActive >= 3
+      ? Math.round((plays + comments) * 0.08 * (categoriesActive - 2))
+      : 0
+    const remoteScore = Number(entry.remoteScore)
+    const composite = baseScore + synergyBonus + fanComboBonus + momentumBonus
+    entry.stats = { plays, comments, likes, reposts }
+    entry.comboBonus = synergyBonus + fanComboBonus + momentumBonus
+    entry.categoriesActive = categoriesActive
+    entry.score = Math.max(composite, Number.isFinite(remoteScore) ? remoteScore : 0)
+    const normalizedEmail = entry.user && entry.user.normalizedEmail ? entry.user.normalizedEmail.toLowerCase() : (entry.user && entry.user.email ? entry.user.email.toLowerCase() : '')
+    entry.isSelf = Boolean((normalizedEmail && viewerEmails.has(normalizedEmail)) || (viewerId && entry.ownerId && entry.ownerId === viewerId))
+  })
+
+  entries.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    if (b.stats.plays !== a.stats.plays) return b.stats.plays - a.stats.plays
+    if (b.stats.comments !== a.stats.comments) return b.stats.comments - a.stats.comments
+    if (b.stats.reposts !== a.stats.reposts) return b.stats.reposts - a.stats.reposts
+    if (b.stats.likes !== a.stats.likes) return b.stats.likes - a.stats.likes
+    return (a.track.title || '').localeCompare(b.track.title || '')
+  })
+
+  entries.forEach((entry, index) => { entry.rank = index + 1 })
+
+  const formatNumber = (value) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })
+
+  const crownSvg = '<svg fill="#0f74b5" viewBox="0 0 100 50" aria-hidden="true"><polygon points="12.7 50 87.5 50 100 0 75 25 50 0 25.6 25 0 0 12.7 50"></polygon></svg>'
+
+  const ensureProfile = (entry) => entry.user || normalizeLeaderboardUser(null, entry.track.artist, '')
+
+  containers.forEach(container => {
+    container.innerHTML = ''
+
+    const topWrap = document.createElement('div')
+    topWrap.className = 'bl-leaderboard-top'
+    entries.slice(0, 3).forEach(entry => {
+      const card = document.createElement('button')
+      card.type = 'button'
+      card.className = 'bl-leaderboard-topCard'
+      card.dataset.rank = String(entry.rank)
+      if (entry.isSelf) card.classList.add('is-self')
+
+      const avatarWrap = document.createElement('div')
+      avatarWrap.className = 'bl-leaderboard-avatar'
+      const img = document.createElement('img')
+      img.src = entry.track.cover || DEFAULT_TRACK_COVER
+      img.onerror = () => { img.src = DEFAULT_TRACK_COVER }
+      avatarWrap.appendChild(img)
+
+      const crown = document.createElement('span')
+      crown.className = 'bl-leaderboard-crown'
+      crown.innerHTML = crownSvg
+      card.appendChild(crown)
+      card.appendChild(avatarWrap)
+
+      const name = document.createElement('div')
+      name.className = 'bl-leaderboard-topName'
+      name.textContent = ensureProfile(entry).displayName || entry.track.artist || 'Beatloop creator'
+      card.appendChild(name)
+
+      const meta = document.createElement('div')
+      meta.className = 'bl-leaderboard-topMeta'
+      meta.textContent = (entry.track.title || 'Untitled track') + ' • Rating ' + formatNumber(entry.score)
+      card.appendChild(meta)
+
+      const profile = ensureProfile(entry)
+      if (typeof openWhoProfile === 'function') {
+        card.addEventListener('click', () => openWhoProfile({ ...profile }))
+      }
+
+      topWrap.appendChild(card)
+    })
+
+    if (topWrap.children.length) {
+      container.appendChild(topWrap)
+    }
+
+    const body = document.createElement('div')
+    body.className = 'bl-leaderboard-body'
+    const table = document.createElement('div')
+    table.className = 'bl-leaderboard-table'
+    const header = document.createElement('div')
+    header.className = 'bl-leaderboard-grid bl-leaderboard-header'
+    ;['#', 'Track', 'Plays', 'Comments', 'Reposts', 'Likes', 'Combo', 'Rating'].forEach(text => {
+      const span = document.createElement('span')
+      span.textContent = text
+      header.appendChild(span)
+    })
+    table.appendChild(header)
+
+    const list = document.createElement('div')
+    list.className = 'bl-leaderboard-list'
+
+    let selfRow = null
+
+    entries.forEach(entry => {
+      const row = document.createElement('button')
+      row.type = 'button'
+      row.className = 'bl-leaderboard-grid bl-leaderboard-player'
+      row.dataset.rank = String(entry.rank)
+      if (entry.isSelf) row.classList.add('is-self')
+      row.setAttribute('aria-label', `View ${ensureProfile(entry).displayName || entry.track.artist}'s leaderboard stats`)
+
+      const rankCell = document.createElement('span')
+      rankCell.textContent = String(entry.rank)
+      row.appendChild(rankCell)
+
+      const trackCell = document.createElement('div')
+      trackCell.className = 'bl-leaderboard-track'
+      const cover = document.createElement('img')
+      cover.className = 'bl-leaderboard-cover'
+      cover.src = entry.track.cover || DEFAULT_TRACK_COVER
+      cover.onerror = () => { cover.src = DEFAULT_TRACK_COVER }
+      const titles = document.createElement('div')
+      titles.className = 'bl-leaderboard-trackTitles'
+      const title = document.createElement('strong')
+      title.textContent = entry.track.title || 'Untitled track'
+      const subtitle = document.createElement('span')
+      subtitle.textContent = entry.track.artist || 'Beatloop creator'
+      titles.appendChild(title)
+      titles.appendChild(subtitle)
+      trackCell.appendChild(cover)
+      trackCell.appendChild(titles)
+      row.appendChild(trackCell)
+
+      if (entry.isSelf) selfRow = row
+
+      const metrics = [entry.stats.plays, entry.stats.comments, entry.stats.reposts, entry.stats.likes]
+      metrics.forEach(value => {
+        const span = document.createElement('span')
+        span.textContent = formatNumber(value)
+        row.appendChild(span)
+      })
+
+      const comboCell = document.createElement('span')
+      comboCell.textContent = entry.comboBonus > 0 ? '+' + formatNumber(entry.comboBonus) : '—'
+      row.appendChild(comboCell)
+
+      const rating = document.createElement('span')
+      rating.className = 'bl-leaderboard-rating'
+      rating.textContent = formatNumber(entry.score)
+      row.appendChild(rating)
+
+      const profile = ensureProfile(entry)
+      if (typeof openWhoProfile === 'function') {
+        row.addEventListener('click', () => openWhoProfile({ ...profile }))
+      }
+
+      list.appendChild(row)
+    })
+
+    if (selfRow) {
+      requestAnimationFrame(() => {
+        const parent = selfRow.parentElement
+        if (!parent) return
+        const targetScroll = selfRow.offsetTop - Math.max(0, parent.clientHeight - selfRow.offsetHeight) / 2
+        parent.scrollTop = Math.max(0, targetScroll)
+      })
+    }
+
+    table.appendChild(list)
+    body.appendChild(table)
+    container.appendChild(body)
+  })
 }
 
 
@@ -2169,7 +2949,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
       // Show the post immediately with server URLs
       saved.caption = saved.caption || (composerTextEl ? composerTextEl.value.trim() : '')
       createPost(saved, { prepend: true })
-      updateLeaderboard()
+      scheduleLeaderboardRefresh()
       pendingMeta = null
       pendingCoverKey = null
       return
@@ -2188,7 +2968,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
       const coverUrl = metaLocal.coverKey ? (await getBlobUrl('covers', metaLocal.coverKey)) : DEFAULT_TRACK_COVER
       const url = URL.createObjectURL(file)
       createPost({ ...metaLocal, url, cover: coverUrl }, { prepend: true })
-      updateLeaderboard()
+      scheduleLeaderboardRefresh()
       pendingMeta = metaLocal
     } catch (saveErr) {
       alert('Save failed: ' + (saveErr?.message || saveErr))
@@ -2243,7 +3023,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
               const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
               const url = URL.createObjectURL(blob)
               createPost({ ...meta, url, cover: coverUrl, createdAt }, { prepend: true })
-              updateLeaderboard()
+              scheduleLeaderboardRefresh()
               pendingMeta = meta
             } catch (err) {
               alert('Recording save failed: ' + err.message)
@@ -2274,7 +3054,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
         if (textVal) playable.caption = textVal
         playable.createdAt = Date.now()
         createPost(playable, { prepend: true })
-        updateLeaderboard()
+        scheduleLeaderboardRefresh()
         if (composerTextEl) composerTextEl.value = ''
         pendingMeta = null
       })
@@ -2317,7 +3097,8 @@ uploadTrackInput.addEventListener('change', async (e) => {
       renderWhoToFollowInto(whoToFollowMEl)
       renderTrendsInto(trendsEl)
       renderTrendsInto(trendsMEl)
-      updateLeaderboard()
+      markLeaderboardTracks([...TRACKS, ...customMeta])
+      scheduleLeaderboardRefresh()
       // Load initial feed
       resetFeedState({ clearDom: true })
       loadMore()
