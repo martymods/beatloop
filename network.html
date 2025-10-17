@@ -1215,7 +1215,9 @@
         if (protocol !== 'http:' && protocol !== 'https:') return null;
         const host = (parsed.hostname || '').toLowerCase();
         const pageHost = (window.location.hostname || '').toLowerCase();
-        if ((host === 'localhost' || host === '127.0.0.1') && host !== pageHost) {
+        const isLoopback = (value) => value === 'localhost' || value === '127.0.0.1';
+        const hostsMatch = host === pageHost || (isLoopback(host) && isLoopback(pageHost));
+        if (isLoopback(host) && !hostsMatch) {
           return null;
         }
         if (window.location.protocol === 'https:' && protocol === 'http:') {
@@ -2954,11 +2956,35 @@ uploadTrackInput.addEventListener('change', async (e) => {
       pendingCoverKey = null
       return
     }
-
-    // If API wasn’t OK → fall through to local
-    throw new Error('API rejected, using local fallback')
+    // Non-OK API response → surface to the user instead of silently falling back
+    let detail = ''
+    try {
+      const raw = await r.text()
+      if (raw) {
+        try {
+          const data = JSON.parse(raw)
+          detail = (data && (data.error || data.message)) || raw
+        } catch {
+          detail = raw
+        }
+        if (detail) detail = String(detail).trim()
+      }
+    } catch {}
+    const message = detail
+      ? ('Track upload failed: ' + detail)
+      : ('Track upload failed (HTTP ' + r.status + ')')
+    const error = new Error(message)
+    error.isApiFailure = true
+    error.status = r.status
+    throw error
   } catch (err) {
     // 2) Local fallback (IDB)
+    const isApiFailure = err && typeof err === 'object' && err.isApiFailure
+    if (isApiFailure) {
+      alert(err.message || 'Track upload failed.')
+      pendingMeta = null
+      return
+    }
     try {
       await putBlob('tracks', idLocal, file)
       customMeta.push(metaLocal)
