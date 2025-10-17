@@ -201,20 +201,60 @@ fs.mkdirSync(trackCoverDir, { recursive: true });
 app.use('/uploads', express.static(uploadsRoot));
 
 const LOCALHOST_RE = /^https?:\/\/(?:localhost|127(?:\.\d+){3})(?::\d+)?$/i;
-const ENV_PUBLIC_BASE = (PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+const MARKETING_HOSTS = new Set(['beatloop.co', 'www.beatloop.co']);
 
-function effectivePublicBase(req) {
-  if (ENV_PUBLIC_BASE && !LOCALHOST_RE.test(ENV_PUBLIC_BASE)) return ENV_PUBLIC_BASE;
+const RAW_PUBLIC_BASE = (PUBLIC_BASE_URL || '').trim();
+let ENV_PUBLIC_BASE = '';
+let ENV_PUBLIC_HOST = '';
+let ENV_PUBLIC_IS_LOCAL = false;
+let ENV_PUBLIC_IS_MARKETING = false;
 
+if (RAW_PUBLIC_BASE) {
+  if (/^https?:\/\//i.test(RAW_PUBLIC_BASE)) {
+    try {
+      const parsed = new URL(RAW_PUBLIC_BASE);
+      const path = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
+      ENV_PUBLIC_BASE = `${parsed.protocol}//${parsed.host}${path}`.replace(/\/+$/, '');
+      ENV_PUBLIC_HOST = (parsed.hostname || '').toLowerCase();
+    } catch {
+      ENV_PUBLIC_BASE = RAW_PUBLIC_BASE.replace(/\/+$/, '');
+    }
+  }
+
+  if (ENV_PUBLIC_BASE) {
+    ENV_PUBLIC_IS_LOCAL = LOCALHOST_RE.test(ENV_PUBLIC_BASE);
+    ENV_PUBLIC_IS_MARKETING = MARKETING_HOSTS.has(ENV_PUBLIC_HOST);
+  }
+}
+
+function requestBaseFromHeaders(req) {
   const headerValue = value => (typeof value === 'string' ? value.split(',')[0].trim() : '');
   const forwardedHost = headerValue(req.headers['x-forwarded-host']);
   const forwardedProto = headerValue(req.headers['x-forwarded-proto']);
   const origin = headerValue(req.headers.origin);
-  const host = forwardedHost || headerValue(req.headers.host) || req.get?.('host') || '';
+  const hostHeader = forwardedHost || headerValue(req.headers.host) || (typeof req.get === 'function' ? headerValue(req.get('host')) : '');
   const protocol = forwardedProto || (origin ? origin.split('://')[0] : '') || req.protocol || 'http';
 
-  if (host) return `${protocol}://${host}`.replace(/\/+$/, '');
-  if (origin) return origin.replace(/\/+$/, '');
+  if (hostHeader) {
+    return `${protocol}://${hostHeader}`.replace(/\/+$/, '');
+  }
+  if (origin) {
+    return origin.replace(/\/+$/, '');
+  }
+  return null;
+}
+
+function effectivePublicBase(req) {
+  const requestBase = requestBaseFromHeaders(req);
+  const requestIsLocal = requestBase ? LOCALHOST_RE.test(requestBase) : false;
+
+  if (ENV_PUBLIC_BASE && !ENV_PUBLIC_IS_LOCAL) {
+    if (!ENV_PUBLIC_IS_MARKETING || !requestBase || requestIsLocal) {
+      return ENV_PUBLIC_BASE;
+    }
+  }
+
+  if (requestBase) return requestBase;
   if (ENV_PUBLIC_BASE) return ENV_PUBLIC_BASE;
   return `http://localhost:${PORT}`;
 }
