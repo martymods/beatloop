@@ -443,6 +443,32 @@ app.get('/api/users/me', auth, async (req, res) => {
   res.json({ user: await userSummary(req.user) });
 });
 
+app.get('/api/users/directory', async (req, res) => {
+  try {
+    const limitParam = Number.parseInt(req.query?.limit, 10);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 500) : 120;
+    const users = await User.find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .select('name email avatarUrl tagUrl totalOnlineSec createdAt');
+
+    const directory = users.map(u => ({
+      id: u._id,
+      name: u.name,
+      email: u.email,
+      avatar: u.avatarUrl,
+      tagUrl: u.tagUrl,
+      joinedAt: u.createdAt,
+      totalOnlineSec: typeof u.totalOnlineSec === 'number' ? u.totalOnlineSec : 0
+    }));
+
+    res.json({ users: directory });
+  } catch (err) {
+    console.error('Failed to load user directory', err);
+    res.status(500).json({ error: 'failed to load user directory' });
+  }
+});
+
 /* ======================= Presence / Time grind ======================= */
 app.post('/api/presence/ping', auth, async (req, res) => {
   const now = new Date();

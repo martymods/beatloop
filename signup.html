@@ -661,6 +661,30 @@
       set(t){ this.token = t; localStorage.setItem('jwt', t); },
       hdr(){ return this.token ? { 'Authorization': 'Bearer ' + this.token } : {}; }
     };
+
+    function persistDirectoryUser(user, fallbackEmail) {
+      if (!user) return;
+      const emailRaw = typeof user.email === 'string' && user.email ? user.email : (typeof fallbackEmail === 'string' ? fallbackEmail : '');
+      const emailKey = emailRaw.trim().toLowerCase();
+      if (!emailKey) return;
+      try {
+        const existingRaw = localStorage.getItem('users');
+        const directory = existingRaw ? JSON.parse(existingRaw) : {};
+        const current = directory[emailKey] || {};
+        directory[emailKey] = {
+          ...current,
+          id: user.id || current.id || null,
+          name: user.name || current.name || emailKey,
+          email: emailKey,
+          avatar: user.avatar || current.avatar || '',
+          tagUrl: user.tagUrl || current.tagUrl || '',
+          joinedAt: user.joinedAt || current.joinedAt || Date.now()
+        };
+        localStorage.setItem('users', JSON.stringify(directory));
+      } catch (err) {
+        console.warn('Unable to cache user directory entry', err);
+      }
+    }
   </script>
 
   <script>
@@ -719,6 +743,7 @@
         AUTH.set(data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         localStorage.setItem('current_user', data.user.email || email);
+        persistDirectoryUser(data.user, email);
 
         if (avatarFile) {
           const fd = new FormData();
@@ -737,6 +762,7 @@
                   if (stored) {
                     stored.avatar = avatarData.avatarUrl;
                     localStorage.setItem('user', JSON.stringify(stored));
+                    persistDirectoryUser(stored, email);
                   }
                 } catch (_) {}
               }
