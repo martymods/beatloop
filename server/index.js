@@ -66,9 +66,6 @@ const AUDIO_MIME_EXT = {
   'audio/x-aiff': '.aiff'
 };
 const AUDIO_ALLOWED_MIME = new Set(Object.keys(AUDIO_MIME_EXT));
-const LEADERBOARD_WEIGHTS = Object.freeze({ plays: 15, comments: 9, likes: 2, reposts: 3 });
-const LEADERBOARD_FETCH_LIMIT = 200;
-const LEADERBOARD_LIMIT = 50;
 /* ============================ DB ============================ */
 await mongoose.connect(MONGODB_URI, { dbName: 'beatloop' });
 
@@ -136,31 +133,6 @@ TrackSchema.pre('save', function(next) {
 const User = mongoose.model('User', UserSchema);
 const Session = mongoose.model('Session', SessionSchema);
 const Track = mongoose.model('Track', TrackSchema);
-const TrackCommentSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  displayName: { type: String, default: '' },
-  avatarUrl: { type: String, default: '' },
-  text: { type: String, default: '' },
-  time: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now }
-});
-
-const TrackStatSchema = new mongoose.Schema({
-  trackId: { type: mongoose.Schema.Types.ObjectId, ref: 'Track', unique: true, index: true },
-  plays: { type: Number, default: 0 },
-  likes: { type: Number, default: 0 },
-  reposts: { type: Number, default: 0 },
-  commentsCount: { type: Number, default: 0 },
-  comments: { type: [TrackCommentSchema], default: [] },
-  updatedAt: { type: Date, default: Date.now }
-});
-
-TrackStatSchema.pre('save', function(next) {
-  this.updatedAt = new Date();
-  next();
-});
-
-const TrackStat = mongoose.model('TrackStat', TrackStatSchema);
 
 /* ============================ APP ============================ */
 const app = express();
@@ -359,67 +331,8 @@ function toIdString(value) {
   if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === '[object Object]') {
-  return null;
-}
-
-function toObjectId(value) {
-  if (!value) return null;
-  try {
-    if (value instanceof mongoose.Types.ObjectId) return value;
-    return new mongoose.Types.ObjectId(value);
-  } catch {
-    return null;
-  }
-}
-
-function normalizeStatNumber(value) {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num < 0) return 0;
-  return Math.floor(num);
-}
-
-function serializeTrackStats(doc) {
-  if (!doc) {
-    return { plays: 0, likes: 0, reposts: 0, comments: 0 };
-  }
-  const plays = normalizeStatNumber(doc.plays);
-  const likes = normalizeStatNumber(doc.likes);
-  const reposts = normalizeStatNumber(doc.reposts);
-  const comments = normalizeStatNumber(doc.commentsCount ?? (Array.isArray(doc.comments) ? doc.comments.length : 0));
-  return { plays, likes, reposts, comments };
-}
-
-function serializeComment(c) {
-  if (!c) return null;
-  return {
-    id: c._id ? toIdString(c._id) : null,
-    userId: c.userId ? toIdString(c.userId) : null,
-    displayName: typeof c.displayName === 'string' ? c.displayName : '',
-    avatar: typeof c.avatarUrl === 'string' ? c.avatarUrl : '',
-    text: typeof c.text === 'string' ? c.text : '',
-    time: normalizeStatNumber(c.time),
-    createdAt: c.createdAt || null
-  };
-}
-
-async function ensureTrackExists(objectId) {
-  if (!objectId) return false;
-  try {
-    const exists = await Track.exists({ _id: objectId });
-    return !!exists;
-  } catch {
-    return false;
-  }
-}
-
-function upsertTrackStat(objectId, update) {
-  if (!objectId) return Promise.resolve(null);
-  return TrackStat.findOneAndUpdate(
-    { trackId: objectId },
-    { $setOnInsert: { trackId: objectId }, ...update },
-    { new: true, upsert: true }
-  );
-}
+      return null;
+    }
     const match = trimmed.match(/([0-9a-f]{24})/i);
     return match ? match[1].toLowerCase() : trimmed;
   }
@@ -702,51 +615,6 @@ app.get('/api/users/directory', async (req, res) => {
   } catch (err) {
     console.error('Failed to load user directory', err);
     res.status(500).json({ error: 'failed to load user directory' });
-  }
-});
-
-app.get('/api/track-stats', auth, async (req, res) => {
-  try {
-    const idsParam = req.query?.ids;
-    const rawIds = [];
-    if (typeof idsParam === 'string') {
-      rawIds.push(...idsParam.split(/[\s,]+/));
-    } else if (Array.isArray(idsParam)) {
-      idsParam.forEach(part => {
-        if (typeof part === 'string') {
-          rawIds.push(...part.split(/[\s,]+/));
-        }
-      });
-    }
-
-    const normalizedToObjectId = new Map();
-    rawIds.forEach(raw => {
-      const normalized = toIdString(raw);
-      if (!normalized || normalizedToObjectId.has(normalized)) return;
-      const objectId = toObjectId(normalized);
-      if (!objectId) return;
-      normalizedToObjectId.set(normalized, objectId);
-    });
-
-    if (!normalizedToObjectId.size) {
-      return res.json({ stats: {} });
-    }
-
-    const objectIds = Array.from(normalizedToObjectId.values());
-    const docs = await TrackStat.find({ trackId: { $in: objectIds } }).lean();
-    const stats = {};
-    for (const doc of docs) {
-      const key = toIdString(doc.trackId);
-      if (!key) continue;
-      stats[key] = serializeTrackStats(doc);
-    }
-    for (const key of normalizedToObjectId.keys()) {
-      if (!stats[key]) stats[key] = { plays: 0, likes: 0, reposts: 0, comments: 0 };
-    }
-    res.json({ stats });
-  } catch (err) {
-    console.error('Failed to load track stats', err);
-    res.status(500).json({ error: 'stats unavailable' });
   }
 });
 
@@ -1041,88 +909,6 @@ app.post('/api/tracks', auth, (req, res) => {
   });
 });
 
-app.post('/api/tracks/:id/play', auth, async (req, res) => {
-  const trackObjectId = toObjectId(req.params.id);
-  if (!trackObjectId) return res.status(400).json({ error: 'invalid track id' });
-  const exists = await ensureTrackExists(trackObjectId);
-  if (!exists) return res.status(404).json({ error: 'track not found' });
-  const statDoc = await upsertTrackStat(trackObjectId, { $inc: { plays: 1 } });
-  res.json({ stats: serializeTrackStats(statDoc) });
-});
-
-app.post('/api/tracks/:id/like', auth, async (req, res) => {
-  const trackObjectId = toObjectId(req.params.id);
-  if (!trackObjectId) return res.status(400).json({ error: 'invalid track id' });
-  const exists = await ensureTrackExists(trackObjectId);
-  if (!exists) return res.status(404).json({ error: 'track not found' });
-  const statDoc = await upsertTrackStat(trackObjectId, { $inc: { likes: 1 } });
-  res.json({ stats: serializeTrackStats(statDoc) });
-});
-
-app.post('/api/tracks/:id/repost', auth, async (req, res) => {
-  const trackObjectId = toObjectId(req.params.id);
-  if (!trackObjectId) return res.status(400).json({ error: 'invalid track id' });
-  const exists = await ensureTrackExists(trackObjectId);
-  if (!exists) return res.status(404).json({ error: 'track not found' });
-  const statDoc = await upsertTrackStat(trackObjectId, { $inc: { reposts: 1 } });
-  res.json({ stats: serializeTrackStats(statDoc) });
-});
-
-app.get('/api/tracks/:id/comments', auth, async (req, res) => {
-  const trackObjectId = toObjectId(req.params.id);
-  if (!trackObjectId) return res.status(400).json({ error: 'invalid track id' });
-  const exists = await ensureTrackExists(trackObjectId);
-  if (!exists) return res.status(404).json({ error: 'track not found' });
-  const statDoc = await TrackStat.findOne({ trackId: trackObjectId }).lean();
-  const commentsRaw = Array.isArray(statDoc?.comments) ? statDoc.comments.slice(-50) : [];
-  const comments = commentsRaw.map(serializeComment).filter(Boolean);
-  res.json({ comments, stats: serializeTrackStats(statDoc) });
-});
-
-app.post('/api/tracks/:id/comments', auth, async (req, res) => {
-  const trackObjectId = toObjectId(req.params.id);
-  if (!trackObjectId) return res.status(400).json({ error: 'invalid track id' });
-  const exists = await ensureTrackExists(trackObjectId);
-  if (!exists) return res.status(404).json({ error: 'track not found' });
-
-  const { text, time } = req.body || {};
-  const trimmed = typeof text === 'string' ? text.trim() : '';
-  if (!trimmed) return res.status(400).json({ error: 'comment text required' });
-  const safeText = trimmed.slice(0, 500);
-  const numericTime = Number(time);
-  const safeTime = Number.isFinite(numericTime) && numericTime > 0 ? Math.min(numericTime, 60 * 60 * 3) : 0;
-  const roundedTime = Math.round(safeTime * 1000) / 1000;
-
-  const displayName = (() => {
-    if (typeof req.user.displayName === 'string' && req.user.displayName.trim()) return req.user.displayName.trim();
-    if (typeof req.user.firstName === 'string' || typeof req.user.lastName === 'string') {
-      const first = typeof req.user.firstName === 'string' ? req.user.firstName.trim() : '';
-      const last = typeof req.user.lastName === 'string' ? req.user.lastName.trim() : '';
-      const combined = [first, last].filter(Boolean).join(' ').trim();
-      if (combined) return combined;
-    }
-    if (typeof req.user.name === 'string' && req.user.name.trim()) return req.user.name.trim();
-    return req.user.email;
-  })();
-
-  const comment = {
-    userId: req.user._id,
-    displayName,
-    avatarUrl: req.user.avatarUrl || '',
-    text: safeText,
-    time: roundedTime,
-    createdAt: new Date()
-  };
-
-  const statDoc = await upsertTrackStat(trackObjectId, {
-    $inc: { commentsCount: 1 },
-    $push: { comments: { $each: [comment], $slice: -50 } }
-  });
-
-  const comments = Array.isArray(statDoc?.comments) ? statDoc.comments.slice(-50).map(serializeComment).filter(Boolean) : [];
-  res.json({ comments, stats: serializeTrackStats(statDoc) });
-});
-
 app.get('/api/tracks', async (req, res) => {
   try {
     const limitParam = Number.parseInt(req.query?.limit, 10);
@@ -1185,78 +971,6 @@ app.get('/api/tracks', async (req, res) => {
   } catch (err) {
     console.error('Failed to load tracks', err);
     res.status(500).json({ error: 'failed to load tracks' });
-  }
-});
-
-app.get('/api/leaderboard', auth, async (req, res) => {
-  try {
-    const statDocs = await TrackStat.find({})
-      .sort({ updatedAt: -1 })
-      .limit(LEADERBOARD_FETCH_LIMIT)
-      .lean();
-
-    if (!statDocs.length) {
-      return res.json({ top: [] });
-    }
-
-    const trackIds = Array.from(new Set(statDocs.map(doc => toIdString(doc.trackId)).filter(Boolean)));
-    const trackObjectIds = trackIds.map(toObjectId).filter(Boolean);
-    const tracks = trackObjectIds.length
-      ? await Track.find({ _id: { $in: trackObjectIds } }).lean()
-      : [];
-    const trackMap = new Map(tracks.map(track => [toIdString(track._id), track]));
-
-    const userIds = Array.from(new Set(tracks.map(track => toIdString(track.userId)).filter(Boolean)));
-    let userMap = new Map();
-    if (userIds.length) {
-      const userObjectIds = userIds.map(toObjectId).filter(Boolean);
-      if (userObjectIds.length) {
-        const users = await User.find({ _id: { $in: userObjectIds } });
-        const summaries = await Promise.all(users.map(async (u) => [toIdString(u._id), await userSummary(u)]));
-        userMap = new Map(summaries.filter(([key, value]) => Boolean(key) && Boolean(value)));
-      }
-    }
-
-    const entries = [];
-    for (const doc of statDocs) {
-      const trackId = toIdString(doc.trackId);
-      if (!trackId) continue;
-      const track = trackMap.get(trackId);
-      if (!track) continue;
-
-      const stats = serializeTrackStats(doc);
-      const score = (
-        stats.plays * LEADERBOARD_WEIGHTS.plays +
-        stats.comments * LEADERBOARD_WEIGHTS.comments +
-        stats.likes * LEADERBOARD_WEIGHTS.likes +
-        stats.reposts * LEADERBOARD_WEIGHTS.reposts
-      );
-
-      entries.push({
-        track: {
-          id: track._id,
-          title: track.title || 'Untitled',
-          artist: track.artist || '',
-          coverUrl: track.coverUrl || '',
-          userId: track.userId,
-          user: userMap.get(toIdString(track.userId)) || null
-        },
-        metrics: stats,
-        score
-      });
-    }
-
-    entries.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if ((b.metrics.likes || 0) !== (a.metrics.likes || 0)) return (b.metrics.likes || 0) - (a.metrics.likes || 0);
-      if ((b.metrics.reposts || 0) !== (a.metrics.reposts || 0)) return (b.metrics.reposts || 0) - (a.metrics.reposts || 0);
-      return (b.metrics.plays || 0) - (a.metrics.plays || 0);
-    });
-
-    res.json({ top: entries.slice(0, LEADERBOARD_LIMIT) });
-  } catch (err) {
-    console.error('Failed to build leaderboard', err);
-    res.status(500).json({ error: 'leaderboard unavailable' });
   }
 });
 

@@ -1494,165 +1494,22 @@
     }
 
     // ---------- Stats
-    const statsCache = new Map()
-    const statsFetches = new Map()
-    const commentsCache = new Map()
-    const commentsFetches = new Map()
-    const EMPTY_STATS = Object.freeze({ plays: 0, likes: 0, reposts: 0, comments: 0 })
-
-    function normalizeStat(value) {
-      const num = Number(value)
-      if (!Number.isFinite(num) || num < 0) return 0
-      return Math.floor(num)
-    }
-
-    function normalizeStats(data) {
-      if (!data || typeof data !== 'object') return { ...EMPTY_STATS }
-      return {
-        plays: normalizeStat(data.plays),
-        likes: normalizeStat(data.likes),
-        reposts: normalizeStat(data.reposts),
-        comments: normalizeStat(data.comments)
-      }
-    }
-
     function getStats(id) {
-      if (!id) return EMPTY_STATS
-      return statsCache.get(String(id)) || EMPTY_STATS
+      const stats = getJSON('track_stats', '{}')
+      const existing = stats[id]
+      if (existing) {
+        if (typeof existing.reposts !== 'number') existing.reposts = Number(existing.reposts) || 0
+        if (typeof existing.likes !== 'number') existing.likes = Number(existing.likes) || 0
+        if (typeof existing.comments !== 'number') existing.comments = Number(existing.comments) || 0
+        if (typeof existing.plays !== 'number') existing.plays = Number(existing.plays) || 0
+        return existing
+      }
+      return { plays: 0, likes: 0, comments: 0, reposts: 0 }
     }
-
     function setStats(id, data) {
-      if (!id) return EMPTY_STATS
-      const normalized = normalizeStats(data)
-      statsCache.set(String(id), normalized)
-      return normalized
-    }
-
-    async function fetchTrackStats(ids = []) {
-      const pending = []
-      ids.forEach(value => {
-        if (!value) return
-        const key = String(value)
-        if (!statsCache.has(key) && !pending.includes(key)) pending.push(key)
-      })
-      if (!pending.length) return
-      const fetchKey = pending.slice().sort().join(',')
-      if (statsFetches.has(fetchKey)) {
-        await statsFetches.get(fetchKey)
-        return
-      }
-      const promise = (async () => {
-        try {
-          const apiBase = (typeof window.getApiBase === 'function'
-            ? window.getApiBase()
-            : (window.API_BASE || API_BASE_DEFAULT))
-          const params = new URLSearchParams({ ids: pending.join(',') })
-          const resp = await fetch(`${apiBase}/api/track-stats?${params.toString()}`, {
-            headers: { ...AUTH.hdr() }
-          })
-          if (!resp.ok) throw new Error('stats request failed')
-          const payload = await resp.json().catch(() => null) || {}
-          const statsMap = payload.stats || {}
-          pending.forEach(key => {
-            const entry = statsMap[key] || statsMap[String(key)] || {}
-            setStats(key, entry)
-          })
-        } catch (err) {
-          console.warn('Track stats fetch failed', err)
-        } finally {
-          statsFetches.delete(fetchKey)
-        }
-      })()
-      statsFetches.set(fetchKey, promise)
-      await promise
-    }
-
-    function getCommentsFromCache(id) {
-      if (!id) return []
-      return commentsCache.get(String(id)) || []
-    }
-
-    function setComments(id, comments) {
-      if (!id) return
-      const key = String(id)
-      commentsCache.set(key, Array.isArray(comments) ? comments.slice() : [])
-    }
-
-    async function fetchComments(trackId, { force = false } = {}) {
-      if (!trackId) return []
-      const key = String(trackId)
-      if (!force && commentsCache.has(key)) return commentsCache.get(key)
-      if (commentsFetches.has(key)) return commentsFetches.get(key)
-      const promise = (async () => {
-        try {
-          const apiBase = (typeof window.getApiBase === 'function'
-            ? window.getApiBase()
-            : (window.API_BASE || API_BASE_DEFAULT))
-          const resp = await fetch(`${apiBase}/api/tracks/${encodeURIComponent(key)}/comments`, {
-            headers: { ...AUTH.hdr() }
-          })
-          if (!resp.ok) throw new Error('comments request failed')
-          const payload = await resp.json().catch(() => null) || {}
-          if (payload.stats) setStats(key, payload.stats)
-          const comments = Array.isArray(payload.comments) ? payload.comments : []
-          setComments(key, comments)
-          return comments
-        } catch (err) {
-          console.warn('Comment fetch failed', err)
-          setComments(key, [])
-          return []
-        } finally {
-          commentsFetches.delete(key)
-        }
-      })()
-      commentsFetches.set(key, promise)
-      return promise
-    }
-
-    async function submitComment(trackId, { text, time }) {
-      if (!trackId) throw new Error('missing track id')
-      const key = String(trackId)
-      const payload = {
-        text: typeof text === 'string' ? text : '',
-        time: typeof time === 'number' ? time : 0
-      }
-      const apiBase = (typeof window.getApiBase === 'function'
-        ? window.getApiBase()
-        : (window.API_BASE || API_BASE_DEFAULT))
-      const resp = await fetch(`${apiBase}/api/tracks/${encodeURIComponent(key)}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...AUTH.hdr() },
-        body: JSON.stringify(payload)
-      })
-      if (!resp.ok) throw new Error('comment request failed')
-      const body = await resp.json().catch(() => null) || {}
-      if (body.stats) setStats(key, body.stats)
-      if (Array.isArray(body.comments)) {
-        setComments(key, body.comments)
-        return body.comments
-      }
-      return getCommentsFromCache(key)
-    }
-
-    async function recordTrackEvent(trackId, action) {
-      if (!trackId) return getStats(trackId)
-      const key = String(trackId)
-      const apiBase = (typeof window.getApiBase === 'function'
-        ? window.getApiBase()
-        : (window.API_BASE || API_BASE_DEFAULT))
-      try {
-        const resp = await fetch(`${apiBase}/api/tracks/${encodeURIComponent(key)}/${action}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...AUTH.hdr() },
-          body: '{}'
-        })
-        if (!resp.ok) throw new Error(action + ' request failed')
-        const payload = await resp.json().catch(() => null) || {}
-        if (payload.stats) return setStats(key, payload.stats)
-      } catch (err) {
-        console.warn(`Failed to record ${action}`, err)
-      }
-      return getStats(key)
+      const stats = getJSON('track_stats', '{}')
+      stats[id] = data
+      setJSON('track_stats', stats)
     }
 
     const LEADERBOARD_THRESHOLDS = Object.freeze({ likes: 12, reposts: 4 })
@@ -1753,6 +1610,19 @@ function ensureLoggedIn() {
     window.refreshStepOwnerColors();
   }
 }
+
+
+
+    // ---------- Comments storage
+    function getComments(key) { return getJSON('comments_' + key, '[]') }
+    function saveComment(key, comment) {
+      const arr = getComments(key)
+      arr.push(comment)
+      setJSON('comments_' + key, arr)
+      const s = getStats(key); s.comments = (s.comments || 0) + 1; setStats(key, s)
+      scheduleLeaderboardRefresh()
+    }
+
 // ---------- Elements
 const feedEl = document.getElementById('feed');
 let sessionsCard = null;
@@ -2034,45 +1904,43 @@ let sessionsCard = null;
     let pendingMeta = null          // lightweight meta for last uploaded/recorded track
     let pendingCoverKey = null      // IDB key for optional cover
 
-      // ---------- Render comments & pins
-        async function renderComments(trackId, listContainer, pinsContainer, duration) {
-        if (!listContainer || !pinsContainer) return
-        const comments = await fetchComments(trackId).catch(() => getCommentsFromCache(trackId))
-        listContainer.innerHTML = ''
-        pinsContainer.innerHTML = ''
-        comments.forEach(c => {
-          const row = document.createElement('div')
-          row.className = 'flex items-start gap-2 mb-2'
-          const avatar = document.createElement('img')
-          avatar.src = sanitizeAvatar(c?.avatar)
-          avatar.onerror = () => { avatar.src = fallbackAvatar }
-          avatar.alt = 'avatar'
-          avatar.className = 'h-6 w-6 rounded-full ring-1 ring-white/10 object-cover'
-          row.appendChild(avatar)
-          const txtWrapper = document.createElement('div')
+    // ---------- Render comments & pins
+      function renderComments(trackId, listContainer, pinsContainer, duration) {
+      const comments = getComments(trackId)
+      listContainer.innerHTML = ''
+      pinsContainer.innerHTML = ''
+      comments.forEach(c => {
+        const row = document.createElement('div')
+        row.className = 'flex items-start gap-2 mb-2'
+        const avatar = document.createElement('img')
+        avatar.src = sanitizeAvatar(c.avatar)
+        avatar.onerror = () => { avatar.src = fallbackAvatar }
+        avatar.alt = 'avatar'
+        avatar.className = 'h-6 w-6 rounded-full ring-1 ring-white/10 object-cover'
+        row.appendChild(avatar)
+        const txtWrapper = document.createElement('div')
         const meta = document.createElement('p')
         meta.className = 'text-xs text-white/60'
-        const nameLabel = typeof c?.displayName === 'string' && c.displayName.trim() ? c.displayName.trim() : ''
-        meta.textContent = (nameLabel ? nameLabel + ' • ' : '') + fmt(c?.time || 0)
-          const text = document.createElement('p')
-          text.className = 'text-sm'
-          text.textContent = c?.text || ''
-          txtWrapper.appendChild(meta)
-          txtWrapper.appendChild(text)
-          row.appendChild(txtWrapper)
-          listContainer.appendChild(row)
-          if (duration) {
-            const pin = document.createElement('img')
-            pin.src = sanitizeAvatar(c?.avatar)
-            pin.onerror = () => { pin.src = fallbackAvatar }
-            pin.alt = 'marker'
-            pin.className = 'absolute -translate-x-1/2 top-0 h-6 w-6 rounded-full ring-1 ring-white/10 object-cover pointer-events-none'
-            const pct = ((c?.time || 0) / duration) * 100
-            pin.style.left = pct + '%'
-            pinsContainer.appendChild(pin)
-          }
-        })
-      }
+        meta.textContent = fmt(c.time)
+        const text = document.createElement('p')
+        text.className = 'text-sm'
+        text.textContent = c.text
+        txtWrapper.appendChild(meta)
+        txtWrapper.appendChild(text)
+        row.appendChild(txtWrapper)
+        listContainer.appendChild(row)
+        if (duration) {
+          const pin = document.createElement('img')
+          pin.src = sanitizeAvatar(c.avatar)
+          pin.onerror = () => { pin.src = fallbackAvatar }
+          pin.alt = 'marker'
+          pin.className = 'absolute -translate-x-1/2 top-0 h-6 w-6 rounded-full ring-1 ring-white/10 object-cover pointer-events-none'
+          const pct = (c.time / duration) * 100
+          pin.style.left = pct + '%'
+          pinsContainer.appendChild(pin)
+        }
+      })
+    }
 
       function coerceTimestamp(value) {
         if (value == null) return null
@@ -2271,7 +2139,7 @@ function createPost(track, { prepend = false } = {}) {
   if (!normalized) return null
   if (normalized.id && renderedTrackIds.has(normalized.id)) return null
 
-      const stats = getStats(normalized.id)
+  const stats = getStats(normalized.id)
   const card = document.createElement('article')
   card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
   card.dataset.trackId = normalized.id
@@ -2392,7 +2260,6 @@ function createPost(track, { prepend = false } = {}) {
       input.placeholder = 'Add a comment…'
       input.className = 'flex-grow rounded-lg bg-white/10 border border-white/15 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary'
       const btn = document.createElement('button')
-      btn.type = 'button'
       btn.textContent = 'Send'
       btn.className = 'rounded-lg bg-primary px-4 py-2 text-sm font-semibold'
       formWrapper.appendChild(input)
@@ -2409,22 +2276,14 @@ function createPost(track, { prepend = false } = {}) {
       registerLeaderboardTrack(normalized)
       scheduleLeaderboardRefresh()
 
-      const updateStatButtons = () => {
+      function renderAll() {
+        renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0)
         const stat = getStats(normalized.id)
         commentBtn.textContent = '💬 ' + (stat.comments || 0)
         likeBtn.textContent    = '❤️ ' + (stat.likes || 0)
-        repostBtn.textContent  = '🔁 ' + (stat.reposts || 0)
+        repostBtn.textContent = '🔁 ' + (stat.reposts || 0)
       }
-
-      async function renderAll() {
-        updateStatButtons()
-        await renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0)
-      }
-
-      fetchTrackStats([normalized.id]).then(updateStatButtons).catch(err => {
-        console.warn('Unable to sync stats', err)
-      })
-      renderAll().catch(err => console.warn('Failed to render track comments', err))
+      renderAll()
 
       audio.addEventListener('timeupdate', () => {
         if (audio.duration) {
@@ -2448,55 +2307,38 @@ function createPost(track, { prepend = false } = {}) {
         if ('mediaSession' in navigator) {
           try { navigator.mediaSession.metadata = new MediaMetadata(meta) } catch {}
         }
-        recordTrackEvent(normalized.id, 'play')
-          .then(() => {
-            updateStatButtons()
-            scheduleLeaderboardRefresh()
-          })
-          .catch(err => console.warn('Failed to record play', err))
+        const s = getStats(normalized.id)
+        s.plays = (s.plays || 0) + 1
+        setStats(normalized.id, s)
+        scheduleLeaderboardRefresh()
       })
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const text = input.value.trim()
         if (!text) return
-        btn.disabled = true
-        try {
-          await submitComment(normalized.id, {
-            text,
-            time: audio.currentTime || 0
-          })
-          input.value = ''
-          updateStatButtons()
-          await renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0)
-          scheduleLeaderboardRefresh()
-        } catch (err) {
-          console.warn('Failed to save comment', err)
-        } finally {
-          btn.disabled = false
-        }
+        const time = audio.currentTime || 0
+        saveComment(normalized.id, {
+          text,
+          time,
+          user: currentUser.email,
+          avatar: sanitizeAvatar(currentUser.avatar)
+        })
+        input.value = ''
+        renderAll()
+        scheduleLeaderboardRefresh()
       })
-      likeBtn.addEventListener('click', async () => {
-        likeBtn.disabled = true
-        try {
-          await recordTrackEvent(normalized.id, 'like')
-          updateStatButtons()
-          scheduleLeaderboardRefresh()
-        } catch (err) {
-          console.warn('Failed to record like', err)
-        } finally {
-          likeBtn.disabled = false
-        }
+      likeBtn.addEventListener('click', () => {
+        const s = getStats(normalized.id)
+        s.likes = (s.likes || 0) + 1
+        setStats(normalized.id, s)
+        likeBtn.textContent = '❤️ ' + s.likes
+        scheduleLeaderboardRefresh()
       })
-      repostBtn.addEventListener('click', async () => {
-        repostBtn.disabled = true
-        try {
-          await recordTrackEvent(normalized.id, 'repost')
-          updateStatButtons()
-          scheduleLeaderboardRefresh()
-        } catch (err) {
-          console.warn('Failed to record repost', err)
-        } finally {
-          repostBtn.disabled = false
-        }
+      repostBtn.addEventListener('click', () => {
+        const s = getStats(normalized.id)
+        s.reposts = (s.reposts || 0) + 1
+        setStats(normalized.id, s)
+        repostBtn.textContent = '🔁 ' + s.reposts
+        scheduleLeaderboardRefresh()
       })
       return card
     }
@@ -2576,13 +2418,7 @@ function createPost(track, { prepend = false } = {}) {
         const sortedRemote = Array.isArray(remoteTracks)
           ? remoteTracks.slice().sort((a, b) => resolveTrackCreatedAt(b) - resolveTrackCreatedAt(a))
           : []
-        if (sortedRemote.length) {
-          markLeaderboardTracks(sortedRemote)
-          const ids = sortedRemote.map(item => item && (item.id || item._id)).filter(Boolean)
-          if (ids.length) {
-            try { await fetchTrackStats(ids) } catch (err) { console.warn('Failed to hydrate remote stats', err) }
-          }
-        }
+        if (sortedRemote.length) markLeaderboardTracks(sortedRemote)
         for (const remote of sortedRemote) {
           const card = createPost(remote)
           if (card) {
@@ -2767,7 +2603,7 @@ async function updateLeaderboard() {
   const containers = Array.from(document.querySelectorAll('[data-leaderboard]'))
   if (!containers.length) return
 
-  let statsStore = {}
+  const statsStore = getJSON('track_stats', '{}') || {}
   const entriesMap = new Map()
   const coerceStat = (value) => {
     const num = Number(value)
@@ -2832,23 +2668,6 @@ async function updateLeaderboard() {
   } else {
     topFromApi = Array.isArray(leaderboardRemoteCache.top) ? leaderboardRemoteCache.top : []
   }
-
-  const remoteIds = new Set()
-  topFromApi.forEach(item => {
-    if (!item) return
-    const track = item.track || item
-    const rawId = track && (track.id || track._id || track.trackId || track.metaId)
-    if (rawId) remoteIds.add(String(rawId))
-  })
-
-  if (remoteIds.size) {
-    try { await fetchTrackStats(Array.from(remoteIds)) } catch (err) { console.warn('Failed to refresh leaderboard stats', err) }
-  }
-
-  statsStore = {}
-  statsCache.forEach((value, key) => {
-    statsStore[key] = { ...value }
-  })
 
   topFromApi.forEach(item => {
     if (!item) return
