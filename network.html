@@ -2857,8 +2857,10 @@ function createPost(track, { prepend = false } = {}) {
         }
         if (level === 'error') {
           console.error('Track playback error', payload)
-        } else {
+        } else if (level === 'warn') {
           console.warn('Track playback warning', payload)
+        } else {
+          console.info('Track playback info', payload)
         }
       }
 
@@ -2873,10 +2875,14 @@ function createPost(track, { prepend = false } = {}) {
         }
       })
 
-      ;['stalled', 'suspend', 'abort'].forEach(evt => {
+      ;['stalled', 'abort'].forEach(evt => {
         audio.addEventListener(evt, () => {
           logPlaybackEvent('warn', evt)
         })
+      })
+
+      audio.addEventListener('suspend', () => {
+        logPlaybackEvent('info', 'suspend')
       })
 
       let playbackReadyLogged = false
