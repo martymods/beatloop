@@ -1079,18 +1079,43 @@
       || DEFAULT_ASSETS_BASE;
     window.ASSETS_BASE = ASSETS_BASE;
 
+    const BEATLOOP_HOST_CHECK = host => {
+      if (!host || typeof host !== 'string') return false;
+      const lower = host.toLowerCase();
+      return lower === 'beatloop.co' || lower === 'www.beatloop.co' || lower.endsWith('.beatloop.co');
+    };
+
+    const ensureHttpsMediaUrl = (value) => {
+      if (!value || typeof value !== 'string') return value;
+      if (/^(data:|blob:|filesystem:)/i.test(value)) return value;
+      if (!/^https?:\/\//i.test(value)) return value;
+      try {
+        const parsed = new URL(value);
+        const hostname = (parsed.hostname || '').toLowerCase();
+        if (!BEATLOOP_HOST_CHECK(hostname)) return value;
+        if (parsed.protocol === 'https:') return value;
+        const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
+        return `https://${parsed.host}${pathname}${parsed.search || ''}${parsed.hash || ''}`;
+      } catch {
+        if (/^http:\/\/(?:[\w-]+\.)*beatloop\.co(?::\d+)?/i.test(value)) {
+          return value.replace(/^http:/i, 'https:');
+        }
+      }
+      return value;
+    };
+
     const toAssetUrl = (path) => {
       if (!path || typeof path !== 'string') return path;
-      if (/^https?:\/\//i.test(path)) return path;
+      if (/^https?:\/\//i.test(path)) return ensureHttpsMediaUrl(path);
       if (/^(data:|blob:|filesystem:)/i.test(path)) return path;
       if (path.startsWith('//')) {
-        try { return `${window.location.protocol}${path}`; } catch { return `https:${path}`; }
+        try { return ensureHttpsMediaUrl(`${window.location.protocol}${path}`); } catch { return ensureHttpsMediaUrl(`https:${path}`); }
       }
       const base = ASSETS_BASE || '';
       if (!base) return path;
       const normalizedBase = base.replace(/\/+$/, '');
       const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-      return `${normalizedBase}${normalizedPath}`;
+      return ensureHttpsMediaUrl(`${normalizedBase}${normalizedPath}`);
     };
 
     window.toAssetUrl = toAssetUrl;
@@ -2029,20 +2054,23 @@ let sessionsCard = null;
 
         const artist = track.artist || (author && (author.displayName || author.name || author.email)) || 'Beatloop creator'
 
+        const normalizedUrl = ensureHttpsMediaUrl(toAssetUrl(url));
+        const normalizedCover = coverRaw ? ensureHttpsMediaUrl(toAssetUrl(coverRaw)) : DEFAULT_TRACK_COVER;
+
         return {
-        ...track,
-        id: id || `track-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-        url: toAssetUrl(url),
-        cover: coverRaw ? toAssetUrl(coverRaw) : DEFAULT_TRACK_COVER,
-        artist,
-        caption,
-        createdAt: createdAtTs,
-        user: author ? {
-          ...author,
-          displayName: author.displayName || author.name || ''
-        } : null
+          ...track,
+          id: id || `track-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+          url: normalizedUrl,
+          cover: normalizedCover,
+          artist,
+          caption,
+          createdAt: createdAtTs,
+          user: author ? {
+            ...author,
+            displayName: author.displayName || author.name || ''
+          } : null
+        }
       }
-    }
 
     // ---------- Build a feed card
 function normalizeLeaderboardUser(rawUser, fallbackName, fallbackEmail) {
@@ -2077,7 +2105,7 @@ function registerLeaderboardTrack(rawTrack, options = {}) {
 
   const previous = leaderboardRegistry.get(id) || null
   const coverSource = rawTrack.cover || rawTrack.coverUrl || ''
-  let cover = typeof coverSource === 'string' && coverSource ? toAssetUrl(coverSource) : ''
+  let cover = typeof coverSource === 'string' && coverSource ? ensureHttpsMediaUrl(toAssetUrl(coverSource)) : ''
   if (!cover || typeof cover !== 'string') {
     cover = previous?.track?.cover && previous.track.cover !== DEFAULT_TRACK_COVER
       ? previous.track.cover
