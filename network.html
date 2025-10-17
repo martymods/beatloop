@@ -6708,7 +6708,28 @@ stopBtn.addEventListener('click', () => {
     }
   }
 
-  const resolveApiBase = getApiBase;
+  const getActiveApiBase = () => {
+    if (typeof window.getApiBase === 'function') {
+      try {
+        const base = window.getApiBase();
+        if (typeof base === 'string' && base.trim()) {
+          return base.replace(/\/+$/, '');
+        }
+      } catch (err) {
+        console.warn('getApiBase() threw unexpectedly', err);
+      }
+    }
+    const metaBase = (() => {
+      try {
+        return document.querySelector('meta[name="beatloop-api-base"]')?.content || '';
+      } catch (err) {
+        console.warn('Unable to read beatloop-api-base meta tag', err);
+        return '';
+      }
+    })();
+    const fallback = (typeof window.API_BASE === 'string' ? window.API_BASE : '') || metaBase || 'http://localhost:10000';
+    return fallback.replace(/\/+$/, '');
+  };
 
   const profileOverlayEl = document.getElementById('profileOverlay');
   const profileCloseButton = document.getElementById('profileCloseButton');
@@ -6994,7 +7015,7 @@ stopBtn.addEventListener('click', () => {
   if (profileSaveButton) {
     profileSaveButton.addEventListener('click', async () => {
       if (!profileState.user) return;
-      const apiBase = resolveApiBase();
+      const apiBase = getActiveApiBase();
       const originalText = profileSaveButton.textContent;
       profileSaveButton.disabled = true;
       profileSaveButton.textContent = 'Saving…';
@@ -7463,7 +7484,7 @@ stopBtn.addEventListener('click', () => {
   // Hydrate user non-blocking if JWT exists but user is stale/missing fields.
   const token = localStorage.getItem('jwt');
   if (hasAuthToken(token) && (!user.name || !user.email)) {
-    fetch(resolveApiBase() + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
+    fetch(getActiveApiBase() + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => {
         if (d?.user) {
@@ -7477,7 +7498,7 @@ stopBtn.addEventListener('click', () => {
   // Presence heartbeat (safe even without token)
   if (hasAuthToken(token)) {
     setInterval(() => {
-      fetch(resolveApiBase() + '/api/presence/ping', {
+      fetch(getActiveApiBase() + '/api/presence/ping', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token }
       }).catch(()=>{});
@@ -7535,7 +7556,7 @@ stopBtn.addEventListener('click', () => {
   setInterval(refreshSessions, 5000);
   // Attempt stale session cleanup every minute (no-op if endpoint doesn’t exist)
   setInterval(() => {
-    fetch(resolveApiBase() + '/api/sessions/cleanup', {
+    fetch(getActiveApiBase() + '/api/sessions/cleanup', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('jwt') || '') }
     }).catch(()=>{});
