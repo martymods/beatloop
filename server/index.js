@@ -202,6 +202,30 @@ app.use('/uploads', express.static(uploadsRoot));
 
 const LOCALHOST_RE = /^https?:\/\/(?:localhost|127(?:\.\d+){3})(?::\d+)?$/i;
 const MARKETING_HOSTS = new Set(['beatloop.co', 'www.beatloop.co']);
+const BEATLOOP_HOST_CHECK = host => {
+  if (!host) return false;
+  const lower = host.toLowerCase();
+  return lower === 'beatloop.co' || lower === 'www.beatloop.co' || lower.endsWith('.beatloop.co');
+};
+
+function ensureHttpsForBeatloopHost(urlString) {
+  if (!urlString || typeof urlString !== 'string') return urlString;
+  if (!/^https?:\/\//i.test(urlString)) return urlString;
+  try {
+    const parsed = new URL(urlString);
+    const hostname = (parsed.hostname || '').toLowerCase();
+    if (!BEATLOOP_HOST_CHECK(hostname)) return urlString;
+    if (parsed.protocol === 'https:') return urlString.replace(/\/+$/, '');
+    const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
+    const rebuilt = `https://${parsed.host}${pathname}${parsed.search || ''}${parsed.hash || ''}`;
+    return rebuilt.replace(/\/+$/, '');
+  } catch {
+    if (/^http:\/\/(?:[\w-]+\.)*beatloop\.co(?::\d+)?/i.test(urlString)) {
+      return urlString.replace(/^http:/i, 'https:').replace(/\/+$/, '');
+    }
+    return urlString;
+  }
+}
 
 const RAW_PUBLIC_BASE = (PUBLIC_BASE_URL || '').trim();
 let ENV_PUBLIC_BASE = '';
@@ -214,10 +238,11 @@ if (RAW_PUBLIC_BASE) {
     try {
       const parsed = new URL(RAW_PUBLIC_BASE);
       const path = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
-      ENV_PUBLIC_BASE = `${parsed.protocol}//${parsed.host}${path}`.replace(/\/+$/, '');
+      const base = `${parsed.protocol}//${parsed.host}${path}`.replace(/\/+$/, '');
+      ENV_PUBLIC_BASE = ensureHttpsForBeatloopHost(base);
       ENV_PUBLIC_HOST = (parsed.hostname || '').toLowerCase();
     } catch {
-      ENV_PUBLIC_BASE = RAW_PUBLIC_BASE.replace(/\/+$/, '');
+      ENV_PUBLIC_BASE = ensureHttpsForBeatloopHost(RAW_PUBLIC_BASE).replace(/\/+$/, '');
     }
   }
 
@@ -236,10 +261,11 @@ function requestBaseFromHeaders(req) {
   const protocol = forwardedProto || (origin ? origin.split('://')[0] : '') || req.protocol || 'http';
 
   if (hostHeader) {
-    return `${protocol}://${hostHeader}`.replace(/\/+$/, '');
+    const base = `${protocol}://${hostHeader}`.replace(/\/+$/, '');
+    return ensureHttpsForBeatloopHost(base);
   }
   if (origin) {
-    return origin.replace(/\/+$/, '');
+    return ensureHttpsForBeatloopHost(origin).replace(/\/+$/, '');
   }
   return null;
 }
@@ -250,12 +276,12 @@ function effectivePublicBase(req) {
 
   if (ENV_PUBLIC_BASE && !ENV_PUBLIC_IS_LOCAL) {
     if (!ENV_PUBLIC_IS_MARKETING || !requestBase || requestIsLocal) {
-      return ENV_PUBLIC_BASE;
+      return ensureHttpsForBeatloopHost(ENV_PUBLIC_BASE);
     }
   }
 
-  if (requestBase) return requestBase;
-  if (ENV_PUBLIC_BASE) return ENV_PUBLIC_BASE;
+  if (requestBase) return ensureHttpsForBeatloopHost(requestBase);
+  if (ENV_PUBLIC_BASE) return ensureHttpsForBeatloopHost(ENV_PUBLIC_BASE);
   return `http://localhost:${PORT}`;
 }
 
