@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>beatloop — Creator Network</title>
   <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
-  <meta name="beatloop-api-base" content="https://api.beatloop.co" />
+  <meta name="beatloop-api-base" content="https://beatloop-api.onrender.com" />
   <meta name="beatloop-assets-base" content="https://www.beatloop.co" />
 
   <link rel="stylesheet" href="./styles/tailwind.css" />
@@ -1100,10 +1100,6 @@
       try {
         const parsed = new URL(value);
         const hostname = (parsed.hostname || '').toLowerCase();
-        if (hostname === 'beatloop-api.onrender.com') {
-          const pathname = parsed.pathname || '';
-          return `https://api.beatloop.co${pathname}${parsed.search || ''}${parsed.hash || ''}`;
-        }
         if (!BEATLOOP_HOST_CHECK(hostname)) return value;
         if (parsed.protocol === 'https:') return value;
         const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
@@ -1111,9 +1107,6 @@
       } catch {
         if (/^http:\/\/(?:[\w-]+\.)*beatloop\.co(?::\d+)?/i.test(value)) {
           return value.replace(/^http:/i, 'https:');
-        }
-        if (/^https?:\/\/beatloop-api\.onrender\.com/i.test(value)) {
-          return value.replace(/^https?:\/\/beatloop-api\.onrender\.com/i, 'https://api.beatloop.co');
         }
       }
       return value;
