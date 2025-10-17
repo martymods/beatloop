@@ -2654,8 +2654,45 @@ async function updateLeaderboard() {
       const apiBase = (typeof window.getApiBase === 'function'
         ? window.getApiBase()
         : (window.API_BASE || API_BASE_DEFAULT))
-      const resp = await fetch(apiBase + '/api/leaderboard', { headers: { ...AUTH.hdr() } })
-      if (!resp.ok) throw new Error('leaderboard request failed')
+
+      const fetchLeaderboardPayload = async () => {
+        const attemptPaths = [
+          '/api/leaderboard',
+          '/api/network/leaderboard',
+          '/network/leaderboard',
+          '/leaderboard'
+        ]
+
+        const headers = { ...AUTH.hdr() }
+        let lastResponse = null
+
+        for (const path of attemptPaths) {
+          try {
+            const resp = await fetch(apiBase + path, { headers })
+            if (resp.ok) {
+              return resp
+            }
+            lastResponse = resp
+            if (resp.status === 404) {
+              continue
+            }
+            throw new Error(`leaderboard request failed (${resp.status || 'unknown status'})`)
+          } catch (requestErr) {
+            lastResponse = null
+            if (!isRecoverableNetworkError || !isRecoverableNetworkError(requestErr)) {
+              throw requestErr
+            }
+          }
+        }
+
+        if (lastResponse && !lastResponse.ok) {
+          throw new Error(`leaderboard request failed (${lastResponse.status || 'unknown status'})`)
+        }
+
+        throw new Error('leaderboard request failed')
+      }
+
+      const resp = await fetchLeaderboardPayload()
       const payload = await resp.json().catch(() => null) || {}
       const remoteTop = Array.isArray(payload.top) ? payload.top : []
       leaderboardRemoteCache = { fetchedAt: now, top: remoteTop }
