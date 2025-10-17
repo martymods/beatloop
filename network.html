@@ -1233,8 +1233,8 @@
     const DEFAULT_FALLBACK_TRACK_SRC = TRACK_FALLBACK_SOURCES.length ? TRACK_FALLBACK_SOURCES[0] : '';
     const KNOWN_REMOTE_MEDIA_HOSTS = ['beatloop.co', 'www.beatloop.co', 'api.beatloop.co', 'beatloop-api.onrender.com'];
 
-    const shouldUseLocalMediaFallback = (value) => {
-      if (!IS_LOCAL_DEV_ENV) return false;
+    const shouldUseLocalMediaFallback = (value, { ignoreEnv = false } = {}) => {
+      if (!ignoreEnv && !IS_LOCAL_DEV_ENV) return false;
       if (!value || typeof value !== 'string') return false;
       if (/^(data:|blob:|filesystem:)/i.test(value)) return false;
       try {
@@ -1249,11 +1249,11 @@
       }
     };
 
-    const resolveLocalTrackFallback = (trackId, resolvedUrl) => {
+    const resolveLocalTrackFallback = (trackId, resolvedUrl, options = {}) => {
       if (!resolvedUrl) {
         return { url: resolvedUrl, fallbackApplied: false };
       }
-      if (!shouldUseLocalMediaFallback(resolvedUrl)) {
+      if (!shouldUseLocalMediaFallback(resolvedUrl, options)) {
         return { url: resolvedUrl, fallbackApplied: false };
       }
       const candidate = trackId && TRACK_FALLBACK_BY_ID.get(trackId);
@@ -2419,6 +2419,56 @@ function createPost(track, { prepend = false } = {}) {
       audio.className = 'w-full mt-2'
       trackWrapper.appendChild(audio)
 
+      let localFallbackActive = normalized.localFallbackApplied
+      const tryApplyRuntimeFallback = (reason, extra = {}) => {
+        if (localFallbackActive) return false
+        const fallbackResult = resolveLocalTrackFallback(
+          normalized.id,
+          normalized.originalUrl || normalized.url,
+          { ignoreEnv: true }
+        )
+        if (!fallbackResult || !fallbackResult.fallbackApplied) return false
+        const nextSrc = fallbackResult.url
+        if (!nextSrc) return false
+        const normalizeHref = (value) => {
+          if (!value) return ''
+          try {
+            return new URL(value, window.location.origin).href
+          } catch {
+            return value
+          }
+        }
+        const currentHref = normalizeHref(audio.currentSrc || audio.src)
+        const nextHref = normalizeHref(nextSrc)
+        if (currentHref && nextHref && currentHref === nextHref) return false
+
+        const attemptedSrc = normalized.originalUrl || normalized.url
+
+        localFallbackActive = true
+        normalized.localFallbackApplied = true
+        normalized.url = nextSrc
+        if (normalized.cover && shouldUseLocalMediaFallback(normalized.cover, { ignoreEnv: true })) {
+          normalized.cover = DEFAULT_TRACK_COVER
+          coverImg.src = DEFAULT_TRACK_COVER
+        }
+
+        audio.src = nextSrc
+        try {
+          if (typeof audio.load === 'function') {
+            audio.load()
+          }
+        } catch {}
+
+        logPlaybackEvent('warn', 'fallback-applied', {
+          reason,
+          attemptedSrc,
+          fallbackSrc: nextSrc,
+          ...extra
+        })
+
+        return true
+      }
+
       const logPlaybackEvent = (level, eventName, extra = {}) => {
         const payload = {
           trackId: normalized.id,
@@ -2441,10 +2491,13 @@ function createPost(track, { prepend = false } = {}) {
 
       audio.addEventListener('error', () => {
         const err = audio.error
-        logPlaybackEvent('error', 'error', {
+        const extra = {
           code: err?.code || null,
           message: err?.message || null
-        })
+        }
+        if (!tryApplyRuntimeFallback('media-error', extra)) {
+          logPlaybackEvent('error', 'error', extra)
+        }
       })
 
       ;['stalled', 'suspend', 'abort'].forEach(evt => {
