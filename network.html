@@ -1082,6 +1082,7 @@
     const BEATLOOP_HOST_CHECK = host => {
       if (!host || typeof host !== 'string') return false;
       const lower = host.toLowerCase();
+      if (lower === 'beatloop-api.onrender.com') return true;
       return lower === 'beatloop.co' || lower === 'www.beatloop.co' || lower.endsWith('.beatloop.co');
     };
 
@@ -1092,6 +1093,10 @@
       try {
         const parsed = new URL(value);
         const hostname = (parsed.hostname || '').toLowerCase();
+        if (hostname === 'beatloop-api.onrender.com') {
+          const pathname = parsed.pathname || '';
+          return `https://api.beatloop.co${pathname}${parsed.search || ''}${parsed.hash || ''}`;
+        }
         if (!BEATLOOP_HOST_CHECK(hostname)) return value;
         if (parsed.protocol === 'https:') return value;
         const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
@@ -1099,6 +1104,9 @@
       } catch {
         if (/^http:\/\/(?:[\w-]+\.)*beatloop\.co(?::\d+)?/i.test(value)) {
           return value.replace(/^http:/i, 'https:');
+        }
+        if (/^https?:\/\/beatloop-api\.onrender\.com/i.test(value)) {
+          return value.replace(/^https?:\/\/beatloop-api\.onrender\.com/i, 'https://api.beatloop.co');
         }
       }
       return value;
