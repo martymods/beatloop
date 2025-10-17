@@ -4461,6 +4461,63 @@ stopBtn.addEventListener('click', () => {
     return token.length > 0 && token !== 'undefined' && token !== 'null';
   }
 
+  async function compressAvatarImage(file, { maxDimension = 512, quality = 0.82 } = {}) {
+    if (typeof File === 'undefined' || !(file instanceof File) || !file.type?.startsWith('image/')) return file;
+    let bitmap = null;
+    try {
+      if (window.createImageBitmap) {
+        try {
+          bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        } catch (_) {}
+      }
+      let drawSource = null;
+      let width = 0;
+      let height = 0;
+      if (bitmap) {
+        width = bitmap.width;
+        height = bitmap.height;
+        drawSource = bitmap;
+      } else {
+        const url = URL.createObjectURL(file);
+        try {
+          const img = new Image();
+          img.decoding = 'async';
+          img.src = url;
+          await (img.decode?.() ?? new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          }));
+          width = img.naturalWidth || img.width;
+          height = img.naturalHeight || img.height;
+          drawSource = img;
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      }
+      if (!width || !height || !drawSource) return file;
+      const maxSide = Math.max(width, height);
+      const scale = maxSide > maxDimension ? (maxDimension / maxSide) : 1;
+      const outWidth = Math.max(1, Math.round(width * scale));
+      const outHeight = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = outWidth;
+      canvas.height = outHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return file;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(drawSource, 0, 0, outWidth, outHeight);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', quality));
+      if (!blob) return file;
+      const baseName = file.name.replace(/\.[^.]+$/, '') || 'avatar';
+      return new File([blob], `${baseName}.webp`, { type: blob.type, lastModified: Date.now() });
+    } catch (compressionError) {
+      console.warn('Avatar compression failed, using original file', compressionError);
+      return file;
+    } finally {
+      try { bitmap?.close?.(); } catch (_) {}
+    }
+  }
+
   document.addEventListener('click', (e)=>{
     if (e.target.matches('a[href="#profile"], button#openProfile, .open-profile')){
       e.preventDefault();
@@ -4520,7 +4577,8 @@ stopBtn.addEventListener('click', () => {
     }
     // upload avatar
     if (avatarFile){
-      const fd = new FormData(); fd.append('avatar', avatarFile);
+      const processedAvatar = await compressAvatarImage(avatarFile);
+      const fd = new FormData(); fd.append('avatar', processedAvatar);
       await fetch(apiBase + '/api/users/avatar', { method:'POST', headers: { ...AUTH.hdr() }, body: fd }).catch(()=>{});
     }
     if (tagFile){
