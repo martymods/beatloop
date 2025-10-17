@@ -49,6 +49,23 @@ const IMAGE_MIME_EXT = {
   'image/svg+xml': '.svg',
   'image/bmp': '.bmp'
 };
+const AUDIO_MIME_EXT = {
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/wav': '.wav',
+  'audio/x-wav': '.wav',
+  'audio/wave': '.wav',
+  'audio/webm': '.webm',
+  'audio/ogg': '.ogg',
+  'audio/flac': '.flac',
+  'audio/x-flac': '.flac',
+  'audio/aac': '.aac',
+  'audio/mp4': '.m4a',
+  'audio/x-m4a': '.m4a',
+  'audio/aiff': '.aiff',
+  'audio/x-aiff': '.aiff'
+};
+const AUDIO_ALLOWED_MIME = new Set(Object.keys(AUDIO_MIME_EXT));
 /* ============================ DB ============================ */
 await mongoose.connect(MONGODB_URI, { dbName: 'beatloop' });
 
@@ -58,6 +75,9 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, unique: true, index: true },
   passwordHash: String,
   avatarUrl: String,
+  firstName: { type: String, default: '' },
+  lastName: { type: String, default: '' },
+  displayName: { type: String, default: '' },
   tagUrl: String,            // 3-sec sound tag URL
   tagDurationSec: Number,
   totalOnlineSec: { type: Number, default: 0 },
@@ -92,8 +112,27 @@ const SessionSchema = new mongoose.Schema({
   }
 });
 
+const TrackSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  title: { type: String, default: '' },
+  artist: { type: String, default: '' },
+  bpm: { type: Number, default: 0 },
+  audioUrl: { type: String, required: true },
+  coverUrl: { type: String, default: '' },
+  audioDurationSec: { type: Number, default: 0 },
+  caption: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+TrackSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
 const User = mongoose.model('User', UserSchema);
 const Session = mongoose.model('Session', SessionSchema);
+const Track = mongoose.model('Track', TrackSchema);
 
 /* ============================ APP ============================ */
 const app = express();
@@ -155,6 +194,10 @@ app.use(express.json({ limit: '5mb' }));
 const projectRoot = process.cwd();
 const uploadsRoot = path.join(projectRoot, 'uploads');
 fs.mkdirSync(uploadsRoot, { recursive: true });
+const trackAudioDir = path.join(uploadsRoot, 'tracks');
+const trackCoverDir = path.join(uploadsRoot, 'covers');
+fs.mkdirSync(trackAudioDir, { recursive: true });
+fs.mkdirSync(trackCoverDir, { recursive: true });
 app.use('/uploads', express.static(uploadsRoot));
 
 const LOCALHOST_RE = /^https?:\/\/(?:localhost|127(?:\.\d+){3})(?::\d+)?$/i;
@@ -229,7 +272,18 @@ async function auth(req, res, next) {
 
 async function userSummary(u) {
   if (!u) return null;
-  return { id: u._id, name: u.name, email: u.email, avatar: u.avatarUrl, tagUrl: u.tagUrl, joinedAt: u.createdAt };
+  return {
+    id: u._id,
+    name: u.name,
+    email: u.email,
+    avatar: u.avatarUrl,
+    tagUrl: u.tagUrl,
+    tagDurationSec: u.tagDurationSec,
+    joinedAt: u.createdAt,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    displayName: u.displayName
+  };
 }
 
 function toIdString(value) {
@@ -401,7 +455,7 @@ async function participantHistoryFor(sessionDoc) {
 
 /* ============================ AUTH ============================ */
 app.post('/api/auth/signup', async (req, res) => {
-  const { name, email, password, avatarUrl } = req.body || {};
+  const { name, email, password, avatarUrl, firstName, lastName, displayName } = req.body || {};
   const normalizedEmail = normalizeEmail(email);
   const passwordValue = typeof password === 'string' ? password : '';
   if (!normalizedEmail || !passwordValue) {
@@ -418,12 +472,26 @@ app.post('/api/auth/signup', async (req, res) => {
     if (nameTaken) return res.status(409).json({ error: 'username already taken' });
   }
 
+  const first = typeof firstName === 'string' ? firstName.trim() : '';
+  const last = typeof lastName === 'string' ? lastName.trim() : '';
+  const display = (() => {
+    if (typeof displayName === 'string' && displayName.trim()) return displayName.trim();
+    const combined = [first, last].filter(Boolean).join(' ').trim();
+    if (combined) return combined;
+    if (providedName) return providedName;
+    if (finalName) return finalName;
+    return normalizedEmail.split('@')[0];
+  })();
+
   const passwordHash = await bcrypt.hash(passwordValue, 10);
   const user = await User.create({
     name: finalName,
     email: normalizedEmail,
     passwordHash,
-    avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : ''
+    avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : '',
+    firstName: first,
+    lastName: last,
+    displayName: display
   });
   res.json({ token: sign(user), user: await userSummary(user) });
 });
@@ -449,11 +517,24 @@ app.get('/api/auth/me', auth, async (req, res) => {
 
 /* ---- profile update: change username (unique) and/or avatarUrl ---- */
 async function handleProfileUpdate(req, res) {
-  const { name, avatarUrl } = req.body || {};
-  if (name) {
-    const taken = await User.exists({ name, _id: { $ne: req.user._id } });
-    if (taken) return res.status(409).json({ error: 'username already taken' });
-    req.user.name = name;
+  const { name, avatarUrl, firstName, lastName, displayName } = req.body || {};
+  if (name !== undefined) {
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    if (trimmed) {
+      const taken = await User.exists({ name: trimmed, _id: { $ne: req.user._id } });
+      if (taken) return res.status(409).json({ error: 'username already taken' });
+      req.user.name = trimmed;
+    }
+  }
+  if (firstName !== undefined) {
+    req.user.firstName = typeof firstName === 'string' ? firstName.trim() : '';
+  }
+  if (lastName !== undefined) {
+    req.user.lastName = typeof lastName === 'string' ? lastName.trim() : '';
+  }
+  if (displayName !== undefined) {
+    const trimmed = typeof displayName === 'string' ? displayName.trim() : '';
+    req.user.displayName = trimmed;
   }
   if (avatarUrl !== undefined) req.user.avatarUrl = avatarUrl;
   await req.user.save();
@@ -482,8 +563,12 @@ app.get('/api/users/directory', async (req, res) => {
       email: u.email,
       avatar: u.avatarUrl,
       tagUrl: u.tagUrl,
+      tagDurationSec: u.tagDurationSec,
       joinedAt: u.createdAt,
-      totalOnlineSec: typeof u.totalOnlineSec === 'number' ? u.totalOnlineSec : 0
+      totalOnlineSec: typeof u.totalOnlineSec === 'number' ? u.totalOnlineSec : 0,
+      displayName: u.displayName,
+      firstName: u.firstName,
+      lastName: u.lastName
     }));
 
     res.json({ users: directory });
@@ -542,6 +627,44 @@ const tagUpload = multer({
   }
 });
 
+function audioFileExt(file) {
+  const fromName = (path.extname(file.originalname) || '').toLowerCase();
+  if (fromName) return fromName;
+  return AUDIO_MIME_EXT[file.mimetype] || '.mp3';
+}
+
+const trackStorage = multer.diskStorage({
+  destination: (_req, file, cb) => {
+    if (file.fieldname === 'cover') return cb(null, trackCoverDir);
+    cb(null, trackAudioDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = file.fieldname === 'cover' ? avatarFileExt(file) : audioFileExt(file);
+    const name = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`;
+    cb(null, name);
+  }
+});
+
+const trackUpload = multer({
+  storage: trackStorage,
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.fieldname === 'cover') {
+      if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+        return cb(new Error('cover must be an image'));
+      }
+      return cb(null, true);
+    }
+    if (file.fieldname === 'audio') {
+      if (!file.mimetype || !AUDIO_ALLOWED_MIME.has(file.mimetype)) {
+        return cb(new Error('audio must be an audio file (mp3, wav, ogg, webm, flac, m4a)'));
+      }
+      return cb(null, true);
+    }
+    return cb(new Error('unsupported field'));
+  }
+});
+
 const avatarDir = path.join(uploadsRoot, 'avatars');
 fs.mkdirSync(avatarDir, { recursive: true });
 
@@ -590,6 +713,11 @@ function resolveUploadPath(url, folder) {
     }
     return null;
   }
+}
+
+function safeUnlink(filePath) {
+  if (!filePath) return;
+  fs.promises.unlink(filePath).catch(() => {});
 }
 
 app.post('/api/users/tag', auth, (req, res) => {
@@ -648,6 +776,162 @@ app.post('/api/users/avatar', auth, (req, res) => {
       res.status(500).json({ error: 'could not save avatar' });
     }
   });
+});
+
+app.post('/api/tracks', auth, (req, res) => {
+  trackUpload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }])(req, res, async (err) => {
+    if (err) {
+      const message = err.message || 'upload failed';
+      return res.status(400).json({ error: message });
+    }
+
+    const audioFile = Array.isArray(req.files?.audio) ? req.files.audio[0] : null;
+    const coverFile = Array.isArray(req.files?.cover) ? req.files.cover[0] : null;
+
+    if (!audioFile) {
+      if (coverFile?.path) safeUnlink(coverFile.path);
+      return res.status(400).json({ error: 'missing audio file' });
+    }
+
+    if (audioFile.size > 10 * 1024 * 1024) {
+      safeUnlink(audioFile.path);
+      if (coverFile?.path) safeUnlink(coverFile.path);
+      return res.status(400).json({ error: 'track must be 10MB or less' });
+    }
+
+      if (coverFile && coverFile.size > 10 * 1024 * 1024) {
+        safeUnlink(audioFile.path);
+        safeUnlink(coverFile.path);
+        return res.status(400).json({ error: 'cover art must be 10MB or less' });
+      }
+
+    try {
+      let duration = null;
+      try {
+        const meta = await parseFile(audioFile.path);
+        if (meta?.format?.duration) {
+          duration = Math.round(meta.format.duration * 1000) / 1000;
+        }
+      } catch {}
+
+      const body = req.body || {};
+      const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
+      const rawCaption = typeof body.caption === 'string' ? body.caption.trim() : '';
+      const bpmValue = Number.parseInt(body.bpm, 10);
+      const bpm = Number.isFinite(bpmValue) ? Math.max(0, Math.min(bpmValue, 999)) : 0;
+
+      const title = rawTitle || (audioFile.originalname ? audioFile.originalname.replace(/\.[^.]+$/, '') : 'Untitled');
+      const caption = rawCaption ? rawCaption.slice(0, 500) : '';
+      const audioUrl = publicUploadUrl(req, 'tracks', path.basename(audioFile.path));
+      const coverUrl = coverFile ? publicUploadUrl(req, 'covers', coverFile.filename) : '';
+      const artist = (() => {
+        const display = typeof req.user.displayName === 'string' ? req.user.displayName.trim() : '';
+        if (display) return display;
+        const first = typeof req.user.firstName === 'string' ? req.user.firstName.trim() : '';
+        const last = typeof req.user.lastName === 'string' ? req.user.lastName.trim() : '';
+        const combined = [first, last].filter(Boolean).join(' ').trim();
+        if (combined) return combined;
+        if (typeof req.user.name === 'string' && req.user.name.trim()) return req.user.name.trim();
+        return req.user.email;
+      })();
+
+      const trackDoc = await Track.create({
+        userId: req.user._id,
+        title,
+        artist,
+        bpm,
+        audioUrl,
+        coverUrl,
+        audioDurationSec: duration || 0,
+        caption
+      });
+
+      const summary = await userSummary(req.user);
+        res.json({
+          id: trackDoc._id,
+          title: trackDoc.title,
+          artist: trackDoc.artist,
+          bpm: trackDoc.bpm || 0,
+          audioUrl,
+          coverUrl: coverUrl || null,
+          duration: trackDoc.audioDurationSec || null,
+          caption: trackDoc.caption || '',
+          createdAt: trackDoc.createdAt,
+          userId: trackDoc.userId,
+          user: summary
+        });
+    } catch (ex) {
+      console.error('Track upload failed', ex);
+      safeUnlink(audioFile.path);
+      if (coverFile?.path) safeUnlink(coverFile.path);
+      res.status(500).json({ error: 'could not save track' });
+    }
+  });
+});
+
+app.get('/api/tracks', async (req, res) => {
+  try {
+    const limitParam = Number.parseInt(req.query?.limit, 10);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 10;
+    const cursorRaw = req.query?.cursor;
+    let cursorDate = null;
+    if (cursorRaw) {
+      const parsed = new Date(cursorRaw);
+      if (!Number.isNaN(parsed.valueOf())) {
+        cursorDate = parsed;
+      }
+    }
+
+    const query = {};
+    if (cursorDate) {
+      query.createdAt = { $lt: cursorDate };
+    }
+
+    const docs = await Track.find(query).sort({ createdAt: -1 }).limit(limit).lean();
+    const userIds = Array.from(new Set(docs.map(doc => toIdString(doc.userId)).filter(Boolean)));
+
+    let userMap = new Map();
+    if (userIds.length) {
+      const objectIds = userIds.map(id => {
+        try {
+          return new mongoose.Types.ObjectId(id);
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+      if (objectIds.length) {
+        const users = await User.find({ _id: { $in: objectIds } });
+        const summaries = await Promise.all(users.map(async (u) => [toIdString(u._id), await userSummary(u)]));
+        userMap = new Map(summaries.filter(([key]) => Boolean(key)));
+      }
+    }
+
+    const tracks = docs.map(doc => {
+      const userKey = toIdString(doc.userId);
+      const coverUrl = doc.coverUrl || '';
+        return {
+          id: doc._id,
+          title: doc.title || 'Untitled',
+          artist: doc.artist || '',
+          bpm: doc.bpm || 0,
+          audioUrl: doc.audioUrl,
+          coverUrl: coverUrl || null,
+          duration: doc.audioDurationSec || null,
+          caption: doc.caption || '',
+          createdAt: doc.createdAt,
+          userId: doc.userId,
+          user: userKey ? userMap.get(userKey) || null : null
+        };
+    });
+
+    const last = docs.length ? docs[docs.length - 1] : null;
+    const nextCursor = last ? new Date(last.createdAt).toISOString() : null;
+
+    res.json({ tracks, nextCursor });
+  } catch (err) {
+    console.error('Failed to load tracks', err);
+    res.status(500).json({ error: 'failed to load tracks' });
+  }
 });
 
 /* ============================ Sessions API ============================ */
