@@ -166,6 +166,53 @@
   .bl-eq-label{font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(148,163,184,.7)}
   @media (max-width:640px){.bl-eq-grid{grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:1rem}.bl-eq-meter{height:112px}.bl-eq-slider{height:112px}}
 </style>
+
+  <style>
+    .bl-who-overlay{position:fixed;inset:0;background:rgba(12,12,18,.88);backdrop-filter:blur(12px);z-index:80;display:none;align-items:center;justify-content:center;padding:1.5rem}
+    .bl-who-overlay.active{display:flex}
+    .bl-who-dialog{position:relative;display:grid;gap:1.5rem;max-width:min(920px,94vw);width:100%;background:linear-gradient(145deg,rgba(24,24,36,.96),rgba(12,12,20,.92));border:1px solid rgba(255,255,255,.08);border-radius:1.25rem;padding:1.5rem;box-shadow:0 25px 60px rgba(0,0,0,.45)}
+    .bl-who-close{position:absolute;top:1rem;right:1rem;width:38px;height:38px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(12,12,18,.6);color:#fff;font-size:1.25rem;line-height:1;display:grid;place-items:center;cursor:pointer;transition:background .2s,transform .2s}
+    .bl-who-close:hover{background:rgba(255,255,255,.12);transform:scale(1.05)}
+    .bl-who-close:focus-visible{outline:2px solid rgba(124,58,237,.6);outline-offset:2px}
+    .bl-who-overlay .user-profile-container{display:flex;flex-direction:column;align-items:center;gap:1.25rem}
+    .bl-who-overlay .user-profile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:clamp(260px,40vw,320px);height:clamp(240px,40vw,320px);border-radius:1rem;overflow:hidden;box-shadow:0 15px 55px rgba(0,0,0,.45);background-color:rgba(18,18,24,.9);background-size:cover;background-position:center;text-align:center;padding:1.5rem}
+    .bl-who-overlay .user-profile::after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,rgba(12,12,20,.85) 10%,rgba(12,12,20,.35) 70%,rgba(12,12,20,.1) 100%)}
+    .bl-who-overlay .user-profile h3,.bl-who-overlay .user-profile p{position:relative;z-index:1;margin:0}
+    .bl-who-overlay .user-profile h3{font-size:1.35rem;letter-spacing:.25rem;text-transform:uppercase}
+    .bl-who-overlay .user-profile p{margin-top:.5rem;font-weight:300;letter-spacing:.08rem;color:rgba(255,255,255,.85)}
+    .bl-who-overlay .user-info{position:relative;z-index:1;display:flex;width:clamp(240px,36vw,280px);justify-content:space-around;gap:.75rem;list-style:none;padding:1.5rem .75rem .75rem;margin:-1.75rem 0 0;background:rgba(255,255,255,.96);border-radius:1rem;box-shadow:0 5px 55px rgba(0,0,0,.5)}
+    .bl-who-overlay .user-info li{text-align:center}
+    .bl-who-overlay .user-info h3{margin:0;font-size:1.35rem;color:#0f172a}
+    .bl-who-overlay .user-info small{display:block;margin-top:.15rem;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(15,23,42,.55)}
+    .bl-who-overlay .follow-btn{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;width:clamp(200px,32vw,240px);padding:1.1rem 1.5rem .9rem;border-radius:.85rem;text-transform:uppercase;letter-spacing:.35rem;font-weight:600;text-decoration:none;color:#fff;background:linear-gradient(135deg,#8b5cf6,#0ea5e9);box-shadow:0 8px 40px rgba(14,165,233,.45);transition:transform .2s,box-shadow .2s}
+    .bl-who-overlay .follow-btn:hover{transform:translateY(-2px);box-shadow:0 12px 45px rgba(14,165,233,.55)}
+    .bl-who-overlay .follow-btn.is-following{background:rgba(255,255,255,.9);color:#0f172a;box-shadow:0 8px 40px rgba(255,255,255,.25)}
+    .bl-who-extra{position:relative;z-index:1;background:rgba(12,12,18,.75);border:1px solid rgba(255,255,255,.08);border-radius:1rem;padding:1.5rem;display:flex;flex-direction:column;gap:1rem}
+    .bl-who-extra h4{margin:0;font-size:.95rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+    .bl-who-extra dl{margin:0;display:grid;gap:.75rem}
+    .bl-who-extra dl div{display:flex;justify-content:space-between;gap:1rem;align-items:baseline}
+    .bl-who-extra dt{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.5)}
+    .bl-who-extra dd{margin:0;font-size:.95rem;font-weight:500;color:rgba(255,255,255,.9);text-align:right}
+    .bl-who-actions{display:flex;flex-wrap:wrap;gap:.75rem}
+    .bl-who-contact{display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1rem;border-radius:.75rem;border:1px solid rgba(148,163,184,.25);color:rgba(255,255,255,.85);text-decoration:none;transition:background .2s,border-color .2s}
+    .bl-who-contact:hover{background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.45)}
+    .bl-who-tag-audio{width:100%;border-radius:.75rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);padding:.5rem}
+    .bl-who-tag-audio.hidden{display:none}
+    .bl-who-suggestion{display:flex;align-items:center;gap:.75rem;width:100%;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.05);border-radius:.85rem;padding:.75rem;cursor:pointer;transition:background .18s ease,transform .18s ease,border-color .18s ease;text-align:left;color:inherit}
+    .bl-who-suggestion:hover{background:rgba(255,255,255,.08);transform:translateY(-1px)}
+    .bl-who-suggestion:focus-visible{outline:2px solid rgba(124,58,237,.55);outline-offset:2px}
+    .bl-who-suggestion img{width:44px;height:44px;border-radius:999px;object-fit:cover;border:1px solid rgba(255,255,255,.12)}
+    .bl-who-meta{flex:1;min-width:0}
+    .bl-who-name{margin:0;font-weight:600;font-size:.95rem}
+    .bl-who-handle{margin:.2rem 0 0;font-size:.75rem;color:rgba(255,255,255,.55)}
+    .bl-who-summary{margin:.35rem 0 0;display:flex;flex-wrap:wrap;gap:.4rem .65rem;font-size:.75rem;color:rgba(255,255,255,.6)}
+    .bl-who-chip{display:inline-flex;align-items:center;padding:.1rem .55rem;border-radius:999px;background:rgba(14,165,233,.18);color:rgba(125,211,252,.95);font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+    .bl-who-badge{display:inline-flex;align-items:center;padding:.1rem .55rem;border-radius:999px;background:rgba(124,58,237,.18);color:rgba(167,139,250,.95);font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+    .bl-who-cta{font-size:.75rem;color:rgba(255,255,255,.45)}
+    .bl-who-suggestion.following{background:rgba(124,58,237,.12);border-color:rgba(124,58,237,.35)}
+    .bl-who-suggestion.following .bl-who-cta{color:rgba(255,255,255,.7)}
+    @media (max-width:900px){.bl-who-dialog{grid-template-columns:1fr;padding:1.25rem}.bl-who-overlay .user-profile{width:min(320px,100%);height:min(320px,72vw)}.bl-who-overlay .user-info{width:min(280px,90%)}.bl-who-overlay .follow-btn{width:min(240px,85%)}}
+  </style>
 </head>
 <body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
   <!-- Header -->
@@ -1097,6 +1144,255 @@ const feedEl = document.getElementById('feed');
     const trendsEl = document.getElementById('trends')
     const trendsMEl = document.getElementById('trendsM')
 
+    const profileRefs = {
+      overlay: null,
+      dialog: null,
+      closeBtn: null,
+      card: null,
+      name: null,
+      subtitle: null,
+      stat1Value: null,
+      stat1Label: null,
+      stat2Value: null,
+      stat2Label: null,
+      stat3Value: null,
+      stat3Label: null,
+      followBtn: null,
+      joinedDetail: null,
+      onlineDetail: null,
+      tagDetail: null,
+      contactLink: null,
+      tagAudio: null
+    }
+    let activeProfileUser = null
+    let previousBodyOverflow = ''
+
+    function ensureProfileRefs() {
+      if (profileRefs.overlay && profileRefs.name) return true
+      profileRefs.overlay = document.getElementById('whoProfileOverlay')
+      if (!profileRefs.overlay) return false
+      profileRefs.dialog = profileRefs.overlay.querySelector('.bl-who-dialog')
+      profileRefs.closeBtn = document.getElementById('whoProfileClose')
+      profileRefs.card = document.getElementById('whoProfileCard')
+      profileRefs.name = document.getElementById('whoProfileName')
+      profileRefs.subtitle = document.getElementById('whoProfileSubtitle')
+      profileRefs.stat1Value = document.getElementById('whoProfileStat1Value')
+      profileRefs.stat1Label = document.getElementById('whoProfileStat1Label')
+      profileRefs.stat2Value = document.getElementById('whoProfileStat2Value')
+      profileRefs.stat2Label = document.getElementById('whoProfileStat2Label')
+      profileRefs.stat3Value = document.getElementById('whoProfileStat3Value')
+      profileRefs.stat3Label = document.getElementById('whoProfileStat3Label')
+      profileRefs.followBtn = document.getElementById('whoProfileFollow')
+      profileRefs.joinedDetail = document.getElementById('whoProfileJoinedDetail')
+      profileRefs.onlineDetail = document.getElementById('whoProfileOnlineDetail')
+      profileRefs.tagDetail = document.getElementById('whoProfileTagDetail')
+      profileRefs.contactLink = document.getElementById('whoProfileContactLink')
+      profileRefs.tagAudio = document.getElementById('whoProfileTagAudio')
+
+      if (profileRefs.closeBtn && !profileRefs.closeBtn.dataset.bound) {
+        profileRefs.closeBtn.addEventListener('click', closeWhoProfile)
+        profileRefs.closeBtn.dataset.bound = '1'
+      }
+      if (profileRefs.overlay && !profileRefs.overlay.dataset.bound) {
+        profileRefs.overlay.addEventListener('click', (event) => {
+          if (event.target === profileRefs.overlay) closeWhoProfile()
+        })
+        profileRefs.overlay.dataset.bound = '1'
+      }
+      if (profileRefs.followBtn && !profileRefs.followBtn.dataset.bound) {
+        profileRefs.followBtn.addEventListener('click', (event) => {
+          event.preventDefault()
+          if (activeProfileUser) toggleFollow(activeProfileUser)
+        })
+        profileRefs.followBtn.dataset.bound = '1'
+      }
+      return true
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && profileRefs.overlay && profileRefs.overlay.classList.contains('active')) {
+        closeWhoProfile()
+      }
+    })
+
+    function parseDateValue(value) {
+      if (!value) return null
+      if (value instanceof Date) {
+        return Number.isFinite(value.valueOf()) ? value : null
+      }
+      const d = new Date(value)
+      return Number.isFinite(d.valueOf()) ? d : null
+    }
+
+    function computeDaysSince(date) {
+      const parsed = parseDateValue(date)
+      if (!parsed) return null
+      const diff = Date.now() - parsed.getTime()
+      if (!Number.isFinite(diff) || diff < 0) return 0
+      return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)))
+    }
+
+    function formatOnlineCompact(totalSec) {
+      const seconds = Math.max(0, Number(totalSec) || 0)
+      if (seconds >= 3600) {
+        const hours = seconds / 3600
+        return hours >= 10 ? Math.round(hours) + 'h' : hours.toFixed(1) + 'h'
+      }
+      const minutes = Math.floor(seconds / 60)
+      if (minutes > 0) return minutes + 'm'
+      return seconds > 0 ? Math.floor(seconds) + 's' : '0m'
+    }
+
+    function formatOnlineDetailed(totalSec) {
+      const seconds = Math.max(0, Number(totalSec) || 0)
+      const hours = Math.floor(seconds / 3600)
+      const minutes = Math.floor((seconds % 3600) / 60)
+      if (hours && minutes) return hours + 'h ' + minutes + 'm'
+      if (hours) return hours + ' hour' + (hours === 1 ? '' : 's')
+      if (minutes) return minutes + ' minute' + (minutes === 1 ? '' : 's')
+      const secs = Math.floor(seconds % 60)
+      return secs + ' second' + (secs === 1 ? '' : 's')
+    }
+
+    function buildHandle(user) {
+      const source = (user && (user.name || user.email)) || ''
+      const base = source.toString().toLowerCase().replace(/[^a-z0-9_]/g, '')
+      return base ? '@' + base : ''
+    }
+
+    function getFollowingSet() {
+      const stored = getJSON('following', '[]')
+      if (!Array.isArray(stored)) return new Set()
+      const normed = stored
+        .map(entry => (typeof entry === 'string' ? entry.trim().toLowerCase() : ''))
+        .filter(Boolean)
+      return new Set(normed)
+    }
+
+    function updateFollowButtonState(user) {
+      if (!ensureProfileRefs()) return
+      const email = (user && (user.normalizedEmail || user.email) ? (user.normalizedEmail || user.email).toLowerCase() : '')
+      const set = getFollowingSet()
+      const following = email && set.has(email)
+      if (profileRefs.followBtn) {
+        profileRefs.followBtn.textContent = following ? 'Following' : 'Follow'
+        profileRefs.followBtn.classList.toggle('is-following', Boolean(following))
+        if (user && user.name) {
+          profileRefs.followBtn.setAttribute('aria-label', (following ? 'Unfollow ' : 'Follow ') + user.name)
+        }
+        if (email) {
+          profileRefs.followBtn.dataset.email = email
+        }
+      }
+    }
+
+    function closeWhoProfile() {
+      if (!profileRefs.overlay) return
+      profileRefs.overlay.classList.remove('active')
+      profileRefs.overlay.setAttribute('aria-hidden', 'true')
+      if (profileRefs.tagAudio) {
+        try { profileRefs.tagAudio.pause() } catch {}
+        try { profileRefs.tagAudio.currentTime = 0 } catch {}
+      }
+      document.body.style.overflow = previousBodyOverflow || ''
+      activeProfileUser = null
+    }
+
+    function openWhoProfile(user) {
+      if (!user) return
+      if (!ensureProfileRefs()) return
+      const normalizedEmail = user.normalizedEmail || (user.email ? user.email.toLowerCase() : '')
+      activeProfileUser = { ...user, normalizedEmail }
+      previousBodyOverflow = document.body.style.overflow || ''
+      document.body.style.overflow = 'hidden'
+
+      if (profileRefs.overlay) {
+        profileRefs.overlay.classList.add('active')
+        profileRefs.overlay.setAttribute('aria-hidden', 'false')
+      }
+
+      const sanitizedAvatar = sanitizeAvatar(activeProfileUser.avatar)
+      if (profileRefs.card) {
+        profileRefs.card.style.backgroundImage = sanitizedAvatar ? `url('${sanitizedAvatar}')` : ''
+      }
+
+      const displayName = activeProfileUser.name || activeProfileUser.email || 'Beatloop creator'
+      if (profileRefs.name) profileRefs.name.textContent = displayName
+
+      const joinedDate = parseDateValue(activeProfileUser.joinedAt)
+      const taglineParts = []
+      const handle = buildHandle(activeProfileUser)
+      if (handle) taglineParts.push(handle)
+      if (joinedDate) taglineParts.push('joined ' + joinedDate.getFullYear())
+      if (profileRefs.subtitle) {
+        profileRefs.subtitle.textContent = taglineParts.join(' • ') || 'Beatloop creator'
+      }
+
+      const totalSec = Number(activeProfileUser.totalOnlineSec) || 0
+      if (profileRefs.stat1Value) profileRefs.stat1Value.textContent = formatOnlineCompact(totalSec)
+      if (profileRefs.stat1Label) profileRefs.stat1Label.textContent = 'time online'
+
+      const days = computeDaysSince(joinedDate)
+      if (profileRefs.stat2Value) profileRefs.stat2Value.textContent = days != null ? String(days) : '—'
+      if (profileRefs.stat2Label) profileRefs.stat2Label.textContent = 'days on beatloop'
+
+      const hasTag = Boolean(activeProfileUser.tagUrl)
+      if (profileRefs.stat3Value) profileRefs.stat3Value.textContent = hasTag ? 'Live' : 'Pending'
+      if (profileRefs.stat3Label) profileRefs.stat3Label.textContent = 'sound tag'
+
+      if (profileRefs.joinedDetail) {
+        profileRefs.joinedDetail.textContent = joinedDate
+          ? joinedDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+          : 'Not yet provided'
+      }
+      if (profileRefs.onlineDetail) {
+        profileRefs.onlineDetail.textContent = formatOnlineDetailed(totalSec)
+      }
+      if (profileRefs.tagDetail) {
+        profileRefs.tagDetail.textContent = hasTag
+          ? 'Tap play to preview their signature tag.'
+          : 'No sound tag uploaded yet.'
+      }
+
+      if (profileRefs.contactLink) {
+        const email = activeProfileUser.email || ''
+        if (email) {
+          profileRefs.contactLink.href = 'mailto:' + email + '?subject=Beatloop%20collab'
+          profileRefs.contactLink.textContent = 'Email ' + (activeProfileUser.name || email.split('@')[0] || 'creator')
+          profileRefs.contactLink.classList.remove('hidden')
+        } else {
+          profileRefs.contactLink.href = '#'
+          profileRefs.contactLink.textContent = 'Contact unavailable'
+        }
+      }
+
+      if (profileRefs.tagAudio) {
+        if (hasTag) {
+          profileRefs.tagAudio.src = toAssetUrl(activeProfileUser.tagUrl)
+          profileRefs.tagAudio.classList.remove('hidden')
+        } else {
+          profileRefs.tagAudio.removeAttribute('src')
+          profileRefs.tagAudio.classList.add('hidden')
+        }
+      }
+
+      updateFollowButtonState(activeProfileUser)
+    }
+
+    function toggleFollow(user) {
+      const email = (user && (user.normalizedEmail || user.email)
+        ? (user.normalizedEmail || user.email).toLowerCase()
+        : '')
+      if (!email) return
+      const set = getFollowingSet()
+      if (set.has(email)) set.delete(email)
+      else set.add(email)
+      setJSON('following', Array.from(set))
+      updateFollowButtonState(user)
+      renderWhoToFollowInto(whoToFollowEl)
+      renderWhoToFollowInto(whoToFollowMEl)
+    }
+
     // ---------- Pending selections
     let pendingMeta = null          // lightweight meta for last uploaded/recorded track
     let pendingCoverKey = null      // IDB key for optional cover
@@ -1408,27 +1704,94 @@ function createPost(track) {
       if (!el) return
       const users = getJSON('users', '{}')
       const suggestions = []
-      Object.values(users).forEach(u => {
-        if (currentUser && u.email !== currentUser.email) suggestions.push(u)
+      Object.values(users).forEach(entry => {
+        if (!entry || typeof entry !== 'object') return
+        const rawEmail = typeof entry.email === 'string' ? entry.email : ''
+        const normalizedEmail = rawEmail ? rawEmail.toLowerCase() : ''
+        if (!normalizedEmail) return
+        if (currentUser && normalizedEmail === (currentUser.email || '').toLowerCase()) return
+        suggestions.push({
+          ...entry,
+          email: rawEmail,
+          normalizedEmail,
+          avatar: sanitizeAvatar(entry.avatar)
+        })
       })
       el.innerHTML = ''
-      suggestions.slice(0,3).forEach(u => {
-        const row = document.createElement('div')
-        row.className = 'flex items-center gap-3'
+      if (!suggestions.length) {
+        const empty = document.createElement('p')
+        empty.className = 'text-sm text-white/50'
+        empty.textContent = 'More creators joining soon.'
+        el.appendChild(empty)
+        return
+      }
+
+      const following = getFollowingSet()
+      suggestions.sort((a, b) => {
+        const secDelta = (Number(b.totalOnlineSec) || 0) - (Number(a.totalOnlineSec) || 0)
+        if (secDelta !== 0) return secDelta
+        const bJoined = parseDateValue(b.joinedAt)?.getTime() || 0
+        const aJoined = parseDateValue(a.joinedAt)?.getTime() || 0
+        return bJoined - aJoined
+      })
+
+      const prioritized = [
+        ...suggestions.filter(u => !following.has(u.normalizedEmail)),
+        ...suggestions.filter(u => following.has(u.normalizedEmail))
+      ].slice(0, 3)
+
+      prioritized.forEach(user => {
+        const row = document.createElement('button')
+        row.type = 'button'
+        row.className = 'bl-who-suggestion'
+        const isFollowing = following.has(user.normalizedEmail)
+        if (isFollowing) row.classList.add('following')
+        row.setAttribute('aria-label', 'View profile for ' + (user.name || user.email))
+
         const av = document.createElement('img')
-        av.src = sanitizeAvatar(u.avatar)
+        av.src = user.avatar || fallbackAvatar
         av.onerror = () => { av.src = fallbackAvatar }
-        av.className = 'h-8 w-8 rounded-full ring-1 ring-white/10 object-cover'
+
         const info = document.createElement('div')
-        info.className = 'min-w-0 flex-1'
+        info.className = 'bl-who-meta'
         const name = document.createElement('p')
-        name.className = 'font-semibold truncate'
-        name.textContent = u.name || u.email
+        name.className = 'bl-who-name'
+        name.textContent = user.name || user.email
         const handle = document.createElement('p')
-        handle.className = 'text-xs text-white/50 truncate'
-        handle.textContent = '@' + (u.name || u.email).toLowerCase().replace(/[^a-z0-9_]/g,'')
-        info.appendChild(name); info.appendChild(handle)
-        row.appendChild(av); row.appendChild(info)
+        handle.className = 'bl-who-handle'
+        const handleText = buildHandle(user) || user.email
+        handle.textContent = handleText
+        const summary = document.createElement('div')
+        summary.className = 'bl-who-summary'
+        const timeSpan = document.createElement('span')
+        timeSpan.textContent = formatOnlineCompact(user.totalOnlineSec) + ' online'
+        summary.appendChild(timeSpan)
+        if (user.tagUrl) {
+          const tagChip = document.createElement('span')
+          tagChip.className = 'bl-who-chip'
+          tagChip.textContent = 'Tag ready'
+          summary.appendChild(tagChip)
+        }
+        if (isFollowing) {
+          const badge = document.createElement('span')
+          badge.className = 'bl-who-badge'
+          badge.textContent = 'Following'
+          summary.appendChild(badge)
+        }
+        info.appendChild(name)
+        info.appendChild(handle)
+        info.appendChild(summary)
+
+        const cta = document.createElement('span')
+        cta.className = 'bl-who-cta'
+        cta.textContent = 'View profile →'
+
+        row.appendChild(av)
+        row.appendChild(info)
+        row.appendChild(cta)
+
+        const enriched = { ...user }
+        row.addEventListener('click', () => openWhoProfile(enriched))
         el.appendChild(row)
       })
     }
@@ -1667,6 +2030,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
       }
 
       ensureLoggedIn()
+      ensureProfileRefs()
       await refreshUserDirectory()
 
       // migrate any legacy data: URLs out of localStorage
@@ -1695,6 +2059,54 @@ uploadTrackInput.addEventListener('change', async (e) => {
       loadMore()
     })
   </script>
+
+  <div id="whoProfileOverlay" class="bl-who-overlay" aria-hidden="true" role="dialog">
+    <div class="bl-who-dialog glass">
+      <button id="whoProfileClose" class="bl-who-close" aria-label="Close profile">×</button>
+      <div class="user-profile-container">
+        <div id="whoProfileCard" class="user-profile">
+          <h3 id="whoProfileName">Beatloop Creator</h3>
+          <p id="whoProfileSubtitle">@beatloop</p>
+        </div>
+        <ul class="user-info">
+          <li>
+            <h3 id="whoProfileStat1Value">0</h3>
+            <small id="whoProfileStat1Label">time online</small>
+          </li>
+          <li>
+            <h3 id="whoProfileStat2Value">0</h3>
+            <small id="whoProfileStat2Label">days on beatloop</small>
+          </li>
+          <li>
+            <h3 id="whoProfileStat3Value">Pending</h3>
+            <small id="whoProfileStat3Label">sound tag</small>
+          </li>
+        </ul>
+        <a id="whoProfileFollow" class="follow-btn" href="#">Follow</a>
+      </div>
+      <div class="bl-who-extra">
+        <h4>Creator highlights</h4>
+        <dl>
+          <div>
+            <dt>Member since</dt>
+            <dd id="whoProfileJoinedDetail">—</dd>
+          </div>
+          <div>
+            <dt>Time spent creating</dt>
+            <dd id="whoProfileOnlineDetail">—</dd>
+          </div>
+          <div>
+            <dt>Latest sound tag</dt>
+            <dd id="whoProfileTagDetail">—</dd>
+          </div>
+        </dl>
+        <div class="bl-who-actions">
+          <a id="whoProfileContactLink" class="bl-who-contact" href="#">Connect via email</a>
+        </div>
+        <audio id="whoProfileTagAudio" class="bl-who-tag-audio hidden" controls preload="none"></audio>
+      </div>
+    </div>
+  </div>
 
 <script src="https://unpkg.com/wavesurfer.js@7"></script>
 <!-- Tone.js for WebAudio sequencing -->
