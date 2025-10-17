@@ -7484,7 +7484,7 @@ stopBtn.addEventListener('click', () => {
   // Hydrate user non-blocking if JWT exists but user is stale/missing fields.
   const token = localStorage.getItem('jwt');
   if (hasAuthToken(token) && (!user.name || !user.email)) {
-    fetch(getActiveApiBase() + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
+    fetch(getApiBase() + '/api/auth/me', { headers: { Authorization: 'Bearer ' + token }})
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => {
         if (d?.user) {
@@ -7498,7 +7498,7 @@ stopBtn.addEventListener('click', () => {
   // Presence heartbeat (safe even without token)
   if (hasAuthToken(token)) {
     setInterval(() => {
-      fetch(getActiveApiBase() + '/api/presence/ping', {
+      fetch(getApiBase() + '/api/presence/ping', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token }
       }).catch(()=>{});
@@ -7556,7 +7556,7 @@ stopBtn.addEventListener('click', () => {
   setInterval(refreshSessions, 5000);
   // Attempt stale session cleanup every minute (no-op if endpoint doesn’t exist)
   setInterval(() => {
-    fetch(getActiveApiBase() + '/api/sessions/cleanup', {
+    fetch(getApiBase() + '/api/sessions/cleanup', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('jwt') || '') }
     }).catch(()=>{});
