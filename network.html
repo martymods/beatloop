@@ -1119,6 +1119,93 @@
       return typeof base === 'string' ? base.trim() : '';
     };
 
+    const MEDIA_UPLOAD_PATH_PREFIX = /^\/?(?:uploads|api\/uploads)\//i;
+
+    const DEFAULT_VERIFIED_MEDIA_UPLOAD_HOSTS = [
+      'beatloop-api.onrender.com',
+      'api.beatloop.co'
+    ];
+
+    const normalizeHostForComparison = (value) => {
+      if (!value) return '';
+      const stringValue = typeof value === 'string' ? value : String(value);
+      if (!stringValue) return '';
+      const trimmed = stringValue.trim();
+      if (!trimmed) return '';
+      const withoutProtocol = trimmed.replace(/^https?:\/\//i, '');
+      const withoutPath = withoutProtocol.replace(/[/:?#].*$/, '');
+      let normalized = withoutPath.toLowerCase();
+      if (!normalized) return '';
+      const preserveLeadingDot = normalized.startsWith('.') || normalized.startsWith('*.');
+      normalized = normalized.replace(/^\*?\.+/, '');
+      if (!normalized) return '';
+      return preserveLeadingDot ? `.${normalized}` : normalized;
+    };
+
+    const buildVerifiedMediaUploadHostSet = () => {
+      const hosts = new Set();
+      const addHost = (candidate) => {
+        const normalized = normalizeHostForComparison(candidate);
+        if (normalized) hosts.add(normalized);
+      };
+
+      for (const host of DEFAULT_VERIFIED_MEDIA_UPLOAD_HOSTS) {
+        addHost(host);
+      }
+
+      try {
+        const meta = document.querySelector('meta[name="beatloop-verified-media-hosts"]');
+        if (meta && typeof meta.content === 'string' && meta.content.trim()) {
+          meta.content.split(/[,\s]+/).forEach(addHost);
+        }
+      } catch {}
+
+      const dynamicSources = typeof window === 'undefined' ? {} : window;
+      const { BEATLOOP_VERIFIED_MEDIA_HOSTS, additionalVerifiedMediaHosts } = dynamicSources;
+      const applyDynamicHosts = (value) => {
+        if (!value) return;
+        if (Array.isArray(value)) {
+          value.forEach(applyDynamicHosts);
+          return;
+        }
+        if (typeof value === 'string') {
+          value.split(/[,\s]+/).forEach(addHost);
+          return;
+        }
+        addHost(value);
+      };
+
+      applyDynamicHosts(BEATLOOP_VERIFIED_MEDIA_HOSTS);
+      applyDynamicHosts(additionalVerifiedMediaHosts);
+
+      return hosts;
+    };
+
+    const VERIFIED_MEDIA_UPLOAD_HOSTS = buildVerifiedMediaUploadHostSet();
+
+    const isVerifiedMediaUploadHost = (hostname) => {
+      if (!hostname) return false;
+      const normalized = normalizeHostForComparison(hostname);
+      if (!normalized) return false;
+      if (VERIFIED_MEDIA_UPLOAD_HOSTS.has(normalized)) return true;
+      for (const host of VERIFIED_MEDIA_UPLOAD_HOSTS) {
+        if (host.startsWith('.') && (normalized === host.slice(1) || normalized.endsWith(host))) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const isVerifiedUploadUrl = (value) => {
+      if (!value || typeof value !== 'string') return false;
+      try {
+        const parsed = new URL(value);
+        return MEDIA_UPLOAD_PATH_PREFIX.test(parsed.pathname || '') && isVerifiedMediaUploadHost(parsed.hostname);
+      } catch {
+        return false;
+      }
+    };
+
     const maybeRewriteToActiveApiBase = (value) => {
       if (!value || typeof value !== 'string') return value;
       if (!/^https?:\/\//i.test(value)) return value;
@@ -1128,6 +1215,10 @@
         const isApiHost = hostname === 'api.beatloop.co'
           || hostname === 'beatloop-api.onrender.com';
         if (!isApiHost) return value;
+
+        if (MEDIA_UPLOAD_PATH_PREFIX.test(parsed.pathname || '') && isVerifiedMediaUploadHost(hostname)) {
+          return value;
+        }
 
         const currentBase = getCurrentApiBase();
         if (!currentBase || typeof currentBase !== 'string') return value;
@@ -1180,7 +1271,7 @@
     };
 
     const STATIC_MEDIA_PREFIX = /^\/?(?:audio|img)\//i;
-    const API_MEDIA_PREFIX = /^\/?(?:uploads|api\/uploads)\//i;
+    const API_MEDIA_PREFIX = MEDIA_UPLOAD_PATH_PREFIX;
 
     const buildUploadUrlCandidates = (path) => {
       const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -1216,7 +1307,12 @@
       const value = raw.trim();
       if (!value) return value;
       if (/^(data:|blob:|filesystem:)/i.test(value)) return value;
-      if (/^https?:\/\//i.test(value)) return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(value));
+      if (/^https?:\/\//i.test(value)) {
+        if (isVerifiedUploadUrl(value)) {
+          return ensureHttpsMediaUrl(value);
+        }
+        return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(value));
+      }
       if (value.startsWith('//')) {
         try { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${window.location.protocol}${value}`)); } catch { return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`https:${value}`)); }
       }
