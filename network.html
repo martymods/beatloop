@@ -1073,9 +1073,16 @@
       return 'https://www.beatloop.co';
     })();
 
+    const LOCAL_DEV_HOSTS = new Set(['localhost', '127.0.0.1', '']);
+    const CURRENT_HOST = (window.location.hostname || '').toLowerCase();
+    const IS_LOCAL_DEV_ENV = LOCAL_DEV_HOSTS.has(CURRENT_HOST) || window.location.protocol === 'file:';
+
     const DEFAULT_ASSETS_BASE = 'https://www.beatloop.co';
-    const ASSETS_BASE = normalizeAssetBase(metaAssetsBase)
-      || normalizeAssetBase(derivedAssetsBase)
+    const normalizedMetaAssetsBase = normalizeAssetBase(metaAssetsBase);
+    const normalizedDerivedAssetsBase = normalizeAssetBase(derivedAssetsBase);
+    const ASSETS_BASE = (IS_LOCAL_DEV_ENV && normalizedDerivedAssetsBase)
+      || normalizedMetaAssetsBase
+      || normalizedDerivedAssetsBase
       || DEFAULT_ASSETS_BASE;
     window.ASSETS_BASE = ASSETS_BASE;
 
@@ -1188,6 +1195,44 @@
       url: toAssetUrl(track.url),
       cover: track.cover ? toAssetUrl(track.cover) : track.cover
     }));
+
+    const TRACK_FALLBACK_BY_ID = new Map(TRACKS.map(track => [track.id, track.url]));
+    const TRACK_FALLBACK_SOURCES = TRACKS.map(track => track.url).filter(Boolean);
+    const DEFAULT_FALLBACK_TRACK_SRC = TRACK_FALLBACK_SOURCES.length ? TRACK_FALLBACK_SOURCES[0] : '';
+    const KNOWN_REMOTE_MEDIA_HOSTS = ['beatloop.co', 'www.beatloop.co', 'api.beatloop.co', 'beatloop-api.onrender.com'];
+
+    const shouldUseLocalMediaFallback = (value) => {
+      if (!IS_LOCAL_DEV_ENV) return false;
+      if (!value || typeof value !== 'string') return false;
+      if (/^(data:|blob:|filesystem:)/i.test(value)) return false;
+      try {
+        const { hostname } = new URL(value, window.location.origin);
+        if (!hostname) return false;
+        const normalized = hostname.toLowerCase();
+        if (!normalized || normalized === CURRENT_HOST) return false;
+        if (LOCAL_DEV_HOSTS.has(normalized)) return false;
+        return KNOWN_REMOTE_MEDIA_HOSTS.some(host => normalized === host || normalized.endsWith(`.${host}`));
+      } catch {
+        return false;
+      }
+    };
+
+    const resolveLocalTrackFallback = (trackId, resolvedUrl) => {
+      if (!resolvedUrl) {
+        return { url: resolvedUrl, fallbackApplied: false };
+      }
+      if (!shouldUseLocalMediaFallback(resolvedUrl)) {
+        return { url: resolvedUrl, fallbackApplied: false };
+      }
+      const candidate = trackId && TRACK_FALLBACK_BY_ID.get(trackId);
+      if (candidate && candidate !== resolvedUrl) {
+        return { url: candidate, fallbackApplied: true };
+      }
+      if (DEFAULT_FALLBACK_TRACK_SRC && DEFAULT_FALLBACK_TRACK_SRC !== resolvedUrl) {
+        return { url: DEFAULT_FALLBACK_TRACK_SRC, fallbackApplied: true };
+      }
+      return { url: resolvedUrl, fallbackApplied: false };
+    };
 
     // Defaults (leave fallbackAvatar as-is)
     const fallbackAvatar = toAssetUrl('/img/avatar-default.svg');
@@ -2127,8 +2172,12 @@ let sessionsCard = null;
 
         const artist = track.artist || (author && (author.displayName || author.name || author.email)) || 'Beatloop creator'
 
-        const normalizedUrl = resolveTrackMediaUrl(url)
-        const normalizedCover = coverRaw ? resolveTrackMediaUrl(coverRaw) : DEFAULT_TRACK_COVER
+        const resolvedUrl = resolveTrackMediaUrl(url)
+        const { url: normalizedUrl, fallbackApplied: localFallbackApplied } = resolveLocalTrackFallback(id, resolvedUrl)
+        let normalizedCover = coverRaw ? resolveTrackMediaUrl(coverRaw) : DEFAULT_TRACK_COVER
+        if (localFallbackApplied && shouldUseLocalMediaFallback(normalizedCover)) {
+          normalizedCover = DEFAULT_TRACK_COVER
+        }
 
         return {
           ...track,
@@ -2138,6 +2187,8 @@ let sessionsCard = null;
           artist,
           caption,
           createdAt: createdAtTs,
+          originalUrl: resolvedUrl,
+          localFallbackApplied,
           user: author ? {
             ...author,
             displayName: author.displayName || author.name || ''
@@ -2284,6 +2335,14 @@ function createPost(track, { prepend = false } = {}) {
   card.appendChild(header)
 
 
+      if (normalized.localFallbackApplied) {
+        console.info('Track media fallback applied', {
+          trackId: normalized.id,
+          original: normalized.originalUrl || null,
+          fallback: normalized.url
+        })
+      }
+
       const trackWrapper = document.createElement('div')
       trackWrapper.className = 'mt-3 rounded-xl bg-black/30 p-3 ring-1 ring-white/10'
       const trackRow = document.createElement('div')
@@ -2334,6 +2393,12 @@ function createPost(track, { prepend = false } = {}) {
           src: audio.currentSrc || normalized.url,
           event: eventName,
           ...extra
+        }
+        if (normalized.localFallbackApplied) {
+          payload.fallback = {
+            applied: true,
+            original: normalized.originalUrl || null
+          }
         }
         if (level === 'error') {
           console.error('Track playback error', payload)
