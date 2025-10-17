@@ -957,7 +957,15 @@
 
     // ---------- Small JSON helpers
     const getJSON = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || d) } catch { return JSON.parse(d) } }
-    const setJSON = (k, v) => localStorage.setItem(k, JSON.stringify(v))
+    const setJSON = (k, v) => {
+      try {
+        localStorage.setItem(k, JSON.stringify(v))
+        return true
+      } catch (err) {
+        console.warn('Unable to persist localStorage key', k, err)
+        return false
+      }
+    }
 
     function persistUserDirectoryEntry(entry, fallbackEmail, options = {}) {
       if (!entry) return null
@@ -1142,7 +1150,11 @@ function ensureLoggedIn() {
     const legacy = localStorage.getItem('current_user') || localStorage.getItem('currentUser');
     if (legacy) {
       u = { name: legacy.split('@')[0], email: legacy, avatar: fallbackAvatar };
-      localStorage.setItem('user', JSON.stringify(u));
+      try {
+        localStorage.setItem('user', JSON.stringify(u));
+      } catch (err) {
+        console.warn('Unable to persist upgraded legacy user', err);
+      }
     }
   }
 
@@ -5188,7 +5200,14 @@ stopBtn.addEventListener('click', () => {
 <script>
   const AUTH = window.AUTH || (window.AUTH = {
     token: localStorage.getItem('jwt') || '',
-    set(t){ this.token = t; localStorage.setItem('jwt', t); },
+    set(t){
+      this.token = t;
+      try {
+        localStorage.setItem('jwt', t);
+      } catch (err) {
+        console.warn('Unable to persist auth token', err);
+      }
+    },
     hdr(){ return hasAuthToken(this.token) ? { 'Authorization': 'Bearer ' + this.token } : {}; }
   });
 
@@ -5994,7 +6013,11 @@ stopBtn.addEventListener('click', () => {
     const legacyEmail = localStorage.getItem('current_user') || localStorage.getItem('currentUser');
     if (legacyEmail) {
       user = { name: legacyEmail.split('@')[0], email: legacyEmail, avatar: fallbackAvatar };
-      localStorage.setItem('user', JSON.stringify(user));
+      try {
+        localStorage.setItem('user', JSON.stringify(user));
+      } catch (err) {
+        console.warn('Unable to persist upgraded legacy user', err);
+      }
     }
   }
 
