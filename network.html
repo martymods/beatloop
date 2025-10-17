@@ -1649,22 +1649,216 @@
     }
 
     // ---------- Stats
+    function normalizeStats(raw) {
+      const base = { plays: 0, likes: 0, comments: 0, reposts: 0 }
+      if (!raw || typeof raw !== 'object') return { ...base }
+      const normalized = { ...base }
+      Object.keys(base).forEach(key => {
+        const value = Number(raw[key])
+        normalized[key] = Number.isFinite(value) && value > 0 ? Math.max(0, Math.floor(value)) : 0
+      })
+      return normalized
+    }
     function getStats(id) {
       const stats = getJSON('track_stats', '{}')
       const existing = stats[id]
       if (existing) {
-        if (typeof existing.reposts !== 'number') existing.reposts = Number(existing.reposts) || 0
-        if (typeof existing.likes !== 'number') existing.likes = Number(existing.likes) || 0
-        if (typeof existing.comments !== 'number') existing.comments = Number(existing.comments) || 0
-        if (typeof existing.plays !== 'number') existing.plays = Number(existing.plays) || 0
-        return existing
+        return normalizeStats(existing)
       }
       return { plays: 0, likes: 0, comments: 0, reposts: 0 }
     }
     function setStats(id, data) {
       const stats = getJSON('track_stats', '{}')
-      stats[id] = data
+      stats[id] = normalizeStats(data)
       setJSON('track_stats', stats)
+    }
+
+    const remoteStatsCache = new Map()
+    const remoteCommentsCache = new Map()
+
+    function resolveApiBase() {
+      return (typeof window.getApiBase === 'function'
+        ? window.getApiBase()
+        : (window.API_BASE || API_BASE_DEFAULT))
+    }
+
+    async function fetchTrackStatsRemote(trackId, { force = false } = {}) {
+      if (!trackId) return null
+      if (!force && remoteStatsCache.has(trackId)) return remoteStatsCache.get(trackId)
+      try {
+        const apiBase = resolveApiBase()
+        const resp = await fetch(`${apiBase}/api/tracks/${trackId}/stats`, {
+          headers: { ...AUTH.hdr() }
+        })
+        if (!resp.ok) throw new Error('stats request failed')
+        const payload = await resp.json().catch(() => null)
+        const normalized = normalizeStats(payload?.stats)
+        remoteStatsCache.set(trackId, normalized)
+        setStats(trackId, normalized)
+        return normalized
+      } catch (err) {
+        console.warn('Failed to fetch remote stats', err)
+        return null
+      }
+    }
+
+    async function recordTrackMetricRemote(trackId, action, body = {}) {
+      if (!trackId || !action) return null
+      try {
+        const apiBase = resolveApiBase()
+        const resp = await fetch(`${apiBase}/api/tracks/${trackId}/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...AUTH.hdr() },
+          body: JSON.stringify(body)
+        })
+        if (!resp.ok) throw new Error(`${action} request failed`)
+        const payload = await resp.json().catch(() => null)
+        const normalized = normalizeStats(payload?.stats)
+        remoteStatsCache.set(trackId, normalized)
+        setStats(trackId, normalized)
+        return { payload, stats: normalized }
+      } catch (err) {
+        console.warn(`Failed to record ${action}`, err)
+        throw err
+      }
+    }
+
+    function normalizeComment(raw) {
+      if (!raw || typeof raw !== 'object') return null
+      return {
+        id: raw.id || raw._id || null,
+        text: typeof raw.text === 'string' ? raw.text : '',
+        time: Number(raw.time ?? raw.timeSec ?? raw.timestamp) || 0,
+        createdAt: raw.createdAt || Date.now(),
+        user: typeof raw.user === 'string' ? raw.user : '',
+        displayName: typeof raw.displayName === 'string' ? raw.displayName : '',
+        avatar: sanitizeAvatar(raw.avatar),
+        userId: raw.userId || null,
+        clientId: typeof raw.clientId === 'string' ? raw.clientId : null
+      }
+    }
+
+    function persistComments(trackId, comments) {
+      setJSON('comments_' + trackId, Array.isArray(comments) ? comments : [])
+    }
+
+    function getCommentsLocal(trackId) {
+      const arr = getJSON('comments_' + trackId, '[]')
+      if (!Array.isArray(arr)) return []
+      return arr.map(item => normalizeComment(item)).filter(Boolean)
+    }
+
+    async function fetchTrackCommentsRemote(trackId, { force = false } = {}) {
+      if (!trackId) return []
+      if (!force && remoteCommentsCache.has(trackId)) return remoteCommentsCache.get(trackId)
+      try {
+        const apiBase = resolveApiBase()
+        const resp = await fetch(`${apiBase}/api/tracks/${trackId}/comments`, {
+          headers: { ...AUTH.hdr() }
+        })
+        if (!resp.ok) throw new Error('comments request failed')
+        const payload = await resp.json().catch(() => null)
+        const comments = Array.isArray(payload?.comments) ? payload.comments.map(normalizeComment).filter(Boolean) : []
+        remoteCommentsCache.set(trackId, comments)
+        persistComments(trackId, comments)
+        return comments
+      } catch (err) {
+        console.warn('Failed to fetch remote comments', err)
+        return []
+      }
+    }
+
+    async function postTrackComment(trackId, data) {
+      if (!trackId) throw new Error('missing track id')
+      const commentBody = {
+        text: typeof data?.text === 'string' ? data.text : '',
+        time: Number(data?.time) || 0,
+        clientId: typeof data?.clientId === 'string' ? data.clientId : undefined
+      }
+      try {
+        const apiBase = resolveApiBase()
+        const resp = await fetch(`${apiBase}/api/tracks/${trackId}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...AUTH.hdr() },
+          body: JSON.stringify(commentBody)
+        })
+        if (!resp.ok) throw new Error('comment request failed')
+        const payload = await resp.json().catch(() => null)
+        const normalized = normalizeComment(payload?.comment)
+        const stats = normalizeStats(payload?.stats)
+        if (normalized) {
+          const existing = remoteCommentsCache.get(trackId) || []
+          const deduped = [...existing]
+          if (!deduped.some(c => c.id && normalized.id && c.id === normalized.id)) {
+            deduped.push(normalized)
+          }
+          remoteCommentsCache.set(trackId, deduped)
+          persistComments(trackId, deduped)
+        }
+        if (stats) {
+          remoteStatsCache.set(trackId, stats)
+          setStats(trackId, stats)
+        }
+        return { comment: normalized, stats }
+      } catch (err) {
+        console.warn('Failed to post comment', err)
+        throw err
+      }
+    }
+
+    async function backfillTrackStats(trackId, localStats, remoteStats) {
+      if (!trackId) return null
+      const diff = {
+        plays: Math.max(0, (localStats?.plays || 0) - (remoteStats?.plays || 0)),
+        likes: Math.max(0, (localStats?.likes || 0) - (remoteStats?.likes || 0)),
+        reposts: Math.max(0, (localStats?.reposts || 0) - (remoteStats?.reposts || 0))
+      }
+      if (diff.plays <= 0 && diff.likes <= 0 && diff.reposts <= 0) return remoteStats || null
+      try {
+        const apiBase = resolveApiBase()
+        const resp = await fetch(`${apiBase}/api/tracks/${trackId}/stats/backfill`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...AUTH.hdr() },
+          body: JSON.stringify(diff)
+        })
+        if (!resp.ok) throw new Error('backfill request failed')
+        const payload = await resp.json().catch(() => null)
+        const normalized = normalizeStats(payload?.stats)
+        remoteStatsCache.set(trackId, normalized)
+        setStats(trackId, normalized)
+        return normalized
+      } catch (err) {
+        console.warn('Failed to backfill stats', err)
+        return remoteStats || null
+      }
+    }
+
+    async function backfillTrackComments(trackId, localComments, remoteComments) {
+      if (!trackId) return remoteComments
+      const remoteList = Array.isArray(remoteComments) ? remoteComments.slice() : []
+      const pending = Array.isArray(localComments) ? localComments : []
+      for (const comment of pending) {
+        const normalized = normalizeComment(comment)
+        if (!normalized || !normalized.text) continue
+        const already = remoteList.some(remote => {
+          if (!remote) return false
+          if (normalized.clientId && remote.clientId) return normalized.clientId === remote.clientId
+          if (normalized.user && remote.user && normalized.user.toLowerCase() === remote.user.toLowerCase()) {
+            const delta = Math.abs((normalized.time || 0) - (remote.time || 0))
+            if (delta < 0.5 && normalized.text === remote.text) return true
+          }
+          return false
+        })
+        if (already) continue
+        const clientId = normalized.clientId || (`backfill-${Date.now()}-${Math.random().toString(36).slice(2,8)}`)
+        try {
+          const result = await postTrackComment(trackId, { text: normalized.text, time: normalized.time, clientId })
+          if (result?.comment) {
+            remoteList.push(result.comment)
+          }
+        } catch {}
+      }
+      return remoteList
     }
 
     const LEADERBOARD_THRESHOLDS = Object.freeze({ likes: 12, reposts: 4 })
@@ -1789,11 +1983,11 @@ function ensureLoggedIn() {
 
 
     // ---------- Comments storage
-    function getComments(key) { return getJSON('comments_' + key, '[]') }
+    function getComments(key) { return getCommentsLocal(key) }
     function saveComment(key, comment) {
-      const arr = getComments(key)
+      const arr = getCommentsLocal(key)
       arr.push(comment)
-      setJSON('comments_' + key, arr)
+      persistComments(key, arr)
       const s = getStats(key); s.comments = (s.comments || 0) + 1; setStats(key, s)
       scheduleLeaderboardRefresh()
     }
@@ -2080,11 +2274,11 @@ let sessionsCard = null;
     let pendingCoverKey = null      // IDB key for optional cover
 
     // ---------- Render comments & pins
-      function renderComments(trackId, listContainer, pinsContainer, duration) {
-      const comments = getComments(trackId)
+      function renderComments(trackId, listContainer, pinsContainer, duration, comments) {
+      const source = Array.isArray(comments) ? comments.map(normalizeComment).filter(Boolean) : getCommentsLocal(trackId)
       listContainer.innerHTML = ''
       pinsContainer.innerHTML = ''
-      comments.forEach(c => {
+      source.forEach(c => {
         const row = document.createElement('div')
         row.className = 'flex items-start gap-2 mb-2'
         const avatar = document.createElement('img')
@@ -2221,6 +2415,8 @@ let sessionsCard = null;
           createdAt: createdAtTs,
           originalUrl: resolvedUrl,
           localFallbackApplied,
+          stats: track.stats ? normalizeStats(track.stats) : undefined,
+          comments: Array.isArray(track.comments) ? track.comments.map(normalizeComment).filter(Boolean) : undefined,
           user: author ? {
             ...author,
             displayName: author.displayName || author.name || ''
@@ -2323,7 +2519,15 @@ function createPost(track, { prepend = false } = {}) {
   if (!normalized) return null
   if (normalized.id && renderedTrackIds.has(normalized.id)) return null
 
-  const stats = getStats(normalized.id)
+  let latestStats = normalizeStats(normalized.stats || getStats(normalized.id))
+  setStats(normalized.id, latestStats)
+  remoteStatsCache.set(normalized.id, latestStats)
+
+  let latestComments = Array.isArray(normalized.comments) && normalized.comments.length
+    ? normalized.comments.map(normalizeComment).filter(Boolean)
+    : getCommentsLocal(normalized.id)
+  persistComments(normalized.id, latestComments)
+  remoteCommentsCache.set(normalized.id, latestComments)
   const card = document.createElement('article')
   card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
   card.dataset.trackId = normalized.id
@@ -2524,17 +2728,17 @@ function createPost(track, { prepend = false } = {}) {
       commentBtn.className = 'hover:text-white'
       commentBtn.dataset.act = 'comment'
       commentBtn.dataset.id = normalized.id
-      commentBtn.textContent = '💬 ' + (stats.comments || 0)
+      commentBtn.textContent = '💬 ' + (latestStats.comments || 0)
       const repostBtn = document.createElement('button')
       repostBtn.className = 'hover:text-white'
       repostBtn.dataset.act = 'repost'
       repostBtn.dataset.id = normalized.id
-      repostBtn.textContent = '🔁 ' + (stats.reposts || 0)
+      repostBtn.textContent = '🔁 ' + (latestStats.reposts || 0)
       const likeBtn = document.createElement('button')
       likeBtn.className = 'hover:text-white'
       likeBtn.dataset.act = 'like'
       likeBtn.dataset.id = normalized.id
-      likeBtn.textContent = '❤️ ' + (stats.likes || 0)
+        likeBtn.textContent = '❤️ ' + (latestStats.likes || 0)
       actions.appendChild(commentBtn)
       actions.appendChild(repostBtn)
       actions.appendChild(likeBtn)
@@ -2568,12 +2772,27 @@ function createPost(track, { prepend = false } = {}) {
       scheduleLeaderboardRefresh()
 
       function renderAll() {
-        renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0)
-        const stat = getStats(normalized.id)
-        commentBtn.textContent = '💬 ' + (stat.comments || 0)
-        likeBtn.textContent    = '❤️ ' + (stat.likes || 0)
-        repostBtn.textContent = '🔁 ' + (stat.reposts || 0)
+        renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0, latestComments)
+        commentBtn.textContent = '💬 ' + (latestStats.comments || 0)
+        likeBtn.textContent    = '❤️ ' + (latestStats.likes || 0)
+        repostBtn.textContent = '🔁 ' + (latestStats.reposts || 0)
       }
+
+      function applyStats(stats) {
+        latestStats = normalizeStats(stats || latestStats)
+        setStats(normalized.id, latestStats)
+        remoteStatsCache.set(normalized.id, latestStats)
+        renderAll()
+        scheduleLeaderboardRefresh()
+      }
+
+      function applyComments(comments) {
+        latestComments = Array.isArray(comments) ? comments.map(normalizeComment).filter(Boolean) : []
+        remoteCommentsCache.set(normalized.id, latestComments)
+        persistComments(normalized.id, latestComments)
+        renderAll()
+      }
+
       renderAll()
 
       audio.addEventListener('timeupdate', () => {
@@ -2598,39 +2817,100 @@ function createPost(track, { prepend = false } = {}) {
         if ('mediaSession' in navigator) {
           try { navigator.mediaSession.metadata = new MediaMetadata(meta) } catch {}
         }
-        const s = getStats(normalized.id)
-        s.plays = (s.plays || 0) + 1
-        setStats(normalized.id, s)
-        scheduleLeaderboardRefresh()
+        applyStats({ ...latestStats, plays: (latestStats.plays || 0) + 1 })
+        recordTrackMetricRemote(normalized.id, 'plays', { timestamp: Date.now() })
+          .then(result => {
+            if (result?.stats) applyStats(result.stats)
+          })
+          .catch(err => { console.warn('Failed to sync play', err) })
       })
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const text = input.value.trim()
         if (!text) return
         const time = audio.currentTime || 0
-        saveComment(normalized.id, {
+        const clientId = `comment-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+        const authorEmail = (currentUser && currentUser.email) ? currentUser.email : ''
+        const authorAvatar = sanitizeAvatar(currentUser && currentUser.avatar)
+        const optimistic = {
+          id: null,
           text,
           time,
-          user: currentUser.email,
-          avatar: sanitizeAvatar(currentUser.avatar)
-        })
+          user: authorEmail,
+          avatar: authorAvatar,
+          createdAt: Date.now(),
+          clientId
+        }
+        latestComments = [...latestComments, optimistic]
+        persistComments(normalized.id, latestComments)
+        applyStats({ ...latestStats, comments: (latestStats.comments || 0) + 1 })
         input.value = ''
-        renderAll()
-        scheduleLeaderboardRefresh()
+        try {
+          const result = await postTrackComment(normalized.id, { text, time, clientId })
+          if (result?.comment) {
+            latestComments = latestComments.map(entry => entry.clientId === clientId ? result.comment : entry)
+            applyComments(latestComments)
+          } else {
+            applyComments(latestComments)
+          }
+          if (result?.stats) {
+            applyStats(result.stats)
+          }
+        } catch (err) {
+          console.warn('Failed to sync comment', err)
+          applyComments(latestComments)
+        }
       })
-      likeBtn.addEventListener('click', () => {
-        const s = getStats(normalized.id)
-        s.likes = (s.likes || 0) + 1
-        setStats(normalized.id, s)
-        likeBtn.textContent = '❤️ ' + s.likes
-        scheduleLeaderboardRefresh()
+      likeBtn.addEventListener('click', async () => {
+        if (likeBtn.dataset.loading === '1') return
+        likeBtn.dataset.loading = '1'
+        applyStats({ ...latestStats, likes: (latestStats.likes || 0) + 1 })
+        try {
+          const result = await recordTrackMetricRemote(normalized.id, 'likes')
+          if (result?.stats) applyStats(result.stats)
+        } catch (err) {
+          console.warn('Failed to sync like', err)
+        } finally {
+          likeBtn.dataset.loading = '0'
+        }
       })
-      repostBtn.addEventListener('click', () => {
-        const s = getStats(normalized.id)
-        s.reposts = (s.reposts || 0) + 1
-        setStats(normalized.id, s)
-        repostBtn.textContent = '🔁 ' + s.reposts
-        scheduleLeaderboardRefresh()
+      repostBtn.addEventListener('click', async () => {
+        if (repostBtn.dataset.loading === '1') return
+        repostBtn.dataset.loading = '1'
+        applyStats({ ...latestStats, reposts: (latestStats.reposts || 0) + 1 })
+        try {
+          const result = await recordTrackMetricRemote(normalized.id, 'reposts')
+          if (result?.stats) applyStats(result.stats)
+        } catch (err) {
+          console.warn('Failed to sync repost', err)
+        } finally {
+          repostBtn.dataset.loading = '0'
+        }
       })
+
+      ;(async () => {
+        try {
+          const cachedLocalStats = getStats(normalized.id)
+          const remoteStats = await fetchTrackStatsRemote(normalized.id)
+          if (remoteStats) {
+            const merged = await backfillTrackStats(normalized.id, cachedLocalStats, remoteStats)
+            applyStats(merged || remoteStats)
+          }
+          const localComments = getCommentsLocal(normalized.id)
+          if (!latestComments.length && localComments.length) {
+            applyComments(localComments)
+          }
+          const remoteComments = await fetchTrackCommentsRemote(normalized.id)
+          if (remoteComments && remoteComments.length) {
+            const mergedComments = await backfillTrackComments(normalized.id, localComments, remoteComments)
+            applyComments(mergedComments)
+            const refreshedStats = await fetchTrackStatsRemote(normalized.id, { force: true })
+            if (refreshedStats) applyStats(refreshedStats)
+          }
+        } catch (err) {
+          console.warn('Failed to refresh remote stats/comments', err)
+        }
+      })()
+
       return card
     }
 

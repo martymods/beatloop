@@ -43,6 +43,8 @@ const PLAYER_COLOR_PALETTE = [
   '#4ade80',
   '#fbbf24'
 ];
+const LEADERBOARD_THRESHOLDS = Object.freeze({ likes: 12, reposts: 4 });
+const LEADERBOARD_WEIGHTS = Object.freeze({ plays: 15, comments: 9, likes: 2, reposts: 3 });
 const IMAGE_MIME_EXT = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -133,9 +135,56 @@ TrackSchema.pre('save', function(next) {
   next();
 });
 
+const TrackStatsSchema = new mongoose.Schema({
+  trackId: { type: mongoose.Schema.Types.ObjectId, ref: 'Track', unique: true, index: true },
+  plays: { type: Number, default: 0 },
+  likes: { type: Number, default: 0 },
+  reposts: { type: Number, default: 0 },
+  comments: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+TrackStatsSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+const TrackEventSchema = new mongoose.Schema({
+  trackId: { type: mongoose.Schema.Types.ObjectId, ref: 'Track', required: true, index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  type: { type: String, enum: ['play', 'like', 'repost', 'comment', 'backfill'], required: true },
+  count: { type: Number, default: 1 },
+  createdAt: { type: Date, default: Date.now },
+  metadata: {
+    type: Object,
+    default: {}
+  }
+});
+
+const TrackCommentSchema = new mongoose.Schema({
+  trackId: { type: mongoose.Schema.Types.ObjectId, ref: 'Track', required: true, index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  text: { type: String, required: true },
+  timeSec: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+  clientId: { type: String, default: null },
+  userSnapshot: {
+    name: { type: String, default: '' },
+    displayName: { type: String, default: '' },
+    email: { type: String, default: '' },
+    avatar: { type: String, default: '' }
+  }
+});
+
+TrackCommentSchema.index({ trackId: 1, clientId: 1 }, { unique: true, sparse: true });
+
 const User = mongoose.model('User', UserSchema);
 const Session = mongoose.model('Session', SessionSchema);
 const Track = mongoose.model('Track', TrackSchema);
+const TrackStat = mongoose.model('TrackStat', TrackStatsSchema);
+const TrackEvent = mongoose.model('TrackEvent', TrackEventSchema);
+const TrackComment = mongoose.model('TrackComment', TrackCommentSchema);
 
 /* ============================ APP ============================ */
 const app = express();
@@ -454,6 +503,160 @@ async function userSummary(u) {
     lastName: u.lastName,
     displayName: u.displayName
   };
+}
+
+function asObjectId(value) {
+  if (!value) return null;
+  try {
+    return new mongoose.Types.ObjectId(value);
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeCount(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.floor(num);
+}
+
+function coerceDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isFinite(time) ? value : null;
+  }
+  if (typeof value === 'number') {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    if (num > 1e12) return new Date(num);
+    if (num > 1e9) return new Date(num * 1000);
+    return new Date(num);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+      return coerceDate(Number(trimmed));
+    }
+    const parsed = Date.parse(trimmed);
+    if (!Number.isNaN(parsed)) return new Date(parsed);
+  }
+  return null;
+}
+
+function statsSummary(doc) {
+  if (!doc) {
+    return { plays: 0, likes: 0, reposts: 0, comments: 0 };
+  }
+  const { plays = 0, likes = 0, reposts = 0, comments = 0 } = doc;
+  return {
+    plays: Number(plays) || 0,
+    likes: Number(likes) || 0,
+    reposts: Number(reposts) || 0,
+    comments: Number(comments) || 0
+  };
+}
+
+async function trackById(id) {
+  if (!id) return null;
+  return Track.findById(id);
+}
+
+async function incrementTrackStats({
+  trackId,
+  userId,
+  field,
+  count = 1,
+  type,
+  metadata = {}
+}) {
+  const inc = sanitizeCount(count) || 0;
+  if (!trackId || !userId || !field || !type || inc <= 0) {
+    const existing = await TrackStat.findOne({ trackId });
+    return existing || await TrackStat.findOneAndUpdate(
+      { trackId },
+      { $setOnInsert: { trackId } },
+      { new: true, upsert: true }
+    );
+  }
+
+  const update = { $inc: { [field]: inc }, $setOnInsert: { trackId } };
+  const stats = await TrackStat.findOneAndUpdate({ trackId }, update, { new: true, upsert: true });
+
+  const timestamp = coerceDate(metadata.timestamp) || new Date();
+  const meta = { ...metadata };
+  delete meta.timestamp;
+  if (!meta.source) meta.source = 'live';
+  try {
+    await TrackEvent.create({
+      trackId,
+      userId,
+      type,
+      count: inc,
+      createdAt: timestamp,
+      metadata: meta
+    });
+  } catch (err) {
+    console.warn('Failed to record track event', err);
+  }
+
+  return stats;
+}
+
+function commentSummary(doc) {
+  if (!doc) return null;
+  return {
+    id: doc._id,
+    text: doc.text,
+    time: Number(doc.timeSec) || 0,
+    createdAt: doc.createdAt,
+    userId: doc.userId,
+    user: doc.userSnapshot?.email || '',
+    displayName: doc.userSnapshot?.displayName || doc.userSnapshot?.name || '',
+    avatar: doc.userSnapshot?.avatar || '',
+    clientId: doc.clientId || null
+  };
+}
+
+function commentSnapshot(user) {
+  if (!user) {
+    return { name: '', displayName: '', email: '', avatar: '' };
+  }
+  return {
+    name: typeof user.name === 'string' ? user.name : '',
+    displayName: typeof user.displayName === 'string' ? user.displayName : '',
+    email: typeof user.email === 'string' ? user.email : '',
+    avatar: typeof user.avatarUrl === 'string' ? user.avatarUrl : ''
+  };
+}
+
+function computeLeaderboardScore(stats) {
+  const plays = Number(stats?.plays) || 0;
+  const comments = Number(stats?.comments) || 0;
+  const likes = Number(stats?.likes) || 0;
+  const reposts = Number(stats?.reposts) || 0;
+
+  const playsScore = plays * LEADERBOARD_WEIGHTS.plays;
+  const commentsScore = comments * LEADERBOARD_WEIGHTS.comments;
+  const likesQualified = likes >= LEADERBOARD_THRESHOLDS.likes;
+  const repostQualified = reposts >= LEADERBOARD_THRESHOLDS.reposts;
+  const likesScore = likesQualified ? likes * LEADERBOARD_WEIGHTS.likes : 0;
+  const repostScore = repostQualified ? reposts * LEADERBOARD_WEIGHTS.reposts : 0;
+
+  let baseScore = playsScore + commentsScore + likesScore + repostScore;
+  let categoriesActive = 0;
+  if (plays > 0) categoriesActive += 1;
+  if (comments > 0) categoriesActive += 1;
+  if (likesQualified) categoriesActive += 1;
+  if (repostQualified) categoriesActive += 1;
+  if (categoriesActive >= 3) {
+    baseScore += Math.round(baseScore * 0.2);
+  }
+  if (likesQualified && repostQualified) {
+    baseScore += Math.round((likesScore + repostScore) * 0.6);
+  }
+  return baseScore;
 }
 
 function toIdString(value) {
@@ -1058,6 +1261,7 @@ app.get('/api/tracks', async (req, res) => {
     }
 
     const docs = await Track.find(query).sort({ createdAt: -1 }).limit(limit).lean();
+    const trackIds = docs.map(doc => doc._id).filter(Boolean);
     const userIds = Array.from(new Set(docs.map(doc => toIdString(doc.userId)).filter(Boolean)));
 
     let userMap = new Map();
@@ -1076,22 +1280,44 @@ app.get('/api/tracks', async (req, res) => {
       }
     }
 
+    let statsMap = new Map();
+    if (trackIds.length) {
+      const statsRows = await TrackStat.find({ trackId: { $in: trackIds } }).lean();
+      statsMap = new Map(statsRows.map(row => [toIdString(row.trackId) || String(row.trackId), statsSummary(row)]));
+    }
+
+    const commentsByTrack = new Map();
+    if (trackIds.length) {
+      const commentRows = await TrackComment.find({ trackId: { $in: trackIds } }).sort({ createdAt: 1 }).lean();
+      for (const comment of commentRows) {
+        const key = toIdString(comment.trackId) || String(comment.trackId);
+        if (!key) continue;
+        if (!commentsByTrack.has(key)) commentsByTrack.set(key, []);
+        const list = commentsByTrack.get(key);
+        if (list.length >= 100) continue;
+        list.push(commentSummary(comment));
+      }
+    }
+
     const tracks = docs.map(doc => {
       const userKey = toIdString(doc.userId);
       const coverUrl = doc.coverUrl || '';
-        return {
-          id: doc._id,
-          title: doc.title || 'Untitled',
-          artist: doc.artist || '',
-          bpm: doc.bpm || 0,
-          audioUrl: doc.audioUrl,
-          coverUrl: coverUrl || null,
-          duration: doc.audioDurationSec || null,
-          caption: doc.caption || '',
-          createdAt: doc.createdAt,
-          userId: doc.userId,
-          user: userKey ? userMap.get(userKey) || null : null
-        };
+      const key = toIdString(doc._id) || String(doc._id);
+      return {
+        id: doc._id,
+        title: doc.title || 'Untitled',
+        artist: doc.artist || '',
+        bpm: doc.bpm || 0,
+        audioUrl: doc.audioUrl,
+        coverUrl: coverUrl || null,
+        duration: doc.audioDurationSec || null,
+        caption: doc.caption || '',
+        createdAt: doc.createdAt,
+        userId: doc.userId,
+        user: userKey ? userMap.get(userKey) || null : null,
+        stats: statsSummary(statsMap.get(key)),
+        comments: commentsByTrack.get(key) || []
+      };
     });
 
     const last = docs.length ? docs[docs.length - 1] : null;
@@ -1101,6 +1327,232 @@ app.get('/api/tracks', async (req, res) => {
   } catch (err) {
     console.error('Failed to load tracks', err);
     res.status(500).json({ error: 'failed to load tracks' });
+  }
+});
+
+async function handleTrackMetric(req, res, { field, type }) {
+  const id = asObjectId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid track id' });
+
+  const track = await trackById(id);
+  if (!track) return res.status(404).json({ error: 'track not found' });
+
+  const count = sanitizeCount(req.body?.count) || 1;
+  const timestamp = coerceDate(req.body?.timestamp);
+
+  const stats = await incrementTrackStats({
+    trackId: track._id,
+    userId: req.user._id,
+    field,
+    count,
+    type,
+    metadata: { timestamp }
+  });
+
+  res.json({ ok: true, stats: statsSummary(stats) });
+}
+
+app.post('/api/tracks/:id/plays', auth, async (req, res) => {
+  await handleTrackMetric(req, res, { field: 'plays', type: 'play' });
+});
+
+app.post('/api/tracks/:id/likes', auth, async (req, res) => {
+  await handleTrackMetric(req, res, { field: 'likes', type: 'like' });
+});
+
+app.post('/api/tracks/:id/reposts', auth, async (req, res) => {
+  await handleTrackMetric(req, res, { field: 'reposts', type: 'repost' });
+});
+
+app.post('/api/tracks/:id/stats/backfill', auth, async (req, res) => {
+  const id = asObjectId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid track id' });
+
+  const track = await trackById(id);
+  if (!track) return res.status(404).json({ error: 'track not found' });
+
+  const increments = {
+    plays: sanitizeCount(req.body?.plays),
+    likes: sanitizeCount(req.body?.likes),
+    reposts: sanitizeCount(req.body?.reposts)
+  };
+
+  let stats = await TrackStat.findOne({ trackId: track._id });
+  const entries = [
+    ['plays', 'play'],
+    ['likes', 'like'],
+    ['reposts', 'repost']
+  ];
+
+  for (const [field, type] of entries) {
+    const inc = increments[field];
+    if (inc && inc > 0) {
+      stats = await incrementTrackStats({
+        trackId: track._id,
+        userId: req.user._id,
+        field,
+        count: inc,
+        type,
+        metadata: { source: 'backfill' }
+      });
+    }
+  }
+
+  if (!stats) {
+    stats = await TrackStat.findOneAndUpdate(
+      { trackId: track._id },
+      { $setOnInsert: { trackId: track._id } },
+      { new: true, upsert: true }
+    );
+  }
+
+  res.json({ ok: true, stats: statsSummary(stats) });
+});
+
+app.get('/api/tracks/:id/stats', auth, async (req, res) => {
+  const id = asObjectId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid track id' });
+  const stats = await TrackStat.findOne({ trackId: id });
+  res.json({ stats: statsSummary(stats) });
+});
+
+app.get('/api/tracks/:id/comments', auth, async (req, res) => {
+  const id = asObjectId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid track id' });
+  const comments = await TrackComment.find({ trackId: id }).sort({ createdAt: 1 }).limit(200);
+  res.json({ comments: comments.map(commentSummary) });
+});
+
+app.post('/api/tracks/:id/comments', auth, async (req, res) => {
+  const id = asObjectId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid track id' });
+
+  const track = await trackById(id);
+  if (!track) return res.status(404).json({ error: 'track not found' });
+
+  const body = req.body || {};
+  const rawText = typeof body.text === 'string' ? body.text.trim() : '';
+  if (!rawText) return res.status(400).json({ error: 'comment text required' });
+
+  const text = rawText.slice(0, 500);
+  const rawTime = body.time ?? body.timeSec ?? body.timestamp ?? 0;
+  let timeSec = Number(rawTime);
+  if (!Number.isFinite(timeSec) || timeSec < 0) timeSec = 0;
+  if (timeSec > 3600) timeSec = 3600;
+  const clientId = typeof body.clientId === 'string' && body.clientId.trim()
+    ? body.clientId.trim().slice(0, 120)
+    : null;
+
+  const payload = {
+    trackId: track._id,
+    userId: req.user._id,
+    text,
+    timeSec,
+    clientId,
+    userSnapshot: commentSnapshot(req.user)
+  };
+
+  let created = false;
+  let commentDoc = null;
+  try {
+    commentDoc = await TrackComment.create(payload);
+    created = true;
+  } catch (err) {
+    if (clientId && err?.code === 11000) {
+      commentDoc = await TrackComment.findOne({ trackId: track._id, clientId });
+    } else {
+      console.error('Failed to create comment', err);
+      return res.status(500).json({ error: 'could not save comment' });
+    }
+  }
+
+  if (!commentDoc) {
+    return res.status(500).json({ error: 'could not save comment' });
+  }
+
+  let stats = await TrackStat.findOne({ trackId: track._id });
+  if (created) {
+    stats = await incrementTrackStats({
+      trackId: track._id,
+      userId: req.user._id,
+      field: 'comments',
+      count: 1,
+      type: 'comment',
+      metadata: { commentId: commentDoc._id }
+    });
+  } else if (!stats) {
+    stats = await TrackStat.findOneAndUpdate(
+      { trackId: track._id },
+      { $setOnInsert: { trackId: track._id } },
+      { new: true, upsert: true }
+    );
+  }
+
+  res.json({ ok: true, comment: commentSummary(commentDoc), stats: statsSummary(stats) });
+});
+
+app.get('/api/leaderboard', auth, async (_req, res) => {
+  try {
+    const statsDocs = await TrackStat.find({}).sort({ plays: -1, likes: -1, reposts: -1, comments: -1 }).limit(200).lean();
+    if (!statsDocs.length) {
+      return res.json({ top: [] });
+    }
+
+    const trackIds = statsDocs.map(doc => doc.trackId).filter(Boolean);
+    const tracks = await Track.find({ _id: { $in: trackIds } }).lean();
+    const trackMap = new Map(tracks.map(doc => [toIdString(doc._id) || String(doc._id), doc]));
+
+    const userIds = Array.from(new Set(tracks.map(doc => toIdString(doc.userId)).filter(Boolean)));
+    let userMap = new Map();
+    if (userIds.length) {
+      const userObjectIds = userIds.map(id => {
+        try {
+          return new mongoose.Types.ObjectId(id);
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+      if (userObjectIds.length) {
+        const users = await User.find({ _id: { $in: userObjectIds } });
+        const summaries = await Promise.all(users.map(async u => [toIdString(u._id), await userSummary(u)]));
+        userMap = new Map(summaries.filter(([key]) => Boolean(key)));
+      }
+    }
+
+    const entries = [];
+    for (const statsDoc of statsDocs) {
+      const key = toIdString(statsDoc.trackId) || String(statsDoc.trackId);
+      if (!key) continue;
+      const trackDoc = trackMap.get(key);
+      if (!trackDoc) continue;
+      const stats = statsSummary(statsDoc);
+      const score = computeLeaderboardScore(stats);
+      const userKey = toIdString(trackDoc.userId);
+      entries.push({
+        score,
+        stats,
+        track: {
+          id: trackDoc._id,
+          title: trackDoc.title || 'Untitled',
+          artist: trackDoc.artist || '',
+          bpm: trackDoc.bpm || 0,
+          audioUrl: trackDoc.audioUrl,
+          coverUrl: trackDoc.coverUrl || null,
+          duration: trackDoc.audioDurationSec || null,
+          caption: trackDoc.caption || '',
+          createdAt: trackDoc.createdAt,
+          userId: trackDoc.userId,
+          user: userKey ? userMap.get(userKey) || null : null,
+          stats
+        }
+      });
+    }
+
+    entries.sort((a, b) => b.score - a.score);
+    res.json({ top: entries.slice(0, 20) });
+  } catch (err) {
+    console.error('Failed to build leaderboard', err);
+    res.status(500).json({ error: 'failed to load leaderboard' });
   }
 });
 
