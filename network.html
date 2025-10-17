@@ -1114,80 +1114,6 @@
     // Defaults (leave fallbackAvatar as-is)
     const fallbackAvatar = toAssetUrl('/img/avatar-default.svg');
 
-    // Offline fixtures used when the network API is unavailable.
-    const OFFLINE_TRACK_STATS = Object.freeze({
-      'reggae-trap':   { plays: 1280, likes: 244, reposts: 61, comments: 8 },
-      'stack':         { plays: 980,  likes: 198, reposts: 47, comments: 6 },
-      'cleanup-woman': { plays: 760,  likes: 154, reposts: 32, comments: 5 },
-      'we-go-make-it': { plays: 820,  likes: 166, reposts: 39, comments: 7 },
-      'the-one':       { plays: 640,  likes: 121, reposts: 26, comments: 4 },
-      'it-is-what':    { plays: 705,  likes: 133, reposts: 29, comments: 5 }
-    });
-
-    const OFFLINE_COMMENTS = Object.freeze({
-      'reggae-trap': [
-        { id: 'offline-reggae-1', displayName: 'DJ Offline', text: 'Chilled groove even without the net.', time: 18, avatar: fallbackAvatar },
-        { id: 'offline-reggae-2', displayName: 'Loopback Lee', text: 'Bass hits just right!', time: 46, avatar: fallbackAvatar }
-      ],
-      'stack': [
-        { id: 'offline-stack-1', displayName: 'Latency Liz', text: 'Stacked rhythms keep me bouncing.', time: 12, avatar: fallbackAvatar }
-      ],
-      'cleanup-woman': [
-        { id: 'offline-cleanup-1', displayName: 'Cache Carter', text: 'Vintage vibe with a modern snap.', time: 30, avatar: fallbackAvatar }
-      ],
-      'we-go-make-it': [
-        { id: 'offline-we-go-1', displayName: 'Buffer Ben', text: 'Perfect anthem for grinding offline.', time: 52, avatar: fallbackAvatar }
-      ],
-      'the-one': [
-        { id: 'offline-the-one-1', displayName: 'Packet Priya', text: 'Those chords shimmer!', time: 40, avatar: fallbackAvatar }
-      ],
-      'it-is-what': [
-        { id: 'offline-it-is-1', displayName: 'NoSignal Nico', text: 'Head-nod certified.', time: 21, avatar: fallbackAvatar }
-      ]
-    });
-
-    const OFFLINE_SESSIONS = Object.freeze([
-      {
-        id: 'offline-cypher',
-        name: 'Offline Cypher',
-        tempo: 92,
-        participants: 3,
-        maxPlayers: 8,
-        openSec: 5 * 60,
-        host: { name: 'DJ Packet', avatar: fallbackAvatar }
-      },
-      {
-        id: 'loopback-hang',
-        name: 'Loopback Hang',
-        tempo: 120,
-        participants: 5,
-        maxPlayers: 8,
-        openSec: 11 * 60,
-        host: { name: 'Lo-Fi Layla', avatar: fallbackAvatar }
-      }
-    ]);
-
-    const getOfflineTrackStats = (id) => {
-      if (!id) return null;
-      const stats = OFFLINE_TRACK_STATS[id];
-      return stats ? { ...stats } : null;
-    };
-
-    const getOfflineCommentsPayload = (id) => {
-      if (!id) return null;
-      const comments = OFFLINE_COMMENTS[id];
-      if (!Array.isArray(comments)) return null;
-      return {
-        comments: comments.map(comment => ({ ...comment })),
-        stats: getOfflineTrackStats(id)
-      };
-    };
-
-    const getOfflineSessions = () => OFFLINE_SESSIONS.map(session => ({
-      ...session,
-      host: { ...session.host }
-    }));
-
     const SESSION_LOG_PREFIX = '[Beatloop Session]';
     const sessionInfo  = (...args) => console.info(SESSION_LOG_PREFIX, ...args);
     const sessionWarn  = (...args) => console.warn(SESSION_LOG_PREFIX, ...args);
@@ -1633,10 +1559,6 @@
           })
         } catch (err) {
           console.warn('Track stats fetch failed', err)
-          pending.forEach(key => {
-            const fallbackStats = getOfflineTrackStats(key)
-            if (fallbackStats) setStats(key, fallbackStats)
-          })
         } finally {
           statsFetches.delete(fetchKey)
         }
@@ -1677,12 +1599,6 @@
           return comments
         } catch (err) {
           console.warn('Comment fetch failed', err)
-          const fallback = getOfflineCommentsPayload(key)
-          if (fallback) {
-            if (fallback.stats) setStats(key, fallback.stats)
-            setComments(key, fallback.comments)
-            return fallback.comments
-          }
           setComments(key, [])
           return []
         } finally {
@@ -7141,10 +7057,10 @@ stopBtn.addEventListener('click', () => {
 
   // --- Helpers to fetch + paint the sessions list ---
   async function refreshSessions(){
-    const wrap = document.getElementById('sessionsList');
-    if (!wrap) return;
-
-    const renderSessions = (sessions = []) => {
+    try{
+      const r = await fetch(getApiBase() + '/api/sessions', { headers: { ...AUTH.hdr() }});
+      const { sessions=[] } = await r.json();
+      const wrap = document.getElementById('sessionsList'); if (!wrap) return;
       wrap.innerHTML = '';
       const freshSessions = sessions.filter(s => (s.participants || 0) > 0 && (s.openSec || 0) < (12 * 60 * 60));
       freshSessions.forEach(s => {
@@ -7166,16 +7082,7 @@ stopBtn.addEventListener('click', () => {
         wrap.appendChild(row);
       });
       wrap.querySelectorAll('.joinSession').forEach(btn => btn.onclick = () => joinSession(btn.dataset.id));
-    };
-
-    try{
-      const r = await fetch(getApiBase() + '/api/sessions', { headers: { ...AUTH.hdr() }});
-      const payload = await r.json().catch(() => ({}));
-      renderSessions(Array.isArray(payload.sessions) ? payload.sessions : []);
-    } catch (err) {
-      console.warn('Session list fetch failed', err);
-      renderSessions(getOfflineSessions());
-    }
+    } catch {}
   }
   refreshSessions();
   setInterval(refreshSessions, 5000);
