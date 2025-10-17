@@ -49,7 +49,6 @@ const IMAGE_MIME_EXT = {
   'image/svg+xml': '.svg',
   'image/bmp': '.bmp'
 };
-
 /* ============================ DB ============================ */
 await mongoose.connect(MONGODB_URI, { dbName: 'beatloop' });
 
@@ -98,6 +97,7 @@ const Session = mongoose.model('Session', SessionSchema);
 
 /* ============================ APP ============================ */
 const app = express();
+app.set('trust proxy', true);
 
 /* ---- CORS (Express + Socket.IO use the SAME rule) ---- */
 function normalizeOrigin(value) {
@@ -156,6 +156,30 @@ const projectRoot = process.cwd();
 const uploadsRoot = path.join(projectRoot, 'uploads');
 fs.mkdirSync(uploadsRoot, { recursive: true });
 app.use('/uploads', express.static(uploadsRoot));
+
+const LOCALHOST_RE = /^https?:\/\/(?:localhost|127(?:\.\d+){3})(?::\d+)?$/i;
+const ENV_PUBLIC_BASE = (PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+
+function effectivePublicBase(req) {
+  if (ENV_PUBLIC_BASE && !LOCALHOST_RE.test(ENV_PUBLIC_BASE)) return ENV_PUBLIC_BASE;
+
+  const headerValue = value => (typeof value === 'string' ? value.split(',')[0].trim() : '');
+  const forwardedHost = headerValue(req.headers['x-forwarded-host']);
+  const forwardedProto = headerValue(req.headers['x-forwarded-proto']);
+  const origin = headerValue(req.headers.origin);
+  const host = forwardedHost || headerValue(req.headers.host) || req.get?.('host') || '';
+  const protocol = forwardedProto || (origin ? origin.split('://')[0] : '') || req.protocol || 'http';
+
+  if (host) return `${protocol}://${host}`.replace(/\/+$/, '');
+  if (origin) return origin.replace(/\/+$/, '');
+  if (ENV_PUBLIC_BASE) return ENV_PUBLIC_BASE;
+  return `http://localhost:${PORT}`;
+}
+
+function publicUploadUrl(req, folder, filename) {
+  const base = effectivePublicBase(req);
+  return `${base}/uploads/${folder}/${filename}`;
+}
 
 const STATIC_ASSET_MOUNTS = [
   { mount: '/audio', dir: 'audio' },
@@ -551,13 +575,19 @@ const avatarUpload = multer({
 
 function resolveUploadPath(url, folder) {
   if (!url) return null;
+  const prefix = `/uploads/${folder}/`;
   try {
-    const base = `${PUBLIC_BASE_URL}/uploads/${folder}/`;
-    if (!url.startsWith(base)) return null;
-    const file = url.slice(base.length).split('?')[0];
+    const parsed = new URL(url, 'http://localhost');
+    if (!parsed.pathname.startsWith(prefix)) return null;
+    const file = parsed.pathname.slice(prefix.length);
     if (!file) return null;
     return path.join(uploadsRoot, folder, file);
   } catch {
+    if (typeof url === 'string' && url.startsWith(prefix)) {
+      const file = url.slice(prefix.length).split('?')[0];
+      if (!file) return null;
+      return path.join(uploadsRoot, folder, file);
+    }
     return null;
   }
 }
@@ -581,7 +611,7 @@ app.post('/api/users/tag', auth, (req, res) => {
       const previous = resolveUploadPath(req.user.tagUrl, 'tags');
       if (previous) fs.promises.unlink(previous).catch(() => {});
 
-      const url = `${PUBLIC_BASE_URL}/uploads/tags/${path.basename(full)}`;
+      const url = publicUploadUrl(req, 'tags', path.basename(full));
       req.user.tagUrl = url;
       req.user.tagDurationSec = Math.round(duration * 1000) / 1000;
       await req.user.save();
@@ -599,13 +629,15 @@ app.post('/api/users/avatar', auth, (req, res) => {
       const message = err.message || 'upload failed';
       return res.status(400).json({ error: message });
     }
-    if (!req.file) return res.status(400).json({ error: 'missing file' });
+    if (!req.file) {
+      return res.status(400).json({ error: 'missing file' });
+    }
     try {
       const previous = resolveUploadPath(req.user.avatarUrl, 'avatars');
       if (previous) {
         fs.promises.unlink(previous).catch(() => {});
       }
-      const url = `${PUBLIC_BASE_URL}/uploads/avatars/${req.file.filename}`;
+      const url = publicUploadUrl(req, 'avatars', req.file.filename);
       req.user.avatarUrl = url;
       await req.user.save();
       res.json({ ok: true, avatarUrl: url });
