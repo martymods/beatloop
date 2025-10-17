@@ -1292,18 +1292,28 @@ function createPost(track) {
     })
 
     // ---------- Logout
+    function performLogout() {
+      try { localStorage.removeItem('jwt') } catch {}
+      try { localStorage.removeItem('user') } catch {}
+      try {
+        localStorage.removeItem('current_user')
+        localStorage.removeItem('currentUser')
+      } catch {}
+      window.location.href = 'login.html'
+    }
+
     const logoutBtnHeader = document.getElementById('logoutBtn')
     if (logoutBtnHeader) {
-      logoutBtnHeader.addEventListener('click', () => {
-        localStorage.removeItem('current_user')
-        window.location.href = 'login.html'
+      logoutBtnHeader.addEventListener('click', (event) => {
+        event?.preventDefault?.()
+        performLogout()
       })
     }
     const navLogout = document.getElementById('btnLogout')
     if (navLogout) {
-      navLogout.addEventListener('click', () => {
-        localStorage.removeItem('current_user')
-        window.location.href = 'login.html'
+      navLogout.addEventListener('click', (event) => {
+        event?.preventDefault?.()
+        performLogout()
       })
     }
 

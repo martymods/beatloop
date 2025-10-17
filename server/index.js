@@ -178,6 +178,13 @@ function sign(user) {
   return jwt.sign({ uid: user._id }, JWT_SECRET, { expiresIn: '30d' });
 }
 
+function normalizeEmail(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.toLowerCase();
+}
+
 async function auth(req, res, next) {
   const hdr = req.headers.authorization || '';
   const token = hdr.startsWith('Bearer ') ? hdr.slice(7) : null;
@@ -304,32 +311,43 @@ async function rosterFor(sessionDoc) {
 /* ============================ AUTH ============================ */
 app.post('/api/auth/signup', async (req, res) => {
   const { name, email, password, avatarUrl } = req.body || {};
-  if (!email || !password) return res.status(400).json({ error: 'email & password required' });
+  const normalizedEmail = normalizeEmail(email);
+  const passwordValue = typeof password === 'string' ? password : '';
+  if (!normalizedEmail || !passwordValue) {
+    return res.status(400).json({ error: 'email & password required' });
+  }
 
-  const exists = await User.findOne({ email: email.toLowerCase() });
+  const exists = await User.findOne({ email: normalizedEmail });
   if (exists) return res.status(409).json({ error: 'email already exists' });
 
-  let finalName = (name || email.split('@')[0]).trim();
+  const providedName = typeof name === 'string' ? name.trim() : '';
+  let finalName = providedName || normalizedEmail.split('@')[0];
   if (finalName) {
     const nameTaken = await User.exists({ name: finalName });
     if (nameTaken) return res.status(409).json({ error: 'username already taken' });
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await bcrypt.hash(passwordValue, 10);
   const user = await User.create({
     name: finalName,
-    email: email.toLowerCase(),
+    email: normalizedEmail,
     passwordHash,
-    avatarUrl: avatarUrl || ''
+    avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : ''
   });
   res.json({ token: sign(user), user: await userSummary(user) });
 });
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body || {};
-  const user = await User.findOne({ email: (email||'').toLowerCase() });
+  const normalizedEmail = normalizeEmail(email);
+  const passwordValue = typeof password === 'string' ? password : '';
+  if (!normalizedEmail || !passwordValue) {
+    return res.status(400).json({ error: 'email & password required' });
+  }
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user) return res.status(401).json({ error: 'invalid credentials' });
-  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!user.passwordHash) return res.status(401).json({ error: 'invalid credentials' });
+  const ok = await bcrypt.compare(passwordValue, user.passwordHash);
   if (!ok) return res.status(401).json({ error: 'invalid credentials' });
   res.json({ token: sign(user), user: await userSummary(user) });
 });
