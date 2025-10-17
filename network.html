@@ -1118,6 +1118,51 @@
       return ensureHttpsMediaUrl(`${normalizedBase}${normalizedPath}`);
     };
 
+    const getCurrentApiBase = () => {
+      const base = (typeof window.getApiBase === 'function'
+        ? window.getApiBase()
+        : (window.API_BASE || API_BASE_DEFAULT));
+      return typeof base === 'string' ? base.trim() : '';
+    };
+
+    const toApiUrl = (path) => {
+      if (!path || typeof path !== 'string') return path;
+      if (/^https?:\/\//i.test(path)) return ensureHttpsMediaUrl(path);
+      if (/^(data:|blob:|filesystem:)/i.test(path)) return path;
+      if (path.startsWith('//')) {
+        try { return ensureHttpsMediaUrl(`${window.location.protocol}${path}`); } catch { return ensureHttpsMediaUrl(`https:${path}`); }
+      }
+      const base = getCurrentApiBase();
+      if (!base) return path;
+      const normalizedBase = base.replace(/\/+$/, '');
+      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      return ensureHttpsMediaUrl(`${normalizedBase}${normalizedPath}`);
+    };
+
+    const STATIC_MEDIA_PREFIX = /^\/?(?:audio|img)\//i;
+    const API_MEDIA_PREFIX = /^\/?(?:uploads|api\/uploads)\//i;
+
+    const resolveTrackMediaUrl = (raw) => {
+      if (!raw || typeof raw !== 'string') return raw;
+      const value = raw.trim();
+      if (!value) return value;
+      if (/^(data:|blob:|filesystem:)/i.test(value)) return value;
+      if (/^https?:\/\//i.test(value)) return ensureHttpsMediaUrl(value);
+      if (value.startsWith('//')) {
+        try { return ensureHttpsMediaUrl(`${window.location.protocol}${value}`); } catch { return ensureHttpsMediaUrl(`https:${value}`); }
+      }
+      if (API_MEDIA_PREFIX.test(value)) {
+        return toApiUrl(value);
+      }
+      if (STATIC_MEDIA_PREFIX.test(value)) {
+        return toAssetUrl(value);
+      }
+      if (/\.(?:mp3|wav|ogg|webm|m4a|flac|aiff)(?:[?#].*)?$/i.test(value)) {
+        return toApiUrl(value);
+      }
+      return toAssetUrl(value);
+    };
+
     window.toAssetUrl = toAssetUrl;
 
     // ---------- Predefined tracks
@@ -1512,7 +1557,7 @@
           } catch {}
         } else if (t && typeof t.url === 'string') {
           // keep light http/file references as-is (not blobs)
-          metas.push({ id: t.id, title: t.title, artist: t.artist, bpm: t.bpm || 0, db: false, url: toAssetUrl(t.url), cover: t.cover ? toAssetUrl(t.cover) : DEFAULT_TRACK_COVER })
+          metas.push({ id: t.id, title: t.title, artist: t.artist, bpm: t.bpm || 0, db: false, url: resolveTrackMediaUrl(t.url), cover: t.cover ? resolveTrackMediaUrl(t.cover) : DEFAULT_TRACK_COVER })
         }
       }
       if (changed) setJSON('custom_tracks', metas)
@@ -1540,9 +1585,29 @@
     const LEADERBOARD_THRESHOLDS = Object.freeze({ likes: 12, reposts: 4 })
     const LEADERBOARD_WEIGHTS = Object.freeze({ plays: 15, comments: 9, likes: 2, reposts: 3 })
     const LEADERBOARD_REMOTE_TTL = 15000
+    const LEADERBOARD_REMOTE_DISABLE_TTL = 5 * 60 * 1000
     const leaderboardRegistry = new Map()
     let leaderboardRefreshScheduled = false
     let leaderboardRemoteCache = { fetchedAt: 0, top: [] }
+    const leaderboardRemoteDisabledBases = new Map()
+    const leaderboardMissingLogged = new Set()
+
+    const markLeaderboardRemoteDisabled = (base) => {
+      if (!base) return
+      leaderboardRemoteDisabledBases.set(base, Date.now() + LEADERBOARD_REMOTE_DISABLE_TTL)
+    }
+
+    const isLeaderboardRemoteDisabled = (base) => {
+      if (!base) return false
+      const expiry = leaderboardRemoteDisabledBases.get(base) || 0
+      if (!expiry) return false
+      if (Date.now() > expiry) {
+        leaderboardRemoteDisabledBases.delete(base)
+        leaderboardMissingLogged.delete(base)
+        return false
+      }
+      return true
+    }
 
     function scheduleLeaderboardRefresh() {
       if (leaderboardRefreshScheduled) return
@@ -2054,8 +2119,8 @@ let sessionsCard = null;
 
         const artist = track.artist || (author && (author.displayName || author.name || author.email)) || 'Beatloop creator'
 
-        const normalizedUrl = ensureHttpsMediaUrl(toAssetUrl(url));
-        const normalizedCover = coverRaw ? ensureHttpsMediaUrl(toAssetUrl(coverRaw)) : DEFAULT_TRACK_COVER;
+        const normalizedUrl = resolveTrackMediaUrl(url)
+        const normalizedCover = coverRaw ? resolveTrackMediaUrl(coverRaw) : DEFAULT_TRACK_COVER
 
         return {
           ...track,
@@ -2255,6 +2320,45 @@ function createPost(track, { prepend = false } = {}) {
       audio.className = 'w-full mt-2'
       trackWrapper.appendChild(audio)
 
+      const logPlaybackEvent = (level, eventName, extra = {}) => {
+        const payload = {
+          trackId: normalized.id,
+          src: audio.currentSrc || normalized.url,
+          event: eventName,
+          ...extra
+        }
+        if (level === 'error') {
+          console.error('Track playback error', payload)
+        } else {
+          console.warn('Track playback warning', payload)
+        }
+      }
+
+      audio.addEventListener('error', () => {
+        const err = audio.error
+        logPlaybackEvent('error', 'error', {
+          code: err?.code || null,
+          message: err?.message || null
+        })
+      })
+
+      ;['stalled', 'suspend', 'abort'].forEach(evt => {
+        audio.addEventListener(evt, () => {
+          logPlaybackEvent('warn', evt)
+        })
+      })
+
+      let playbackReadyLogged = false
+      audio.addEventListener('loadeddata', () => {
+        if (playbackReadyLogged) return
+        playbackReadyLogged = true
+        console.info('Track playback ready', {
+          trackId: normalized.id,
+          src: audio.currentSrc || normalized.url,
+          duration: audio.duration || null
+        })
+      })
+
       const actions = document.createElement('div')
       actions.className = 'mt-2 flex items-center gap-4 text-white/60 text-sm'
       const commentBtn = document.createElement('button')
@@ -2380,8 +2484,8 @@ function createPost(track, { prepend = false } = {}) {
           return { ...meta, url, cover: coverUrl, createdAt: resolveTrackCreatedAt(meta) }
         } else {
           // built-in or legacy lightweight entry
-          const normalizedUrl = meta.url ? toAssetUrl(meta.url) : meta.url
-          const normalizedCover = meta.cover ? toAssetUrl(meta.cover) : DEFAULT_TRACK_COVER
+          const normalizedUrl = meta.url ? resolveTrackMediaUrl(meta.url) : meta.url
+          const normalizedCover = meta.cover ? resolveTrackMediaUrl(meta.cover) : DEFAULT_TRACK_COVER
           return { ...meta, url: normalizedUrl, cover: normalizedCover, createdAt: resolveTrackCreatedAt(meta) }
         }
       }
@@ -2683,50 +2787,70 @@ async function updateLeaderboard() {
         ? window.getApiBase()
         : (window.API_BASE || API_BASE_DEFAULT))
 
-      const fetchLeaderboardPayload = async () => {
-        const attemptPaths = [
-          '/api/leaderboard',
-          '/api/network/leaderboard',
-          '/network/leaderboard',
-          '/leaderboard'
-        ]
+      if (isLeaderboardRemoteDisabled(apiBase)) {
+        leaderboardRemoteCache = { fetchedAt: now, top: [] }
+        topFromApi = []
+      } else {
+        const fetchLeaderboardPayload = async () => {
+          const attemptPaths = [
+            '/api/leaderboard',
+            '/api/network/leaderboard',
+            '/network/leaderboard',
+            '/leaderboard'
+          ]
 
-        const headers = { ...AUTH.hdr() }
-        let lastResponse = null
+          const headers = { ...AUTH.hdr() }
+          let lastResponse = null
 
-        for (const path of attemptPaths) {
-          try {
-            const resp = await fetch(apiBase + path, { headers })
-            if (resp.ok) {
-              return resp
-            }
-            lastResponse = resp
-            if (resp.status === 404) {
-              continue
-            }
-            throw new Error(`leaderboard request failed (${resp.status || 'unknown status'})`)
-          } catch (requestErr) {
-            lastResponse = null
-            if (!isRecoverableNetworkError || !isRecoverableNetworkError(requestErr)) {
-              throw requestErr
+          for (const path of attemptPaths) {
+            try {
+              const resp = await fetch(apiBase + path, { headers })
+              if (resp.ok) {
+                return resp
+              }
+              lastResponse = resp
+              if (resp.status === 404) {
+                continue
+              }
+              throw new Error(`leaderboard request failed (${resp.status || 'unknown status'})`)
+            } catch (requestErr) {
+              lastResponse = null
+              if (!isRecoverableNetworkError || !isRecoverableNetworkError(requestErr)) {
+                throw requestErr
+              }
             }
           }
+
+          if (lastResponse && !lastResponse.ok) {
+            const error = new Error(`leaderboard request failed (${lastResponse.status || 'unknown status'})`)
+            error.status = lastResponse.status || null
+            throw error
+          }
+
+          const error = new Error('leaderboard request failed')
+          error.status = lastResponse?.status || null
+          throw error
         }
 
-        if (lastResponse && !lastResponse.ok) {
-          throw new Error(`leaderboard request failed (${lastResponse.status || 'unknown status'})`)
-        }
-
-        throw new Error('leaderboard request failed')
+        const resp = await fetchLeaderboardPayload()
+        const payload = await resp.json().catch(() => null) || {}
+        const remoteTop = Array.isArray(payload.top) ? payload.top : []
+        leaderboardRemoteCache = { fetchedAt: now, top: remoteTop }
+        topFromApi = remoteTop
       }
-
-      const resp = await fetchLeaderboardPayload()
-      const payload = await resp.json().catch(() => null) || {}
-      const remoteTop = Array.isArray(payload.top) ? payload.top : []
-      leaderboardRemoteCache = { fetchedAt: now, top: remoteTop }
-      topFromApi = remoteTop
     } catch (err) {
-      console.warn('Remote leaderboard unavailable', err)
+      const apiBase = (typeof window.getApiBase === 'function'
+        ? window.getApiBase()
+        : (window.API_BASE || API_BASE_DEFAULT))
+      if (err?.status === 404) {
+        markLeaderboardRemoteDisabled(apiBase)
+        if (!leaderboardMissingLogged.has(apiBase)) {
+          leaderboardMissingLogged.add(apiBase)
+          console.info('Remote leaderboard endpoint unavailable for API base', apiBase)
+        }
+      } else {
+        console.warn('Remote leaderboard unavailable', err)
+      }
       leaderboardRemoteCache = { fetchedAt: now, top: [] }
       topFromApi = []
     }
