@@ -12,6 +12,7 @@ import { parseFile } from 'music-metadata';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { lookup as mimeLookup } from 'mime-types';
 import dns from 'dns/promises';
 
 /* ============================ ENV ============================ */
@@ -250,7 +251,25 @@ const trackAudioDir = path.join(uploadsRoot, 'tracks');
 const trackCoverDir = path.join(uploadsRoot, 'covers');
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
-app.use('/uploads', express.static(uploadsRoot));
+
+const UPLOAD_CACHE_CONTROL = 'public, max-age=604800, immutable';
+
+function setUploadHeaders(res, filePath) {
+  const mimeType = mimeLookup(filePath);
+  if (mimeType) {
+    res.setHeader('Content-Type', mimeType);
+  }
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Cache-Control', UPLOAD_CACHE_CONTROL);
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+}
+
+app.use(
+  '/uploads',
+  express.static(uploadsRoot, {
+    setHeaders: setUploadHeaders
+  })
+);
 
 const LOCALHOST_RE = /^https?:\/\/(?:localhost|127(?:\.\d+){3})(?::\d+)?$/i;
 const MARKETING_HOSTS = new Set(['beatloop.co', 'www.beatloop.co']);
