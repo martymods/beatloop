@@ -12,7 +12,7 @@ import { parseFile, parseBuffer } from 'music-metadata';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { lookup as mimeLookup } from 'mime-types';
+import { lookup as mimeLookup, extension as mimeExtension } from 'mime-types';
 import dns from 'dns/promises';
 import {
   durablePublicUrlForKey,
@@ -53,7 +53,20 @@ const PLAYER_COLOR_PALETTE = [
 ];
 const LEADERBOARD_THRESHOLDS = Object.freeze({ likes: 12, reposts: 4 });
 const LEADERBOARD_WEIGHTS = Object.freeze({ plays: 15, comments: 9, likes: 2, reposts: 3 });
-const IMAGE_MIME_EXT = {
+function normalizeMime(value) {
+  if (typeof value !== 'string') return '';
+  if (!value) return '';
+  const base = value.split(';', 1)[0]?.trim() || '';
+  return base.toLowerCase();
+}
+
+function buildNormalizedMimeMap(map) {
+  return Object.fromEntries(
+    Object.entries(map).map(([key, ext]) => [normalizeMime(key), ext])
+  );
+}
+
+const IMAGE_MIME_EXT = buildNormalizedMimeMap({
   'image/png': '.png',
   'image/jpeg': '.jpg',
   'image/jpg': '.jpg',
@@ -61,8 +74,8 @@ const IMAGE_MIME_EXT = {
   'image/webp': '.webp',
   'image/svg+xml': '.svg',
   'image/bmp': '.bmp'
-};
-const AUDIO_MIME_EXT = {
+});
+const AUDIO_MIME_EXT = buildNormalizedMimeMap({
   'audio/mpeg': '.mp3',
   'audio/mp3': '.mp3',
   'audio/wav': '.wav',
@@ -77,7 +90,7 @@ const AUDIO_MIME_EXT = {
   'audio/x-m4a': '.m4a',
   'audio/aiff': '.aiff',
   'audio/x-aiff': '.aiff'
-};
+});
 const AUDIO_ALLOWED_MIME = new Set(Object.keys(AUDIO_MIME_EXT));
 const MESSAGE_ALLOWED_MIME = new Set([
   ...Object.keys(IMAGE_MIME_EXT),
@@ -647,8 +660,9 @@ function sanitizeMessageBody(value) {
 }
 
 function attachmentTypeFor(mimeType) {
-  if (!mimeType) return 'audio';
-  if (IMAGE_MIME_EXT[mimeType]) return 'image';
+  const normalized = normalizeMime(mimeType);
+  if (!normalized) return 'audio';
+  if (IMAGE_MIME_EXT[normalized]) return 'image';
   return 'audio';
 }
 
@@ -1171,7 +1185,7 @@ const TAG_ALLOWED_MIME = new Set([
   'audio/webm',
   'audio/flac',
   'audio/aac'
-]);
+].map(normalizeMime));
 
 const tagStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, tagDir),
@@ -1186,7 +1200,9 @@ const tagUpload = multer({
   storage: tagStorage,
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (!file?.mimetype || !TAG_ALLOWED_MIME.has(file.mimetype)) {
+    const mimetype = normalizeMime(file?.mimetype);
+    if (mimetype) file.mimetype = mimetype;
+    if (!mimetype || !TAG_ALLOWED_MIME.has(mimetype)) {
       return cb(new Error('tag must be an audio file (mp3, wav, ogg, webm, flac)'));
     }
     cb(null, true);
@@ -1196,16 +1212,47 @@ const tagUpload = multer({
 function audioFileExt(file) {
   const fromName = (path.extname(file.originalname) || '').toLowerCase();
   if (fromName) return fromName;
-  return AUDIO_MIME_EXT[file.mimetype] || '.mp3';
+
+  const mimeType = normalizeMime(file.mimetype);
+  if (mimeType && AUDIO_MIME_EXT[mimeType]) {
+    return AUDIO_MIME_EXT[mimeType];
+  }
+
+  const metadataMime = normalizeMime(file?.metadata?.format?.mimeType);
+  if (metadataMime && AUDIO_MIME_EXT[metadataMime]) {
+    return AUDIO_MIME_EXT[metadataMime];
+  }
+
+  const metadataContainer = (file?.metadata?.format?.container || '').toLowerCase();
+  if (metadataContainer.includes('webm')) return '.webm';
+  if (metadataContainer.includes('flac')) return '.flac';
+  if (metadataContainer.includes('ogg')) return '.ogg';
+  if (metadataContainer.includes('wav')) return '.wav';
+  if (metadataContainer.includes('aiff')) return '.aiff';
+  if (metadataContainer.includes('aac')) return '.aac';
+  if (metadataContainer.includes('mp4') || metadataContainer.includes('m4a')) return '.m4a';
+
+  if (mimeType) {
+    const ext = mimeExtension(mimeType);
+    if (ext) return `.${ext.toLowerCase()}`;
+  }
+  if (metadataMime) {
+    const ext = mimeExtension(metadataMime);
+    if (ext) return `.${ext.toLowerCase()}`;
+  }
+
+  return '.mp3';
 }
 
 function messageAttachmentExt(file) {
-  const mapped = IMAGE_MIME_EXT[file.mimetype] || AUDIO_MIME_EXT[file.mimetype];
+  const mimetype = normalizeMime(file.mimetype);
+  if (mimetype) file.mimetype = mimetype;
+  const mapped = IMAGE_MIME_EXT[mimetype] || AUDIO_MIME_EXT[mimetype];
   if (mapped) return mapped;
   const fromName = (path.extname(file.originalname) || '').toLowerCase();
   if (fromName) return fromName;
-  if (file.mimetype && file.mimetype.includes('/')) {
-    const subtype = file.mimetype.split('/').pop();
+  if (mimetype && mimetype.includes('/')) {
+    const subtype = mimetype.split('/').pop();
     if (subtype) return `.${subtype}`;
   }
   return '.bin';
@@ -1219,6 +1266,10 @@ function storageKey(prefix, ext) {
 
 async function persistBufferToStorage(file, { prefix, extResolver }) {
   if (!file) return null;
+  const mimetype = normalizeMime(file.mimetype);
+  if (mimetype) {
+    file.mimetype = mimetype;
+  }
   const ext = extResolver(file);
   const key = storageKey(prefix, ext);
   const result = await writeBufferToUploads({
@@ -1238,14 +1289,16 @@ const trackUploadMemory = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
+    const mimetype = normalizeMime(file.mimetype);
+    if (mimetype) file.mimetype = mimetype;
     if (file.fieldname === 'cover') {
-      if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      if (!mimetype || !mimetype.startsWith('image/')) {
         return cb(new Error('cover must be an image'));
       }
       return cb(null, true);
     }
     if (file.fieldname === 'audio') {
-      if (!file.mimetype || !AUDIO_ALLOWED_MIME.has(file.mimetype)) {
+      if (!mimetype || !AUDIO_ALLOWED_MIME.has(mimetype)) {
         return cb(new Error('audio must be an audio file (mp3, wav, ogg, webm, flac, m4a)'));
       }
       return cb(null, true);
@@ -1307,7 +1360,9 @@ function avatarFileExt(file) {
   if (fromName && ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'].includes(fromName)) {
     return fromName;
   }
-  return IMAGE_MIME_EXT[file.mimetype] || '.png';
+  const mimetype = normalizeMime(file.mimetype);
+  if (mimetype) file.mimetype = mimetype;
+  return IMAGE_MIME_EXT[mimetype] || '.png';
 }
 
 const avatarStorage = multer.diskStorage({
@@ -1323,7 +1378,9 @@ const avatarUpload = multer({
   storage: avatarStorage,
   limits: { fileSize: 3 * 1024 * 1024 }, // 3MB avatar cap
   fileFilter: (_req, file, cb) => {
-    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+    const mimetype = normalizeMime(file.mimetype);
+    if (mimetype) file.mimetype = mimetype;
+    if (!mimetype || !mimetype.startsWith('image/')) {
       return cb(new Error('avatar must be an image'));
     }
     cb(null, true);
@@ -1340,7 +1397,9 @@ const messageAttachmentUploadMemory = multer({
     files: MESSAGE_ATTACHMENT_MAX_COUNT
   },
   fileFilter: (_req, file, cb) => {
-    if (!file?.mimetype || !MESSAGE_ALLOWED_MIME.has(file.mimetype)) {
+    const mimetype = normalizeMime(file?.mimetype);
+    if (mimetype) file.mimetype = mimetype;
+    if (!mimetype || !MESSAGE_ALLOWED_MIME.has(mimetype)) {
       return cb(new Error('attachments must be images or audio files'));
     }
     cb(null, true);
