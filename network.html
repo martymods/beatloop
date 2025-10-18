@@ -29,14 +29,18 @@
       inset: 0;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 3.5s ease;
-      z-index: -1;
+      transition: opacity 3.5s ease, transform 2.4s cubic-bezier(.4,0,.2,1);
+      transform: scale(1.04);
+      z-index: 0;
+      will-change: opacity, transform;
     }
     #timelineShaderOverlay.is-active {
       opacity: 1;
+      transform: scale(1);
     }
     #timelineShaderOverlay.is-exiting {
       transition-duration: 1.2s;
+      transform: scale(0.88);
     }
     #timelineShaderCanvas {
       width: 100%;
@@ -8970,6 +8974,7 @@ void main()
   if (!shader) return;
 
   const IDLE_DELAY = 6000;
+  const ACTIVITY_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'touchstart'];
   let idleTimeout = null;
   let playbackActive = false;
 
@@ -8990,6 +8995,14 @@ void main()
     }, IDLE_DELAY);
   };
 
+  const handleActivity = () => {
+    if (!playbackActive) return;
+    scheduleIdle();
+    if (shader.isActive()) {
+      shader.deactivate({ immediate: true });
+    }
+  };
+
   const handleScroll = () => {
     if (!playbackActive) return;
     scheduleIdle();
@@ -9000,6 +9013,10 @@ void main()
   };
 
   window.addEventListener('scroll', handleScroll, { passive: true });
+
+  ACTIVITY_EVENTS.forEach((eventName) => {
+    window.addEventListener(eventName, handleActivity, { passive: true });
+  });
 
   const applyPlayState = (isPlaying) => {
     const playing = !!isPlaying;
