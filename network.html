@@ -31,7 +31,7 @@
       opacity: 0;
       transition: opacity 3.5s ease, transform 2.4s cubic-bezier(.4,0,.2,1);
       transform: scale(1.04);
-      z-index: 0;
+      z-index: 60;
       will-change: opacity, transform;
     }
     #timelineShaderOverlay.is-active {
@@ -8811,8 +8811,24 @@ void main()
   const vertEl = document.getElementById('timeline-shader-vertex');
   if (!overlay || !canvas || !fragEl || !vertEl) return;
 
+  const debugEnabled = window.__TIMELINE_SHADER_DEBUG ?? true;
+  const debugLog = (...args) => {
+    if (!debugEnabled) return;
+    console.debug('[timeline-shader]', ...args);
+  };
+  window.__TIMELINE_SHADER_DEBUG = debugEnabled;
+  window.__timelineShaderLog = debugLog;
+
+  debugLog('Initializing shader overlay', {
+    overlayFound: !!overlay,
+    canvasFound: !!canvas,
+    fragmentFound: !!fragEl,
+    vertexFound: !!vertEl,
+  });
+
   const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
   if (!gl) {
+    debugLog('WebGL unavailable, removing overlay');
     overlay.remove();
     return;
   }
@@ -8845,6 +8861,8 @@ void main()
     overlay.remove();
     return;
   }
+
+  debugLog('Shader program linked');
 
   gl.useProgram(program);
 
@@ -8879,6 +8897,7 @@ void main()
     const height = window.innerHeight || document.documentElement.clientHeight || canvas.clientHeight;
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== height) canvas.height = height;
+    debugLog('Resized canvas', { width, height });
   };
 
   resize();
@@ -8921,6 +8940,7 @@ void main()
     overlay.classList.remove('is-active');
     overlay.classList.remove('is-exiting');
     document.body?.classList.remove('timeline-shader-active');
+    debugLog('Overlay deactivated immediately');
   };
 
   const controller = {
@@ -8929,6 +8949,7 @@ void main()
       overlay.classList.remove('is-exiting');
       overlay.classList.add('is-active');
       document.body?.classList.add('timeline-shader-active');
+      debugLog('Overlay activated');
     },
     deactivate(options = {}) {
       const immediate = options.immediate === true;
@@ -8942,8 +8963,10 @@ void main()
       if (isExiting) return;
       overlay.classList.add('is-exiting');
       overlay.classList.remove('is-active');
+      debugLog('Overlay exiting');
       const cleanup = () => {
         deactivateImmediately();
+        debugLog('Overlay exit transition complete');
       };
       overlay.addEventListener('transitionend', (event) => {
         if (event.target === overlay) {
@@ -8955,6 +8978,7 @@ void main()
     boostSpin(multiplier = 2.8, duration = 1400) {
       boostMultiplier = Math.max(1, Number(multiplier) || 1);
       boostUntil = performance.now() + Math.max(0, Number(duration) || 0);
+      debugLog('Boost spin', { multiplier: boostMultiplier, duration });
     },
     isActive() {
       return overlay.classList.contains('is-active');
@@ -8978,10 +9002,19 @@ void main()
   let idleTimeout = null;
   let playbackActive = false;
 
+  const debugEnabled = window.__TIMELINE_SHADER_DEBUG ?? true;
+  const debugLog = window.__timelineShaderLog || ((...args) => {
+    if (!debugEnabled) return;
+    console.debug('[timeline-shader]', ...args);
+  });
+
+  debugLog('Binding timeline shader controller', { IDLE_DELAY, ACTIVITY_EVENTS });
+
   const clearIdle = () => {
     if (idleTimeout) {
       window.clearTimeout(idleTimeout);
       idleTimeout = null;
+      debugLog('Cleared idle timeout');
     }
   };
 
@@ -8990,15 +9023,18 @@ void main()
     if (!playbackActive) return;
     idleTimeout = window.setTimeout(() => {
       if (playbackActive) {
+        debugLog('Idle delay elapsed, activating shader');
         shader.activate();
       }
     }, IDLE_DELAY);
+    debugLog('Scheduled idle activation', { delay: IDLE_DELAY, playbackActive });
   };
 
   const handleActivity = () => {
     if (!playbackActive) return;
     scheduleIdle();
     if (shader.isActive()) {
+      debugLog('User activity detected while active; deactivating immediately');
       shader.deactivate({ immediate: true });
     }
   };
@@ -9007,6 +9043,7 @@ void main()
     if (!playbackActive) return;
     scheduleIdle();
     if (shader.isActive()) {
+      debugLog('Scroll detected while active; boosting and easing out');
       shader.boostSpin(3.2, 1500);
       shader.deactivate({ immediate: false });
     }
@@ -9016,6 +9053,7 @@ void main()
 
   ACTIVITY_EVENTS.forEach((eventName) => {
     window.addEventListener(eventName, handleActivity, { passive: true });
+    debugLog('Attached activity listener', eventName);
   });
 
   const applyPlayState = (isPlaying) => {
@@ -9026,8 +9064,10 @@ void main()
     }
     playbackActive = playing;
     if (playing) {
+      debugLog('Playback started; scheduling idle');
       scheduleIdle();
     } else {
+      debugLog('Playback stopped; clearing idle and deactivating');
       clearIdle();
       shader.deactivate({ immediate: true });
     }
@@ -9039,31 +9079,39 @@ void main()
       originalSetPlayPauseState.call(this, playing);
     }
     applyPlayState(playing);
+    debugLog('Patched play state invoked', { playing });
   };
 
   const attachTransport = () => {
     if (typeof Tone === 'undefined' || !Tone?.Transport) return;
     try {
+      debugLog('Attaching Tone.Transport listeners');
       Tone.Transport.on('start', () => applyPlayState(true));
       const stopHandler = () => applyPlayState(false);
       Tone.Transport.on('stop', stopHandler);
       Tone.Transport.on('pause', stopHandler);
+      debugLog('Tone.Transport listeners attached');
     } catch (err) {
       console.warn('Tone transport listener failed', err);
+      debugLog('Failed to attach Tone.Transport listeners', err);
     }
   };
 
   if (document.readyState === 'complete') {
+    debugLog('Document already loaded; attaching transport immediately');
     attachTransport();
   } else {
+    debugLog('Waiting for load event before attaching transport');
     window.addEventListener('load', attachTransport, { once: true });
   }
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+      debugLog('Document hidden; clearing idle and deactivating');
       clearIdle();
       shader.deactivate({ immediate: true });
     } else if (playbackActive) {
+      debugLog('Document visible; rescheduling idle');
       scheduleIdle();
     }
   });
