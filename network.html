@@ -6142,7 +6142,7 @@ async function updateLeaderboard() {
   };
 
 // Your instrument one-shots
-const INSTRUMENTS = {
+const DEFAULT_INSTRUMENTS = {
   library: [
     '/audio/instruments/448532__tedagame__c5.ogg',
     '/audio/instruments/448533__tedagame__c6.ogg',
@@ -6236,7 +6236,7 @@ const INSTRUMENTS = {
 };
 
 // Your loop files
-const LOOPS = {
+const DEFAULT_LOOPS = {
   library: [
     '/audio/loops/BEATS_LP_SOUN210156CSK.wav',
     '/audio/loops/BEATS_LP_SOUN508144GSK.wav',
@@ -6253,6 +6253,12 @@ const LOOPS = {
     '/audio/loops/Character_voice__male_15.wav'
   ]
 };
+
+let communityLoopEntries = [];
+let communityInstrumentEntries = [];
+let studioSoundsLoaded = false;
+let studioSoundsPromise = null;
+const STUDIO_SOUND_MAX_BYTES = 5 * 1024 * 1024;
 
 const KIT_DETAILS = {
   trap: {
@@ -7869,11 +7875,19 @@ const AI_MELODY_SCALES = {
     }
     if (kitSel && kitSel.value) currentKit = kitSel.value;
     renderKitDetails();
+    const soundsPromise = ensureStudioSoundsLoaded().catch((err) => {
+      console.warn('Failed to load community sounds', err);
+      return null;
+    });
     try { await setupMidiBrowser(); } catch (err) { console.warn('MIDI browser init failed', err); }
     try { await rebuildGraph(); } catch (err) { console.error('Beatloop Studio graph build failed', err); }
     renderLoopPicker();
     renderInstrumentPicker();
     drawArranger();
+    soundsPromise?.then(() => {
+      renderLoopPicker();
+      renderInstrumentPicker();
+    });
   }
   openBtn?.addEventListener('click', launchStudio);
   closeBtn?.addEventListener('click', hideStudio);
@@ -8184,7 +8198,7 @@ let lastBar = -1;             // arranger playhead column
   }
 
   // ---------- Sample pickers (Loops & Instruments) ----------
-  function renderAssetPicker(target, library, selectedSet){
+  function renderDefaultAssetPicker(target, library, selectedSet){
     if (!target) return;
     target.innerHTML = '';
     Object.entries(library).forEach(([pack, files]) => {
@@ -8210,12 +8224,459 @@ let lastBar = -1;             // arranger playhead column
     });
   }
 
+  function createUploadControls(type){
+    const wrap = document.createElement('div');
+    wrap.className = 'mb-2 flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/30 px-2 py-2 text-[0.65rem]';
+    const label = document.createElement('span');
+    label.className = 'text-white/60';
+    label.textContent = type === 'instrument'
+      ? 'Upload custom one-shots (max 5 MB).'
+      : 'Upload custom loops (max 5 MB).';
+    wrap.appendChild(label);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'rounded-md bg-primary/80 px-2 py-1 text-xs font-semibold text-white hover:bg-primary';
+    button.textContent = 'Upload';
+    wrap.appendChild(button);
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*';
+    input.className = 'hidden';
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      input.click();
+    });
+    input.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      await handleStudioSoundUpload(type, file);
+      event.target.value = '';
+    });
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  function renderCommunityAssets(target, entries, selectedSet, { type } = {}){
+    const values = new Set();
+    const heading = document.createElement('p');
+    heading.className = 'text-xs text-white/60 mt-2 mb-1';
+    heading.textContent = 'Community Uploads';
+    target.appendChild(heading);
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'px-1 text-[0.65rem] text-white/40';
+      empty.textContent = 'Upload a sound (max 5 MB) to add it to Beatloop Studio.';
+      target.appendChild(empty);
+      return values;
+    }
+
+    const viewerId = getActiveUserId();
+
+    entries.forEach((raw) => {
+      if (!raw || typeof raw !== 'object') return;
+      const value = typeof raw.value === 'string' && raw.value
+        ? raw.value
+        : (typeof raw.url === 'string' ? raw.url : '');
+      if (!value) return;
+      values.add(value);
+
+      const row = document.createElement('div');
+      row.className = 'rounded-md bg-white/5 px-2 py-1 text-sm hover:bg-white/10 transition-colors';
+
+      const layout = document.createElement('div');
+      layout.className = 'flex items-center gap-2';
+      row.appendChild(layout);
+
+      const label = document.createElement('label');
+      label.className = 'flex flex-1 items-center gap-2 min-w-0 cursor-pointer';
+      layout.appendChild(label);
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'h-4 w-4 shrink-0';
+      checkbox.checked = selectedSet.has(value);
+      label.appendChild(checkbox);
+
+      const textWrap = document.createElement('div');
+      textWrap.className = 'min-w-0 flex-1';
+      label.appendChild(textWrap);
+
+      const title = document.createElement('span');
+      title.className = 'block truncate';
+      const explicitName = typeof raw.name === 'string' ? raw.name.trim() : '';
+      title.textContent = explicitName || filenameLabel(value);
+      textWrap.appendChild(title);
+
+      const ownerDisplay = typeof raw.ownerDisplay === 'string' ? raw.ownerDisplay.trim() : '';
+      if (ownerDisplay) {
+        const credit = document.createElement('span');
+        credit.className = 'block truncate text-[0.65rem] text-white/50';
+        credit.textContent = `by ${ownerDisplay}`;
+        textWrap.appendChild(credit);
+      }
+
+      checkbox.addEventListener('change', async (event) => {
+        if (event.target.checked) selectedSet.add(value);
+        else selectedSet.delete(value);
+        try {
+          await rebuildGraph();
+        } catch (err) {
+          console.error('Failed to rebuild graph after community selection change', err);
+        }
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'flex items-center gap-1';
+      layout.appendChild(actions);
+
+      const ownerId = normalizeUserId(raw.ownerId || raw.userId || raw.owner?.id || raw.owner?._id);
+      const isOwner = ownerId && viewerId && ownerId === viewerId;
+
+      if (isOwner) {
+        const renameBtn = document.createElement('button');
+        renameBtn.type = 'button';
+        renameBtn.className = 'rounded bg-white/10 px-1.5 py-0.5 text-[0.65rem] text-white/80 hover:bg-white/15';
+        renameBtn.textContent = 'Rename';
+        renameBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          handleRenameStudioSound({ ...raw, value, type });
+        });
+        actions.appendChild(renameBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'rounded bg-white/10 px-1.5 py-0.5 text-[0.65rem] text-white/80 hover:bg-red-500/70 hover:text-white';
+        deleteBtn.textContent = 'Remove';
+        deleteBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          handleDeleteStudioSound({ ...raw, value, type }, selectedSet);
+        });
+        actions.appendChild(deleteBtn);
+      }
+
+      target.appendChild(row);
+    });
+
+    return values;
+  }
+
+  function renderAssetPicker(target, library, selectedSet, options = {}){
+    if (!target) return { selectionChanged: false };
+    const type = typeof options.type === 'string' ? options.type : 'loop';
+    const allowUpload = options.allowUpload !== false;
+
+    const baseLibrary = {};
+    let communityEntries = [];
+    Object.entries(library || {}).forEach(([key, value]) => {
+      if (key === 'community') {
+        if (Array.isArray(value)) communityEntries = value;
+      } else if (value !== undefined) {
+        baseLibrary[key] = value;
+      }
+    });
+
+    const defaultValues = new Set();
+    Object.values(baseLibrary).forEach((files) => {
+      if (Array.isArray(files)) {
+        files.forEach((file) => {
+          if (typeof file === 'string') defaultValues.add(file);
+        });
+      }
+    });
+
+    renderDefaultAssetPicker(target, baseLibrary, selectedSet);
+
+    if (allowUpload) {
+      target.prepend(createUploadControls(type));
+    }
+
+    const communityValues = renderCommunityAssets(target, communityEntries, selectedSet, { type });
+    const validValues = new Set([...defaultValues, ...communityValues]);
+
+    let removed = false;
+    selectedSet.forEach((value) => {
+      if (!validValues.has(value)) {
+        selectedSet.delete(value);
+        removed = true;
+      }
+    });
+
+    return { selectionChanged: removed };
+  }
+
+  function getActiveUserId(){
+    try {
+      const explicit = window.currentUserId || null;
+      const normalized = normalizeUserId(explicit);
+      if (normalized) return normalized;
+    } catch {}
+    try {
+      const authUser = window.AUTH && typeof window.AUTH.user === 'object' ? window.AUTH.user : null;
+      if (authUser) {
+        const normalized = normalizeUserId(authUser.id || authUser._id || authUser.userId || null);
+        if (normalized) return normalized;
+      }
+    } catch {}
+    try {
+      const authId = window.AUTH && window.AUTH.token && (window.AUTH.uid || window.AUTH.userId || window.AUTH.id);
+      const normalized = normalizeUserId(authId || null);
+      if (normalized) return normalized;
+    } catch {}
+    try {
+      const user = window.currentUser || null;
+      if (user) return normalizeUserId(user.id || user._id || null);
+    } catch {}
+    return null;
+  }
+
+  function normalizeCommunitySound(raw){
+    if (!raw || typeof raw !== 'object') return null;
+    const url = typeof raw.url === 'string' && raw.url ? raw.url : (typeof raw.value === 'string' ? raw.value : '');
+    if (!url) return null;
+    return {
+      id: raw.id || raw._id || url,
+      url,
+      value: url,
+      name: typeof raw.name === 'string' ? raw.name.trim() : '',
+      ownerId: normalizeUserId(raw.ownerId || raw.userId || raw.owner?.id || raw.owner?._id),
+      ownerDisplay: typeof raw.ownerDisplay === 'string' ? raw.ownerDisplay.trim() : (raw.owner?.displayName || raw.owner?.name || ''),
+      type: typeof raw.type === 'string' ? raw.type : '',
+      size: typeof raw.size === 'number' ? raw.size : null,
+      createdAt: raw.createdAt || null
+    };
+  }
+
+  async function loadStudioSounds({ force = false } = {}){
+    if (studioSoundsPromise) {
+      if (!force) return studioSoundsPromise;
+    } else if (!force && studioSoundsLoaded) {
+      return { loops: communityLoopEntries, instruments: communityInstrumentEntries };
+    }
+
+    const exec = (async () => {
+      const apiBase = (typeof window.getApiBase === 'function') ? window.getApiBase() : '';
+      if (!apiBase) throw new Error('API unavailable');
+      const auth = (window.AUTH && typeof window.AUTH.hdr === 'function') ? window.AUTH.hdr() : {};
+      const headers = { Accept: 'application/json', ...auth };
+      const response = await fetch(`${apiBase}/api/studio/sounds`, { headers });
+      if (!response.ok) {
+        let detail = '';
+        try {
+          const data = await response.json();
+          detail = data?.error || data?.message || '';
+        } catch {
+          try { detail = await response.text(); } catch {}
+        }
+        const message = detail ? `HTTP ${response.status}: ${detail}` : `HTTP ${response.status}`;
+        throw new Error(message);
+      }
+      const payload = await response.json().catch(() => ({}));
+      communityLoopEntries = Array.isArray(payload.loops) ? payload.loops.map(normalizeCommunitySound).filter(Boolean) : [];
+      communityInstrumentEntries = Array.isArray(payload.instruments) ? payload.instruments.map(normalizeCommunitySound).filter(Boolean) : [];
+      studioSoundsLoaded = true;
+      return { loops: communityLoopEntries, instruments: communityInstrumentEntries };
+    })();
+
+    studioSoundsPromise = exec.finally(() => { studioSoundsPromise = null; });
+    return studioSoundsPromise;
+  }
+
+  async function ensureStudioSoundsLoaded(){
+    if (studioSoundsLoaded) {
+      return { loops: communityLoopEntries, instruments: communityInstrumentEntries };
+    }
+    try {
+      return await loadStudioSounds();
+    } catch (err) {
+      console.warn('Failed to load community sounds', err);
+      return { loops: communityLoopEntries, instruments: communityInstrumentEntries };
+    }
+  }
+
+  async function refreshStudioSounds(){
+    try {
+      await loadStudioSounds({ force: true });
+    } catch (err) {
+      console.warn('Failed to refresh community sounds', err);
+    }
+    renderLoopPicker();
+    renderInstrumentPicker();
+  }
+
+  function buildLoopLibrary(){
+    const library = {};
+    Object.entries(DEFAULT_LOOPS || {}).forEach(([key, files]) => {
+      if (Array.isArray(files)) library[key] = files.slice();
+    });
+    library.community = communityLoopEntries.slice();
+    return library;
+  }
+
+  function buildInstrumentLibrary(){
+    const library = {};
+    Object.entries(DEFAULT_INSTRUMENTS || {}).forEach(([key, files]) => {
+      if (Array.isArray(files)) library[key] = files.slice();
+    });
+    library.community = communityInstrumentEntries.slice();
+    return library;
+  }
+
+  async function handleStudioSoundUpload(type, file){
+    if (!file) return;
+    if (file.size > STUDIO_SOUND_MAX_BYTES) {
+      alert('Please upload a sound that is 5 MB or less.');
+      return;
+    }
+    const auth = window.AUTH && typeof window.AUTH.hdr === 'function' ? window.AUTH : null;
+    if (!auth || !auth.token || !auth.token.trim()) {
+      alert('Sign in to upload sounds.');
+      return;
+    }
+    const apiBase = (typeof window.getApiBase === 'function') ? window.getApiBase() : '';
+    if (!apiBase) {
+      alert('Upload unavailable right now.');
+      return;
+    }
+
+    const form = new FormData();
+    form.append('type', type);
+    form.append('sound', file, file.name || `${type}.wav`);
+
+    let response;
+    try {
+      response = await fetch(`${apiBase}/api/studio/sounds`, {
+        method: 'POST',
+        headers: { ...auth.hdr() },
+        body: form
+      });
+    } catch (err) {
+      alert('Upload failed. Please check your connection.');
+      return;
+    }
+
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const data = await response.json();
+        detail = data?.error || data?.message || '';
+      } catch {
+        try { detail = await response.text(); } catch {}
+      }
+      const message = detail ? `Upload failed: ${detail}` : `Upload failed (HTTP ${response.status})`;
+      alert(message);
+      return;
+    }
+
+    await response.json().catch(() => ({}));
+    await refreshStudioSounds();
+  }
+
+  async function handleRenameStudioSound(entry){
+    if (!entry || !entry.id) return;
+    const auth = window.AUTH && typeof window.AUTH.hdr === 'function' ? window.AUTH : null;
+    if (!auth || !auth.token || !auth.token.trim()) {
+      alert('Sign in to manage your sounds.');
+      return;
+    }
+    const currentName = typeof entry.name === 'string' && entry.name ? entry.name : filenameLabel(entry.value || entry.url || '');
+    const next = prompt('Rename sound', currentName || '');
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed) {
+      alert('Name cannot be empty.');
+      return;
+    }
+    const apiBase = (typeof window.getApiBase === 'function') ? window.getApiBase() : '';
+    if (!apiBase) {
+      alert('Rename unavailable right now.');
+      return;
+    }
+    let response;
+    try {
+      response = await fetch(`${apiBase}/api/studio/sounds/${entry.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...auth.hdr() },
+        body: JSON.stringify({ name: trimmed })
+      });
+    } catch (err) {
+      alert('Rename failed. Please check your connection.');
+      return;
+    }
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const data = await response.json();
+        detail = data?.error || data?.message || '';
+      } catch {
+        try { detail = await response.text(); } catch {}
+      }
+      const message = detail ? `Rename failed: ${detail}` : `Rename failed (HTTP ${response.status})`;
+      alert(message);
+      return;
+    }
+    await response.json().catch(() => ({}));
+    await refreshStudioSounds();
+  }
+
+  async function handleDeleteStudioSound(entry, selectedSet){
+    if (!entry || !entry.id) return;
+    const auth = window.AUTH && typeof window.AUTH.hdr === 'function' ? window.AUTH : null;
+    if (!auth || !auth.token || !auth.token.trim()) {
+      alert('Sign in to manage your sounds.');
+      return;
+    }
+    if (!confirm('Remove this sound from Beatloop Studio?')) {
+      return;
+    }
+    const apiBase = (typeof window.getApiBase === 'function') ? window.getApiBase() : '';
+    if (!apiBase) {
+      alert('Delete unavailable right now.');
+      return;
+    }
+    let response;
+    try {
+      response = await fetch(`${apiBase}/api/studio/sounds/${entry.id}`, {
+        method: 'DELETE',
+        headers: { ...auth.hdr() }
+      });
+    } catch (err) {
+      alert('Delete failed. Please check your connection.');
+      return;
+    }
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const data = await response.json();
+        detail = data?.error || data?.message || '';
+      } catch {
+        try { detail = await response.text(); } catch {}
+      }
+      const message = detail ? `Delete failed: ${detail}` : `Delete failed (HTTP ${response.status})`;
+      alert(message);
+      return;
+    }
+    if (selectedSet) {
+      if (entry.value) selectedSet.delete(entry.value);
+      if (entry.url) selectedSet.delete(entry.url);
+    }
+    await refreshStudioSounds();
+  }
+
   function renderLoopPicker(){
-    renderAssetPicker(loopsWrap, LOOPS, selectedLoops);
+    const { selectionChanged } = renderAssetPicker(loopsWrap, buildLoopLibrary(), selectedLoops, { type: 'loop', allowUpload: true });
+    if (selectionChanged) {
+      rebuildGraph().catch(err => console.error('Failed to refresh audio graph after loop removal', err));
+    }
   }
 
   function renderInstrumentPicker(){
-    renderAssetPicker(instrumentsWrap, INSTRUMENTS, selectedInstruments);
+    const { selectionChanged } = renderAssetPicker(instrumentsWrap, buildInstrumentLibrary(), selectedInstruments, { type: 'instrument', allowUpload: true });
+    if (selectionChanged) {
+      rebuildGraph().catch(err => console.error('Failed to refresh audio graph after instrument removal', err));
+    }
   }
 
   // ---------- MIDI Browser ----------

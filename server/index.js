@@ -263,6 +263,27 @@ DirectMessageSchema.pre('save', function(next) {
 DirectMessageSchema.index({ conversationKey: 1, createdAt: 1 });
 DirectMessageSchema.index({ senderId: 1, recipientId: 1, createdAt: -1 });
 
+const StudioSoundSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  type: { type: String, enum: ['loop', 'instrument'], required: true, index: true },
+  name: { type: String, required: true },
+  storageKey: { type: String, required: true },
+  originalName: { type: String, default: '' },
+  mimeType: { type: String, default: '' },
+  size: { type: Number, default: 0 },
+  durationSec: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+StudioSoundSchema.index({ type: 1, createdAt: -1 });
+StudioSoundSchema.index({ userId: 1, createdAt: -1 });
+
+StudioSoundSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
 const User = mongoose.model('User', UserSchema);
 const Session = mongoose.model('Session', SessionSchema);
 const Track = mongoose.model('Track', TrackSchema);
@@ -270,6 +291,7 @@ const TrackStat = mongoose.model('TrackStat', TrackStatsSchema);
 const TrackEvent = mongoose.model('TrackEvent', TrackEventSchema);
 const TrackComment = mongoose.model('TrackComment', TrackCommentSchema);
 const DirectMessage = mongoose.model('DirectMessage', DirectMessageSchema);
+const StudioSound = mongoose.model('StudioSound', StudioSoundSchema);
 
 /* ============================ APP ============================ */
 const app = express();
@@ -333,7 +355,7 @@ const uploadsRoot = getUploadsRoot();
 const trackAudioDir = path.join(uploadsRoot, 'tracks');
 const trackCoverDir = path.join(uploadsRoot, 'covers');
 const messageAttachmentDir = path.join(uploadsRoot, 'messages');
-const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags']);
+const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio']);
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
 fs.mkdirSync(messageAttachmentDir, { recursive: true });
@@ -654,6 +676,51 @@ async function userSummary(reqOrUser, maybeUser) {
     lastName: u.lastName,
     displayName: u.displayName,
     profileColor: resolveProfileColor(u.profileColor)
+  };
+}
+
+function resolveUserDisplayName(user) {
+  if (!user) return '';
+  const display = typeof user.displayName === 'string' ? user.displayName.trim() : '';
+  if (display) return display;
+  const first = typeof user.firstName === 'string' ? user.firstName.trim() : '';
+  const last = typeof user.lastName === 'string' ? user.lastName.trim() : '';
+  const combined = [first, last].filter(Boolean).join(' ').trim();
+  if (combined) return combined;
+  const name = typeof user.name === 'string' ? user.name.trim() : '';
+  if (name) return name;
+  const email = typeof user.email === 'string' ? user.email.trim() : '';
+  if (email) return email;
+  return '';
+}
+
+function presentStudioSound(req, doc, ownerSummary = null) {
+  if (!doc) return null;
+  const storageKey = typeof doc.storageKey === 'string' ? doc.storageKey : '';
+  const fallback = typeof doc.fileUrl === 'string' ? doc.fileUrl : '';
+  const url = storageKey ? publicUploadUrl(req, storageKey) : publicUploadUrl(req, fallback);
+  const ownerId = idToString(doc.userId);
+  const owner = ownerSummary ? {
+    id: ownerSummary.id,
+    name: ownerSummary.name,
+    displayName: ownerSummary.displayName,
+    firstName: ownerSummary.firstName,
+    lastName: ownerSummary.lastName,
+    profileColor: ownerSummary.profileColor
+  } : null;
+  const ownerDisplay = resolveUserDisplayName(ownerSummary);
+  return {
+    id: doc._id,
+    type: doc.type,
+    name: doc.name,
+    url,
+    ownerId,
+    ownerDisplay,
+    owner,
+    size: typeof doc.size === 'number' ? doc.size : null,
+    durationSec: typeof doc.durationSec === 'number' ? doc.durationSec : null,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt
   };
 }
 
@@ -1481,6 +1548,21 @@ const messageAttachmentUpload = {
   array: (field, maxCount) => withMessageStorage(messageAttachmentUploadMemory.array(field, maxCount))
 };
 
+const STUDIO_SOUND_MAX_SIZE = 5 * 1024 * 1024; // 5MB cap per uploaded sound
+
+const studioSoundUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: STUDIO_SOUND_MAX_SIZE },
+  fileFilter: (_req, file, cb) => {
+    const mimetype = normalizeMime(file?.mimetype);
+    if (mimetype) file.mimetype = mimetype;
+    if (!mimetype || AUDIO_ALLOWED_MIME.has(mimetype)) {
+      return cb(null, true);
+    }
+    return cb(new Error('sound must be an audio file (mp3, wav, ogg, webm, flac, m4a, aiff)'));
+  }
+});
+
 function resolveUploadPath(url, folder) {
   if (!url) return null;
   const prefix = `/uploads/${folder}/`;
@@ -1538,6 +1620,177 @@ function messagePreview(message) {
   }
   return '';
 }
+
+/* ========================= Beatloop Studio sounds ========================= */
+app.get('/api/studio/sounds', async (req, res) => {
+  try {
+    const typeParam = typeof req.query?.type === 'string' ? req.query.type.trim().toLowerCase() : '';
+    const filter = {};
+    if (typeParam === 'loop' || typeParam === 'instrument') {
+      filter.type = typeParam;
+    }
+
+    const docs = await StudioSound.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
+
+    if (!docs || docs.length === 0) {
+      return res.json({ loops: [], instruments: [] });
+    }
+
+    const ownerIds = Array.from(new Set(
+      docs
+        .map(doc => idToString(doc?.userId))
+        .filter(Boolean)
+    ));
+
+    let ownerSummaries = new Map();
+    if (ownerIds.length > 0) {
+      const ownerObjectIds = ownerIds.map(id => asObjectId(id)).filter(Boolean);
+      if (ownerObjectIds.length > 0) {
+        const owners = await User.find({ _id: { $in: ownerObjectIds } })
+          .select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey tagDurationSec displayName firstName lastName profileColor createdAt')
+          .lean();
+        const entries = await Promise.all(
+          owners.map(async (owner) => [idToString(owner._id), await userSummary(req, owner)])
+        );
+        ownerSummaries = new Map(entries.filter(([key]) => Boolean(key)));
+      }
+    }
+
+    const present = (doc) => presentStudioSound(req, doc, ownerSummaries.get(idToString(doc?.userId)));
+    const loops = filter.type === 'instrument' ? [] : docs.filter(doc => doc.type === 'loop').map(present);
+    const instruments = filter.type === 'loop' ? [] : docs.filter(doc => doc.type === 'instrument').map(present);
+
+    res.json({ loops, instruments });
+  } catch (err) {
+    console.error('Failed to list studio sounds', err);
+    res.status(500).json({ error: 'failed to load sounds' });
+  }
+});
+
+app.post('/api/studio/sounds', auth, (req, res) => {
+  studioSoundUpload.single('sound')(req, res, async (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE'
+        ? 'sound must be 5MB or less'
+        : (err.message || 'upload failed');
+      return res.status(400).json({ error: message });
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'sound file required' });
+    }
+
+    const typeRaw = typeof req.body?.type === 'string' ? req.body.type.trim().toLowerCase() : '';
+    if (typeRaw !== 'loop' && typeRaw !== 'instrument') {
+      return res.status(400).json({ error: 'type must be loop or instrument' });
+    }
+
+    const mimetype = normalizeMime(file.mimetype);
+    if (mimetype) file.mimetype = mimetype;
+
+    let metadata = null;
+    try {
+      metadata = await parseBuffer(file.buffer, file.mimetype || null, { duration: true });
+      if (metadata) file.metadata = metadata;
+    } catch (ex) {
+      // If parsing fails we still continue, but log for debugging.
+      console.warn('Unable to parse uploaded studio sound metadata', ex);
+    }
+
+    const prefix = typeRaw === 'loop' ? 'studio/loops' : 'studio/instruments';
+    try {
+      await persistBufferToStorage(file, { prefix, extResolver: audioFileExt });
+    } catch (storageErr) {
+      console.error('Studio sound upload storage failed', storageErr);
+      return res.status(500).json({ error: 'failed to store sound' });
+    }
+
+    const durationSec = metadata?.format?.duration ? Math.round(metadata.format.duration * 1000) / 1000 : 0;
+    const rawName = typeof req.body?.name === 'string' ? req.body.name : '';
+    const original = typeof file.originalname === 'string' ? file.originalname : '';
+    const baseName = rawName || original;
+    const normalizedName = baseName
+      ? baseName.replace(/\.[^.]+$/, '').replace(/[_\s]+/g, ' ').trim()
+      : '';
+    const name = (normalizedName || 'Untitled Sound').slice(0, 120);
+
+    try {
+      const doc = await StudioSound.create({
+        userId: req.user._id,
+        type: typeRaw,
+        name,
+        storageKey: file.storageKey,
+        originalName: original,
+        mimeType: file.mimetype || '',
+        size: typeof file.size === 'number' ? file.size : (file.buffer?.length || 0),
+        durationSec
+      });
+      file.buffer = null;
+      const ownerSummary = await userSummary(req, req.user);
+      res.status(201).json(presentStudioSound(req, doc, ownerSummary));
+    } catch (createErr) {
+      console.error('Studio sound save failed', createErr);
+      if (file?.storageKey) {
+        await deleteUploadKey(file.storageKey).catch(() => {});
+      }
+      res.status(500).json({ error: 'could not save sound' });
+    }
+  });
+});
+
+app.patch('/api/studio/sounds/:id', auth, async (req, res) => {
+  const soundId = asObjectId(req.params?.id);
+  if (!soundId) {
+    return res.status(400).json({ error: 'invalid sound id' });
+  }
+
+  const doc = await StudioSound.findById(soundId);
+  if (!doc) {
+    return res.status(404).json({ error: 'sound not found' });
+  }
+
+  if (idToString(doc.userId) !== idToString(req.user._id)) {
+    return res.status(403).json({ error: 'not your sound' });
+  }
+
+  const rawName = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  if (!rawName) {
+    return res.status(400).json({ error: 'name is required' });
+  }
+
+  doc.name = rawName.slice(0, 120);
+  await doc.save();
+
+  const ownerSummary = await userSummary(req, req.user);
+  res.json(presentStudioSound(req, doc, ownerSummary));
+});
+
+app.delete('/api/studio/sounds/:id', auth, async (req, res) => {
+  const soundId = asObjectId(req.params?.id);
+  if (!soundId) {
+    return res.status(400).json({ error: 'invalid sound id' });
+  }
+
+  const doc = await StudioSound.findById(soundId);
+  if (!doc) {
+    return res.status(404).json({ error: 'sound not found' });
+  }
+
+  if (idToString(doc.userId) !== idToString(req.user._id)) {
+    return res.status(403).json({ error: 'not your sound' });
+  }
+
+  const storageKey = typeof doc.storageKey === 'string' ? doc.storageKey : '';
+  await doc.deleteOne();
+  if (storageKey) {
+    await deleteUploadKey(storageKey).catch(() => {});
+  }
+  res.status(204).send();
+});
 
 /* ============================ Direct Messages ============================ */
 app.get('/api/messages/conversations', auth, async (req, res) => {
