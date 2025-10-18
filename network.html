@@ -609,6 +609,36 @@
     .bl-who-suggestion.following{background:rgba(124,58,237,.12);border-color:rgba(124,58,237,.35)}
     .bl-who-suggestion.following .bl-who-cta{color:rgba(255,255,255,.7)}
     @media (max-width:900px){.bl-who-dialog{grid-template-columns:1fr;padding:1.25rem}.bl-who-overlay .user-profile{width:min(320px,100%);height:min(320px,72vw)}.bl-who-overlay .user-info{width:min(280px,90%)}.bl-who-overlay .follow-btn{width:min(240px,85%)}}
+    .bl-notify-overlay{position:fixed;inset:0;background:rgba(12,12,18,.82);backdrop-filter:blur(14px);z-index:85;display:none;align-items:center;justify-content:center;padding:1.5rem}
+    .bl-notify-overlay.active{display:flex}
+    .bl-notify-dialog{position:relative;width:min(640px,95vw);max-height:90vh;overflow:hidden;background:linear-gradient(145deg,rgba(24,24,36,.96),rgba(12,12,20,.92));border-radius:1.25rem;border:1px solid rgba(255,255,255,.08);box-shadow:0 25px 60px rgba(0,0,0,.55);display:flex;flex-direction:column}
+    .bl-notify-header{display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem .5rem}
+    .bl-notify-title{margin:0;font-size:1.1rem;font-weight:700;color:#fff}
+    .bl-notify-close{background:none;border:0;color:rgba(255,255,255,.6);font-size:1.5rem;line-height:1;padding:.35rem;border-radius:.65rem;cursor:pointer;transition:color .2s ease,background .2s ease,transform .2s ease}
+    .bl-notify-close:hover{color:#fff;background:rgba(255,255,255,.08);transform:scale(1.05)}
+    .bl-notify-close:focus-visible{outline:2px solid rgba(124,58,237,.6);outline-offset:3px}
+    .bl-notify-search{position:relative;padding:0 1.5rem 1.25rem}
+    .bl-notify-search input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:.95rem;padding:.75rem 1rem .75rem 2.75rem;color:#fff;font-size:.95rem;box-shadow:0 10px 35px rgba(12,12,18,.45)}
+    .bl-notify-search input::placeholder{color:rgba(255,255,255,.55)}
+    .bl-notify-search .icon{position:absolute;left:2.25rem;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.45);pointer-events:none;font-size:1rem}
+    .bl-notify-body{flex:1;overflow-y:auto;padding:0 1.5rem 1.5rem;scroll-behavior:smooth}
+    .bl-notify-body::-webkit-scrollbar{width:6px}
+    .bl-notify-body::-webkit-scrollbar-thumb{background:rgba(124,58,237,.45);border-radius:999px}
+    .bl-notify-timeline{position:relative;list-style:none;margin:0;padding:0 0 0 1.75rem}
+    .bl-notify-timeline::before{content:"";position:absolute;left:.35rem;top:.65rem;bottom:.65rem;width:2px;background:linear-gradient(180deg,rgba(124,58,237,.65),rgba(14,165,233,.4))}
+    .bl-notify-timeline[data-has-filter="1"]::before{background:linear-gradient(180deg,rgba(14,165,233,.75),rgba(56,189,248,.45))}
+    @keyframes bl-notify-fade{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+    .bl-notify-item{position:relative;margin:0 0 1.75rem;padding:1rem 1.25rem 1rem 1.5rem;border-radius:1rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 42px rgba(12,12,20,.32);backdrop-filter:blur(6px);transition:transform .2s ease,background .2s ease,border-color .2s ease,box-shadow .2s ease;animation:bl-notify-fade .45s ease both}
+    .bl-notify-item:hover{transform:translateY(-2px);background:rgba(255,255,255,.07);border-color:rgba(124,58,237,.45);box-shadow:0 22px 48px rgba(14,165,233,.25)}
+    .bl-notify-item:last-child{margin-bottom:0}
+    .bl-notify-item::before{content:attr(data-icon);position:absolute;left:-1.55rem;top:calc(50% - .8rem);width:1.65rem;height:1.65rem;display:flex;align-items:center;justify-content:center;border-radius:999px;background:rgba(12,12,20,.95);border:2px solid rgba(124,58,237,.6);color:rgba(255,255,255,.85);font-size:.9rem;font-weight:600;box-shadow:0 6px 22px rgba(124,58,237,.35);transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease}
+    .bl-notify-item:hover::before{border-color:rgba(14,165,233,.6);box-shadow:0 8px 26px rgba(14,165,233,.35)}
+    .bl-notify-item.bl-notify-match{border-color:rgba(14,165,233,.5);box-shadow:0 24px 52px rgba(14,165,233,.32);background:rgba(56,189,248,.08)}
+    .bl-notify-timestamp{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:.25rem}
+    .bl-notify-title-text{margin:0;font-size:1rem;font-weight:600;color:#fff}
+    .bl-notify-description{margin:.45rem 0 0;font-size:.85rem;color:rgba(255,255,255,.65)}
+    .bl-notify-empty{margin:2rem auto;text-align:center;font-size:.9rem;color:rgba(255,255,255,.55)}
+    @media (max-width:640px){.bl-notify-dialog{border-radius:1rem}.bl-notify-search{padding:0 1.25rem 1rem}.bl-notify-search input{font-size:.9rem;padding-left:2.5rem}.bl-notify-search .icon{left:2rem}.bl-notify-body{padding:0 1.25rem 1.25rem}.bl-notify-timeline{padding-left:1.5rem}.bl-notify-item::before{left:-1.6rem}}
     .track-cover-editable{cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease}
     .track-cover-editable:hover{transform:scale(1.03);box-shadow:0 0 0 2px rgba(124,58,237,.45)}
     .track-cover-editable[aria-busy="true"]{opacity:.6;pointer-events:none}
@@ -626,8 +656,13 @@
         <span class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span>
         <span>beatloop</span>
       </a>
-      <div class="ml-auto"></div>
-      <button id="logoutBtn" class="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Log out</button>
+      <div class="ml-auto flex items-center gap-2">
+        <button id="notificationsToggle" type="button" class="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary/40">
+          <span aria-hidden="true">🔔</span>
+          <span class="hidden sm:inline">Notifications</span>
+        </button>
+        <button id="logoutBtn" class="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Log out</button>
+      </div>
     </div>
   </header>
 
@@ -638,7 +673,7 @@
       <nav class="sticky top-6 space-y-2 text-white/80">
         <a href="index.html" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🏠</span> Home</a>
         <a href="#explore" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🔍</span> Explore</a>
-        <a href="#notifications" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🔔</span> Notifications</a>
+        <a id="notificationsNav" href="#notifications" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🔔</span> Notifications</a>
         <a href="#profile" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>👤</span> Profile</a>
         <button id="btnLogout" class="mt-4 w-full rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Log out</button>
       </nav>
@@ -836,6 +871,24 @@
         </section>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Notifications overlay -->
+<div id="notificationsOverlay" class="bl-notify-overlay" aria-hidden="true">
+  <div class="bl-notify-dialog glass" role="dialog" aria-modal="true" aria-labelledby="notificationsTitle">
+    <div class="bl-notify-header">
+      <h2 id="notificationsTitle" class="bl-notify-title">Notifications</h2>
+      <button id="notificationsClose" type="button" class="bl-notify-close" aria-label="Close notifications">×</button>
+    </div>
+    <div class="bl-notify-search">
+      <span class="icon">🔍</span>
+      <input id="notificationsSearch" type="search" placeholder="Search notifications…" autocomplete="off" />
+    </div>
+    <div class="bl-notify-body">
+      <ol id="notificationsList" class="bl-notify-timeline" aria-live="polite" aria-label="Notification history"></ol>
+      <p id="notificationsEmpty" class="bl-notify-empty hidden">No notifications yet. Activity will appear here.</p>
     </div>
   </div>
 </div>
@@ -1656,6 +1709,273 @@
       }
     }
 
+    const NOTIFICATIONS_STORAGE_KEY = 'notifications_history_v2'
+    const NOTIFICATIONS_MAX_ITEMS = 150
+    const notificationIcons = {
+      upload: '⬆️',
+      recording: '🎙️',
+      delete: '🗑️',
+      comment: '💬',
+      like: '❤️',
+      repost: '🔁',
+      follow: '⭐',
+      unfollow: '👋',
+      default: '•'
+    }
+
+    function normalizeNotificationEntry(entry) {
+      if (!entry || typeof entry !== 'object') return null
+      const timestamp = Number(entry.timestamp || entry.date || Date.now())
+      if (!Number.isFinite(timestamp)) return null
+      const title = typeof entry.title === 'string' ? entry.title : ''
+      const description = typeof entry.description === 'string' ? entry.description : ''
+      const type = typeof entry.type === 'string' ? entry.type : 'update'
+      const id = typeof entry.id === 'string' && entry.id
+        ? entry.id
+        : `notif-${timestamp}-${Math.random().toString(36).slice(2, 8)}`
+      const meta = entry.meta && typeof entry.meta === 'object' && !Array.isArray(entry.meta)
+        ? { ...entry.meta }
+        : {}
+      return { id, type, title, description, timestamp, meta }
+    }
+
+    function loadNotificationHistory() {
+      const stored = getJSON(NOTIFICATIONS_STORAGE_KEY, '[]')
+      if (!Array.isArray(stored)) return []
+      return stored
+        .map(normalizeNotificationEntry)
+        .filter(Boolean)
+        .sort((a, b) => b.timestamp - a.timestamp)
+    }
+
+    function saveNotificationHistory(list) {
+      const payload = Array.isArray(list) ? list.slice(0, NOTIFICATIONS_MAX_ITEMS).map(entry => ({
+        id: entry.id,
+        type: entry.type,
+        title: entry.title,
+        description: entry.description,
+        timestamp: entry.timestamp,
+        meta: entry.meta || {}
+      })) : []
+      setJSON(NOTIFICATIONS_STORAGE_KEY, payload)
+    }
+
+    let notificationHistory = loadNotificationHistory()
+    let notificationFilter = ''
+
+    const notificationsRefs = {
+      overlay: null,
+      dialog: null,
+      list: null,
+      search: null,
+      empty: null,
+      close: null
+    }
+
+    let notificationsPrevOverflow = ''
+
+    const notificationDateFormatter = (() => {
+      try {
+        return new Intl.DateTimeFormat(undefined, {
+          month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+        })
+      } catch {
+        return null
+      }
+    })()
+
+    function formatNotificationTime(ts) {
+      const date = new Date(ts)
+      if (!Number.isFinite(date.valueOf())) return ''
+      let formatted = ''
+      if (notificationDateFormatter) {
+        try { formatted = notificationDateFormatter.format(date) } catch {}
+      }
+      if (!formatted) {
+        try { formatted = date.toLocaleString() } catch { formatted = '' }
+      }
+      let relative = ''
+      try { relative = timeAgo(ts) } catch {}
+      return relative ? `${formatted} • ${relative}` : formatted
+    }
+
+    function truncateText(value, max = 120) {
+      if (!value) return ''
+      const str = String(value)
+      const condensed = str.replace(/\s+/g, ' ').trim()
+      if (condensed.length <= max) return condensed
+      return condensed.slice(0, Math.max(0, max - 1)).trimEnd() + '…'
+    }
+
+    function getNotificationIcon(type) {
+      if (!type) return notificationIcons.default
+      return notificationIcons[type] || notificationIcons.default
+    }
+
+    function ensureNotificationRefs() {
+      if (!notificationsRefs.overlay) {
+        notificationsRefs.overlay = document.getElementById('notificationsOverlay')
+        notificationsRefs.dialog = notificationsRefs.overlay?.querySelector('.bl-notify-dialog') || null
+        notificationsRefs.list = document.getElementById('notificationsList')
+        notificationsRefs.search = document.getElementById('notificationsSearch')
+        notificationsRefs.empty = document.getElementById('notificationsEmpty')
+        notificationsRefs.close = document.getElementById('notificationsClose')
+
+        if (notificationsRefs.overlay && !notificationsRefs.overlay.dataset.bound) {
+          notificationsRefs.overlay.addEventListener('click', (event) => {
+            if (event.target === notificationsRefs.overlay) closeNotificationsOverlay()
+          })
+          notificationsRefs.overlay.dataset.bound = '1'
+        }
+        if (notificationsRefs.close && !notificationsRefs.close.dataset.bound) {
+          notificationsRefs.close.addEventListener('click', closeNotificationsOverlay)
+          notificationsRefs.close.dataset.bound = '1'
+        }
+        if (notificationsRefs.search && !notificationsRefs.search.dataset.bound) {
+          notificationsRefs.search.addEventListener('input', (event) => {
+            notificationFilter = event.target.value || ''
+            renderNotificationsTimeline()
+          })
+          notificationsRefs.search.dataset.bound = '1'
+        }
+      }
+      return Boolean(notificationsRefs.overlay)
+    }
+
+    function renderNotificationsTimeline() {
+      if (!ensureNotificationRefs()) return
+      const listEl = notificationsRefs.list
+      if (!listEl) return
+      const filter = (notificationFilter || '').trim().toLowerCase()
+      const source = Array.isArray(notificationHistory) ? notificationHistory : []
+      const filtered = !filter
+        ? source
+        : source.filter(entry => {
+            const haystack = [entry.title, entry.description, entry.meta?.trackTitle, entry.meta?.actor]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase()
+            return haystack.includes(filter)
+          })
+
+      listEl.innerHTML = ''
+      if (filter) {
+        listEl.dataset.hasFilter = '1'
+      } else {
+        delete listEl.dataset.hasFilter
+        try { listEl.removeAttribute('data-has-filter') } catch {}
+      }
+      const emptyEl = notificationsRefs.empty
+      if (!filtered.length) {
+        if (emptyEl) {
+          emptyEl.textContent = source.length
+            ? 'No notifications match your search.'
+            : 'No notifications yet. Activity will appear here.'
+          emptyEl.classList.remove('hidden')
+        }
+        return
+      }
+      if (emptyEl) emptyEl.classList.add('hidden')
+
+      filtered.forEach(entry => {
+        const item = document.createElement('li')
+        item.className = 'bl-notify-item'
+        item.dataset.icon = getNotificationIcon(entry.type)
+        if (filter) item.classList.add('bl-notify-match')
+
+        const timestampEl = document.createElement('div')
+        timestampEl.className = 'bl-notify-timestamp'
+        timestampEl.textContent = formatNotificationTime(entry.timestamp)
+
+        const titleEl = document.createElement('p')
+        titleEl.className = 'bl-notify-title-text'
+        titleEl.textContent = entry.title || 'Notification'
+
+        item.appendChild(timestampEl)
+        item.appendChild(titleEl)
+
+        if (entry.description) {
+          const descEl = document.createElement('p')
+          descEl.className = 'bl-notify-description'
+          descEl.textContent = entry.description
+          item.appendChild(descEl)
+        }
+
+        listEl.appendChild(item)
+      })
+    }
+
+    function openNotificationsOverlay(event) {
+      if (event && typeof event.preventDefault === 'function') event.preventDefault()
+      if (!ensureNotificationRefs()) return
+      if (notificationsRefs.overlay?.classList.contains('active')) {
+        renderNotificationsTimeline()
+        return
+      }
+      notificationsPrevOverflow = document.body.style.overflow || ''
+      notificationsRefs.overlay.classList.add('active')
+      notificationsRefs.overlay.setAttribute('aria-hidden', 'false')
+      document.body.style.overflow = 'hidden'
+      renderNotificationsTimeline()
+      if (notificationsRefs.search) {
+        notificationsRefs.search.value = notificationFilter
+        requestAnimationFrame(() => {
+          try { notificationsRefs.search?.focus() } catch {}
+        })
+      }
+    }
+
+    function closeNotificationsOverlay() {
+      if (!ensureNotificationRefs()) return
+      notificationsRefs.overlay.classList.remove('active')
+      notificationsRefs.overlay.setAttribute('aria-hidden', 'true')
+      document.body.style.overflow = notificationsPrevOverflow || ''
+      notificationsPrevOverflow = ''
+    }
+
+    function bindNotificationOpeners() {
+      ensureNotificationRefs()
+      ;['notificationsToggle', 'notificationsNav'].forEach(id => {
+        const el = document.getElementById(id)
+        if (el && !el.dataset.notificationBound) {
+          el.addEventListener('click', (event) => openNotificationsOverlay(event))
+          el.dataset.notificationBound = '1'
+        }
+      })
+    }
+
+    function recordNotification(type, title, description, meta = {}) {
+      const entry = normalizeNotificationEntry({ type, title, description, timestamp: meta.timestamp || Date.now(), id: meta.id, meta })
+      if (!entry) return
+      notificationHistory = [entry, ...notificationHistory].slice(0, NOTIFICATIONS_MAX_ITEMS)
+      saveNotificationHistory(notificationHistory)
+      renderNotificationsTimeline()
+    }
+
+    document.addEventListener('keydown', (event) => {
+      const overlayActive = notificationsRefs.overlay?.classList.contains('active')
+      if (overlayActive && event.key === 'Escape') {
+        closeNotificationsOverlay()
+        return
+      }
+      if (!overlayActive) return
+      if (event.key === '/' && !event.altKey && !event.metaKey && !event.ctrlKey) {
+        const target = event.target
+        const typingElement = target && (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable
+        )
+        if (!typingElement) {
+          event.preventDefault()
+          ensureNotificationRefs()
+          if (notificationsRefs.search) {
+            try { notificationsRefs.search.focus() } catch {}
+          }
+        }
+      }
+    })
+
     function persistUserDirectoryEntry(entry, fallbackEmail, options = {}) {
       if (!entry) return null
       const rawEmail = (typeof entry.email === 'string' && entry.email) ? entry.email : (typeof fallbackEmail === 'string' ? fallbackEmail : '')
@@ -2401,12 +2721,27 @@ let sessionsCard = null;
         : '')
       if (!email) return
       const set = getFollowingSet()
-      if (set.has(email)) set.delete(email)
+      const wasFollowing = set.has(email)
+      if (wasFollowing) set.delete(email)
       else set.add(email)
       setJSON('following', Array.from(set))
       updateFollowButtonState(user)
       renderWhoToFollowInto(whoToFollowEl)
       renderWhoToFollowInto(whoToFollowMEl)
+      const nowFollowing = set.has(email)
+      const labelRaw = (user && (user.displayName || user.name || user.email)) || 'this creator'
+      const label = String(labelRaw).trim() || 'this creator'
+      if (nowFollowing !== wasFollowing) {
+        const action = nowFollowing ? 'followed' : 'unfollowed'
+        const desc = nowFollowing
+          ? `${label} will appear more often in your feed.`
+          : `${label} has been removed from your focused feed.`
+        recordNotification(nowFollowing ? 'follow' : 'unfollow', `You ${action} ${label}`, desc, {
+          actor: label,
+          timestamp: Date.now(),
+          following: nowFollowing
+        })
+      }
     }
 
     // ---------- Pending selections
@@ -2666,6 +3001,12 @@ function createPost(track, { prepend = false } = {}) {
   if (!normalized) return null
   if (normalized.id && renderedTrackIds.has(normalized.id)) return null
 
+  const trackTitleRaw = normalized.title || 'Untitled'
+  const trackTitleForNotifications = String(trackTitleRaw).trim() || 'Untitled'
+  const selfEmailNormalized = (currentUser && currentUser.email) ? String(currentUser.email).toLowerCase() : ''
+  const statNotificationSuppress = { likes: 0, reposts: 0 }
+  let statsInitialized = false
+
   let latestStats = normalizeStats(normalized.stats || getStats(normalized.id))
   setStats(normalized.id, latestStats)
   remoteStatsCache.set(normalized.id, latestStats)
@@ -2675,6 +3016,13 @@ function createPost(track, { prepend = false } = {}) {
     : getCommentsLocal(normalized.id)
   persistComments(normalized.id, latestComments)
   remoteCommentsCache.set(normalized.id, latestComments)
+  const commentSeenKeys = new Set()
+  latestComments.forEach(entry => {
+    if (!entry) return
+    const key = entry.id || entry.clientId || `${entry.user || ''}-${entry.createdAt || ''}-${entry.text || ''}`
+    if (key) commentSeenKeys.add(key)
+  })
+  let commentsInitialized = false
   const card = document.createElement('article')
   card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
   card.dataset.trackId = normalized.id
@@ -2973,6 +3321,12 @@ function createPost(track, { prepend = false } = {}) {
             renderedTrackIds.delete(normalized.id)
             card.remove()
             scheduleLeaderboardRefresh()
+            recordNotification('delete', `Deleted “${trackTitleForNotifications}”`, 'The track has been removed from your profile.', {
+              trackId: normalized.id,
+              trackTitle: trackTitleForNotifications,
+              timestamp: Date.now(),
+              storage: normalized.db ? 'local' : 'cloud'
+            })
           } catch (err) {
             console.error('Track delete failed', err)
             alert('Delete failed: ' + (err?.message || err))
@@ -3023,7 +3377,47 @@ function createPost(track, { prepend = false } = {}) {
       }
 
       function applyStats(stats) {
+        const previousStats = { ...latestStats }
         latestStats = normalizeStats(stats || latestStats)
+        const wasInitialized = statsInitialized
+        statsInitialized = true
+
+        if (wasInitialized) {
+          const likeDelta = (latestStats.likes || 0) - (previousStats.likes || 0)
+          if (likeDelta > 0) {
+            const suppressed = Math.min(likeDelta, statNotificationSuppress.likes)
+            statNotificationSuppress.likes = Math.max(0, statNotificationSuppress.likes - suppressed)
+            const actual = likeDelta - suppressed
+            if (actual > 0) {
+              const detail = actual === 1 ? 'received a new like' : `received ${actual} new likes`
+              recordNotification('like', `“${trackTitleForNotifications}” ${detail}`, 'Keep the momentum going!', {
+                trackId: normalized.id,
+                trackTitle: trackTitleForNotifications,
+                delta: actual,
+                timestamp: Date.now(),
+                metric: 'likes'
+              })
+            }
+          }
+
+          const repostDelta = (latestStats.reposts || 0) - (previousStats.reposts || 0)
+          if (repostDelta > 0) {
+            const suppressed = Math.min(repostDelta, statNotificationSuppress.reposts)
+            statNotificationSuppress.reposts = Math.max(0, statNotificationSuppress.reposts - suppressed)
+            const actual = repostDelta - suppressed
+            if (actual > 0) {
+              const detail = actual === 1 ? 'was reposted' : `received ${actual} new reposts`
+              recordNotification('repost', `“${trackTitleForNotifications}” ${detail}`, 'Your track is travelling further.', {
+                trackId: normalized.id,
+                trackTitle: trackTitleForNotifications,
+                delta: actual,
+                timestamp: Date.now(),
+                metric: 'reposts'
+              })
+            }
+          }
+        }
+
         setStats(normalized.id, latestStats)
         remoteStatsCache.set(normalized.id, latestStats)
         renderAll()
@@ -3031,7 +3425,41 @@ function createPost(track, { prepend = false } = {}) {
       }
 
       function applyComments(comments) {
-        latestComments = Array.isArray(comments) ? comments.map(normalizeComment).filter(Boolean) : []
+        const normalizedList = Array.isArray(comments)
+          ? comments.map(normalizeComment).filter(Boolean)
+          : []
+        const previousSeen = new Set(commentSeenKeys)
+        normalizedList.forEach(entry => {
+          if (!entry) return
+          const key = entry.id || entry.clientId || `${entry.user || ''}-${entry.createdAt || ''}-${entry.text || ''}`
+          if (key) commentSeenKeys.add(key)
+        })
+        if (commentsInitialized) {
+          normalizedList.forEach(entry => {
+            if (!entry) return
+            const key = entry.id || entry.clientId || `${entry.user || ''}-${entry.createdAt || ''}-${entry.text || ''}`
+            if (key && previousSeen.has(key)) return
+            const actorEmail = (entry.user || '').toLowerCase()
+            if (actorEmail && selfEmailNormalized && actorEmail === selfEmailNormalized) return
+            const authorRaw = entry.displayName || entry.user || 'Someone'
+            const authorName = String(authorRaw).trim() || 'Someone'
+            const preview = entry.text ? `“${truncateText(entry.text, 140)}”` : 'Left a comment'
+            let commentTs = Number(entry.createdAt)
+            if (!Number.isFinite(commentTs)) {
+              const parsedTs = typeof entry.createdAt === 'string' ? Date.parse(entry.createdAt) : NaN
+              commentTs = Number.isFinite(parsedTs) ? parsedTs : Date.now()
+            }
+            recordNotification('comment', `${authorName} commented on “${trackTitleForNotifications}”`, preview, {
+              actor: authorName,
+              trackId: normalized.id,
+              trackTitle: trackTitleForNotifications,
+              timestamp: commentTs,
+              commentId: entry.id || entry.clientId || null
+            })
+          })
+        }
+        commentsInitialized = true
+        latestComments = normalizedList
         remoteCommentsCache.set(normalized.id, latestComments)
         persistComments(normalized.id, latestComments)
         renderAll()
@@ -3107,6 +3535,7 @@ function createPost(track, { prepend = false } = {}) {
       likeBtn.addEventListener('click', async () => {
         if (likeBtn.dataset.loading === '1') return
         likeBtn.dataset.loading = '1'
+        statNotificationSuppress.likes += 1
         applyStats({ ...latestStats, likes: (latestStats.likes || 0) + 1 })
         try {
           const result = await recordTrackMetricRemote(normalized.id, 'likes')
@@ -3120,6 +3549,7 @@ function createPost(track, { prepend = false } = {}) {
       repostBtn.addEventListener('click', async () => {
         if (repostBtn.dataset.loading === '1') return
         repostBtn.dataset.loading = '1'
+        statNotificationSuppress.reposts += 1
         applyStats({ ...latestStats, reposts: (latestStats.reposts || 0) + 1 })
         try {
           const result = await recordTrackMetricRemote(normalized.id, 'reposts')
@@ -3824,6 +4254,13 @@ uploadTrackInput.addEventListener('change', async (e) => {
       saved.caption = saved.caption || (composerTextEl ? composerTextEl.value.trim() : '')
       createPost(saved, { prepend: true })
       scheduleLeaderboardRefresh()
+      const titleForNotification = String(saved.title || metaLocal.title || 'Untitled').trim() || 'Untitled'
+      recordNotification('upload', `Uploaded “${titleForNotification}”`, 'Your track is live on Beatloop.', {
+        trackId: saved.id || metaLocal.id,
+        trackTitle: titleForNotification,
+        timestamp: Date.now(),
+        storage: 'cloud'
+      })
       pendingMeta = null
       pendingCoverKey = null
       return
@@ -3867,6 +4304,13 @@ uploadTrackInput.addEventListener('change', async (e) => {
       const url = URL.createObjectURL(file)
       createPost({ ...metaLocal, url, cover: coverUrl }, { prepend: true })
       scheduleLeaderboardRefresh()
+      const titleForNotification = String(metaLocal.title || 'Untitled').trim() || 'Untitled'
+      recordNotification('upload', `Added “${titleForNotification}”`, 'Saved locally to your library.', {
+        trackId: metaLocal.id,
+        trackTitle: titleForNotification,
+        timestamp: Date.now(),
+        storage: 'local'
+      })
       pendingMeta = metaLocal
     } catch (saveErr) {
       alert('Save failed: ' + (saveErr?.message || saveErr))
@@ -4000,6 +4444,13 @@ uploadTrackInput.addEventListener('change', async (e) => {
               const url = URL.createObjectURL(blob)
               createPost({ ...meta, url, cover: coverUrl, createdAt }, { prepend: true })
               scheduleLeaderboardRefresh()
+              const recordingTitle = String(meta.title || 'Recording').trim() || 'Recording'
+              recordNotification('recording', `Recorded “${recordingTitle}”`, 'Your live recording is ready.', {
+                trackId: meta.id,
+                trackTitle: recordingTitle,
+                timestamp: createdAt,
+                storage: 'recording'
+              })
               pendingMeta = meta
             } catch (err) {
               alert('Recording save failed: ' + err.message)
@@ -4047,6 +4498,9 @@ uploadTrackInput.addEventListener('change', async (e) => {
         }
         return;
       }
+
+      bindNotificationOpeners();
+      renderNotificationsTimeline();
 
       ensureLoggedIn()
       ensureProfileRefs()
