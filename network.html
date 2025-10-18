@@ -4137,9 +4137,53 @@ function createPost(track, { prepend = false } = {}) {
         }
       })
 
+      const MAX_STALL_RECOVERY_ATTEMPTS = 3
+      let stallRecoveryAttempts = 0
+      const resetStallRecoveryAttempts = () => {
+        stallRecoveryAttempts = 0
+      }
+
+      const attemptStallRecovery = () => {
+        if (audio.paused) return
+        if (stallRecoveryAttempts >= MAX_STALL_RECOVERY_ATTEMPTS) return
+        stallRecoveryAttempts += 1
+        const resumePoint = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
+        const onCanPlay = () => {
+          audio.removeEventListener('canplay', onCanPlay)
+          if (audio.paused) return
+          if (resumePoint > 0) {
+            try {
+              const duration = Number.isFinite(audio.duration) ? audio.duration : null
+              const clamped = duration && resumePoint > duration
+                ? Math.max(duration - 0.25, 0)
+                : resumePoint
+              audio.currentTime = clamped
+            } catch {}
+          }
+          const playPromise = audio.play()
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => {})
+          }
+        }
+        audio.addEventListener('canplay', onCanPlay, { once: true })
+        try {
+          audio.load()
+        } catch {
+          audio.removeEventListener('canplay', onCanPlay)
+        }
+      }
+
       ;['stalled', 'abort'].forEach(evt => {
         audio.addEventListener(evt, () => {
-          logPlaybackEvent('warn', evt)
+          const extra = {
+            readyState: audio.readyState,
+            networkState: audio.networkState
+          }
+          if (tryApplyRuntimeFallback(evt, extra)) return
+          logPlaybackEvent('warn', evt, extra)
+          if (evt === 'stalled') {
+            attemptStallRecovery()
+          }
         })
       })
 
@@ -4147,8 +4191,12 @@ function createPost(track, { prepend = false } = {}) {
         logPlaybackEvent('info', 'suspend')
       })
 
+      audio.addEventListener('playing', resetStallRecoveryAttempts)
+      audio.addEventListener('seeked', resetStallRecoveryAttempts)
+
       let playbackReadyLogged = false
       audio.addEventListener('loadeddata', () => {
+        resetStallRecoveryAttempts()
         if (playbackReadyLogged) return
         playbackReadyLogged = true
         console.info('Track playback ready', {
