@@ -56,8 +56,8 @@
     const candidates = [];
     try { candidates.push(localStorage.getItem('beatloop_api')); } catch {}
     try { candidates.push(document.querySelector('meta[name="beatloop-api-base"]')?.content); } catch {}
-    candidates.push('https://api.beatloop.co');
     candidates.push('https://beatloop-api.onrender.com');
+    candidates.push('https://api.beatloop.co');
     candidates.push('http://localhost:10000');
 
     for (const candidate of candidates) {

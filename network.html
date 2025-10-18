@@ -1935,7 +1935,7 @@
           // site is served from beatloop.co we should keep using the deployed API
           // backend instead of the marketing site origin to avoid 404s on /api/*.
           if (/\.beatloop\.co$/i.test(host)) {
-            return 'https://api.beatloop.co';
+            return 'https://beatloop-api.onrender.com';
           }
 
           return origin.replace(/\/$/, '');
@@ -1994,8 +1994,8 @@
       } catch {}
     };
     registerLocationOrigin();
-    registerApiBase('https://api.beatloop.co');
     registerApiBase('https://beatloop-api.onrender.com');
+    registerApiBase('https://api.beatloop.co');
     registerApiBase('http://localhost:10000');
 
     let activeApiBase = registerApiBase(window.API_BASE || API_BASE_DEFAULT) || 'http://localhost:10000';
