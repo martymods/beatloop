@@ -1454,308 +1454,6 @@
     #profileOverlay .profile-dialog{position:relative;width:100%;max-width:min(920px,94vw);max-height:calc(100vh - clamp(2rem,6vh,4rem));margin:clamp(1rem,4vh,2.5rem) auto;border-radius:1.25rem;border:1px solid rgba(255,255,255,.08);background:linear-gradient(145deg,rgba(24,24,36,.96),rgba(12,12,20,.92));box-shadow:0 25px 60px rgba(0,0,0,.45);padding:clamp(1.5rem,3vw,2rem);overflow-y:auto;display:flex;flex-direction:column}
     #profileOverlay .profile-panel{background:rgba(17,17,26,.78);border-radius:1rem;border:1px solid rgba(255,255,255,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);padding:clamp(1.25rem,2.5vw,1.75rem);color:#fff;width:100%}
     @media (min-width:768px){#profileOverlay{align-items:center}}
-</style>
-  <style>
-    #beatloopStudio .seq-ui {
-      background: #272927;
-      color: #d9d9d9;
-      font-family: "IBM Plex Mono", "Fira Mono", monospace;
-      border-radius: 0.75rem;
-      padding: 1rem;
-      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
-    }
-
-    #beatloopStudio .seq-ui * {
-      user-select: none;
-    }
-
-    #beatloopStudio .seq-ui [data-display-only="true"] {
-      pointer-events: none;
-      cursor: default;
-    }
-
-    #beatloopStudio .seq-ui section {
-      margin: 1rem 0;
-      padding: 1rem;
-      background: rgba(0, 0, 0, 0.18);
-      border-radius: 0.6rem;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    }
-
-    #beatloopStudio .seq-ui h3 {
-      margin: 0 0 0.75rem;
-      font-size: 0.85rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: #b8b8b8;
-    }
-
-    #beatloopStudio .seq-ui button {
-      appearance: none;
-      border: 2px solid #333;
-      background: #222;
-      background-image: radial-gradient(transparent, rgba(0, 0, 0, 0.6));
-      color: #888;
-      transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
-      cursor: pointer;
-    }
-
-    #beatloopStudio .seq-ui button:focus-visible {
-      outline: none;
-      border-color: #99ccaa;
-      animation: seqUiFocusPulse 0.5s ease infinite alternate;
-    }
-
-    @keyframes seqUiFocusPulse {
-      to {
-        border-color: #336655;
-      }
-    }
-
-    #beatloopStudio .seq-ui .control {
-      margin: 3px;
-      display: inline-block;
-      vertical-align: middle;
-    }
-
-    #beatloopStudio .seq-ui .pad {
-      width: 40px;
-      height: 40px;
-      border-radius: 5px;
-      box-shadow: 0 5px 10px rgba(0, 0, 0, 0.4);
-    }
-
-    #beatloopStudio .seq-ui .pad:hover {
-      background-color: #553300;
-      border-color: #ff9900;
-      color: #fff;
-    }
-
-    #beatloopStudio .seq-ui .pad.active {
-      box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
-      color: #fff;
-      transform: translateY(2px);
-    }
-
-    #beatloopStudio .seq-ui .meter {
-      position: relative;
-      width: 40px;
-      height: 8px;
-      border-radius: 4px;
-      background: #111;
-      overflow: hidden;
-      box-shadow: 0 0 2px rgba(0, 0, 0, 0.4);
-    }
-
-    #beatloopStudio .seq-ui .meter.vertical {
-      width: 6px;
-      height: 40px;
-      transform: rotate(-90deg);
-      transform-origin: center;
-    }
-
-    #beatloopStudio .seq-ui .meter span {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      transform: scaleX(0);
-      transform-origin: 0 50%;
-      background: #22ff55;
-      box-shadow: 0 0 10px #22ff55;
-      opacity: 0.15;
-      transition: transform 0.12s linear, opacity 0.2s ease;
-    }
-
-    #beatloopStudio .seq-ui .meter span[data-peak] {
-      background: #ff2255;
-      box-shadow: 0 0 10px rgba(255, 34, 85, 0.85);
-    }
-
-    #beatloopStudio .seq-ui .meter span.anim {
-      animation: seqUiEqualize 1s linear infinite;
-    }
-
-    @keyframes seqUiEqualize {
-      0% {
-        transform: scaleX(0.2);
-      }
-      25% {
-        transform: scaleX(0.7);
-      }
-      35% {
-        transform: scaleX(0);
-      }
-      40% {
-        transform: scaleX(0.6);
-      }
-      50% {
-        transform: scaleX(0.1);
-      }
-      55% {
-        transform: scaleX(0.9);
-      }
-      60% {
-        transform: scaleX(0.3);
-      }
-      75% {
-        transform: scaleX(0.8);
-      }
-      80% {
-        transform: scaleX(0.4);
-      }
-      90% {
-        transform: scaleX(0.9);
-      }
-      100% {
-        transform: scaleX(0.2);
-      }
-    }
-
-    #beatloopStudio .seq-ui .metronome {
-      width: 48px;
-      height: 18px;
-      font-size: 0;
-      border-radius: 4px;
-      background: #111;
-      box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.4);
-      overflow: hidden;
-    }
-
-    #beatloopStudio .seq-ui .metronome span {
-      display: inline-block;
-      width: 25%;
-      height: 100%;
-      background: #1c1c1c;
-      transition: background 0.18s ease, box-shadow 0.18s ease;
-    }
-
-    #beatloopStudio .seq-ui .metronome span.active {
-      background: #2255ff;
-      box-shadow: 0 0 10px rgba(34, 85, 255, 0.65);
-    }
-
-    #beatloopStudio .seq-ui .mute {
-      width: 16px;
-      height: 16px;
-      background: #111;
-      border-radius: 50%;
-      border: 1px solid #222;
-      box-shadow: inset 0 0 10px #111, 0 0 2px rgba(0, 0, 0, 0.4);
-      transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    #beatloopStudio .seq-ui .mute:hover {
-      border-color: #ff9900;
-    }
-
-    #beatloopStudio .seq-ui .mute.active {
-      background: radial-gradient(#22ff55, transparent 60%);
-      box-shadow: inset 0 0 10px #111, 0 0 4px rgba(34, 255, 85, 0.6);
-    }
-
-    #beatloopStudio .seq-ui .seq-row {
-      font-size: 0;
-      white-space: nowrap;
-    }
-
-    #beatloopStudio .seq-ui .seq-row.inline {
-      display: inline-block;
-      vertical-align: middle;
-      margin-left: 1rem;
-    }
-
-    #beatloopStudio .seq-ui .seq-row span {
-      display: inline-block;
-      margin: 1px;
-      width: 15px;
-      height: 28px;
-      border-radius: 5px;
-      background: #181818 linear-gradient(#282828, transparent);
-      border: 2px solid #222;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
-      transition: border-color 0.2s ease, transform 0.2s ease;
-    }
-
-    #beatloopStudio .seq-ui .seq-row span.seq-step-measure {
-      background: #222 linear-gradient(#333, transparent);
-    }
-
-    #beatloopStudio .seq-ui .seq-row span.seq-note {
-      background: #444 linear-gradient(#77cc88, transparent);
-      border-color: #566556;
-    }
-
-    #beatloopStudio .seq-ui .seq-row span.seq-playhead {
-      border-color: #2255ff;
-      box-shadow: 0 0 20px rgba(34, 85, 255, 0.6);
-      transform: translateY(2px);
-    }
-
-    #beatloopStudio .seq-ui .seq-row span:hover {
-      border-color: #ff9900;
-    }
-
-    #beatloopStudio .seq-ui .channel {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 10px;
-      border: 1px solid #111;
-      border-radius: 0.6rem;
-      background: linear-gradient(#222, rgba(0, 0, 0, 0.4));
-    }
-
-    #beatloopStudio .seq-ui .sep {
-      display: inline-block;
-      width: 1px;
-      height: 48px;
-      margin: 0 1.25rem;
-      background: rgba(255, 255, 255, 0.08);
-    }
-
-    #beatloopStudio .seq-ui .module.transport {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    #beatloopStudio .seq-ui .transport button {
-      width: 40px;
-      height: 36px;
-      border-radius: 5px;
-      box-shadow: 0 5px 10px rgba(0, 0, 0, 0.4);
-    }
-
-    #beatloopStudio .seq-ui .transport button:hover {
-      background-color: #553300;
-      border-color: #ff9900;
-      color: #fff;
-    }
-
-    #beatloopStudio .seq-ui .transport button.active {
-      box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
-      color: #fff;
-      transform: translateY(2px);
-    }
-
-    #beatloopStudio .seq-ui .transport button.transport-play {
-      color: #22ff55;
-    }
-
-    #beatloopStudio .seq-ui .transport-tempo {
-      width: 60px;
-      background: #222;
-      border: 1px solid #111;
-      border-radius: 4px;
-      padding: 4px 6px;
-      color: #22ff55;
-      text-align: center;
-      box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.4);
-      text-shadow: 0 0 10px rgba(34, 255, 85, 0.6);
-    }
   </style>
 </head>
 <body class="bg-[#0c0c12] text-white min-h-screen flex flex-col">
@@ -1988,149 +1686,6 @@
       </div>
 
       <div id="blIntegrationPanels" class="md:col-span-2 grid gap-3 lg:grid-cols-2">
-        <section id="studioVisualizerPanel" class="rounded-xl border border-white/10 bg-[#13141a] p-4 lg:col-span-2">
-          <header class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h4 class="text-base font-semibold text-white">Channel Visualizer &amp; Transport Mirror</h4>
-              <p class="text-xs text-white/60">Live meters, a mini step grid, and beat-ready styling drawn from the upgraded sampler UI.</p>
-            </div>
-            <span class="text-[0.65rem] uppercase tracking-wide text-white/40 hidden sm:inline">Follows the Beatloop master bus in real time</span>
-          </header>
-          <div class="mt-4 seq-ui" id="blSeqUi">
-            <div id="blSeqUiWrap">
-              <section id="seqChannels">
-                <h3>Channels</h3>
-                <div class="channel" data-studio-channel="0">
-                  <button class="control mute" type="button" data-display-only="true" aria-hidden="true"></button>
-                  <button class="control pad" type="button" data-display-only="true" aria-hidden="true">S</button>
-                  <div class="control meter vertical">
-                    <span data-peak="channel-0"></span>
-                    <span data-meter="channel-0"></span>
-                  </div>
-                  <div class="seq-row inline" data-studio-row="0" aria-hidden="true">
-                    <span class="seq-step-measure" data-studio-step="0"></span>
-                    <span data-studio-step="1"></span>
-                    <span data-studio-step="2"></span>
-                    <span data-studio-step="3"></span>
-                    <span class="seq-step-measure" data-studio-step="4"></span>
-                    <span data-studio-step="5"></span>
-                    <span data-studio-step="6"></span>
-                    <span data-studio-step="7"></span>
-                    <span class="seq-step-measure" data-studio-step="8"></span>
-                    <span data-studio-step="9"></span>
-                    <span data-studio-step="10"></span>
-                    <span data-studio-step="11"></span>
-                    <span class="seq-step-measure" data-studio-step="12"></span>
-                    <span data-studio-step="13"></span>
-                    <span data-studio-step="14"></span>
-                    <span data-studio-step="15"></span>
-                  </div>
-                </div>
-
-                <div class="sep" aria-hidden="true"></div>
-
-                <div class="channel" data-studio-channel="1">
-                  <button class="control mute active" type="button" data-display-only="true" aria-hidden="true"></button>
-                  <button class="control pad" type="button" data-display-only="true" aria-hidden="true">K</button>
-                  <div class="control meter vertical">
-                    <span data-peak="channel-1"></span>
-                    <span data-meter="channel-1"></span>
-                  </div>
-                  <div class="seq-row inline" data-studio-row="1" aria-hidden="true">
-                    <span class="seq-step-measure" data-studio-step="0"></span>
-                    <span data-studio-step="1"></span>
-                    <span data-studio-step="2"></span>
-                    <span data-studio-step="3"></span>
-                    <span class="seq-step-measure" data-studio-step="4"></span>
-                    <span data-studio-step="5"></span>
-                    <span data-studio-step="6"></span>
-                    <span data-studio-step="7"></span>
-                    <span class="seq-step-measure" data-studio-step="8"></span>
-                    <span data-studio-step="9"></span>
-                    <span data-studio-step="10"></span>
-                    <span data-studio-step="11"></span>
-                    <span class="seq-step-measure" data-studio-step="12"></span>
-                    <span data-studio-step="13"></span>
-                    <span data-studio-step="14"></span>
-                    <span data-studio-step="15"></span>
-                  </div>
-                </div>
-              </section>
-
-              <section id="seqPads">
-                <h3>Pads</h3>
-                <button class="control pad" type="button" data-display-only="true">K</button>
-                <button class="control pad active" type="button" data-display-only="true">S</button>
-                <button class="control pad" type="button" data-display-only="true">Ho</button>
-                <button class="control pad" type="button" data-display-only="true">Hc</button>
-                <button class="control pad" type="button" data-display-only="true">Cr</button>
-                <button class="control pad" type="button" data-display-only="true">Cc</button>
-                <button class="control pad" type="button" data-display-only="true">Th</button>
-                <button class="control pad" type="button" data-display-only="true">Tm</button>
-                <button class="control pad" type="button" data-display-only="true">Tl</button>
-              </section>
-
-              <section id="seqMeters">
-                <h3>Metering</h3>
-                <div class="control meter">
-                  <span data-meter="mix"></span>
-                </div>
-
-                <div class="control meter">
-                  <span data-peak="mix"></span>
-                </div>
-
-                <div class="control metronome">
-                  <span data-metronome-step="0"></span>
-                  <span data-metronome-step="1"></span>
-                  <span data-metronome-step="2"></span>
-                  <span data-metronome-step="3"></span>
-                </div>
-              </section>
-
-              <section id="seqToggles">
-                <h3>Toggles</h3>
-                <button class="control mute" type="button" data-display-only="true"></button>
-                <button class="control mute active" type="button" data-display-only="true"></button>
-              </section>
-
-              <section id="seqMiniGrid">
-                <h3>Sequencing</h3>
-                <div class="seq-row" data-studio-row="0" aria-hidden="true">
-                  <span class="seq-step-measure" data-studio-step="0"></span>
-                  <span data-studio-step="1"></span>
-                  <span data-studio-step="2"></span>
-                  <span data-studio-step="3"></span>
-                  <span class="seq-step-measure" data-studio-step="4"></span>
-                  <span data-studio-step="5"></span>
-                  <span data-studio-step="6"></span>
-                  <span data-studio-step="7"></span>
-                </div>
-
-                <div class="seq-row" data-studio-row="1" aria-hidden="true">
-                  <span class="seq-step-measure seq-note" data-studio-step="0"></span>
-                  <span data-studio-step="1"></span>
-                  <span data-studio-step="2"></span>
-                  <span data-studio-step="3"></span>
-                  <span class="seq-step-measure" data-studio-step="4"></span>
-                  <span data-studio-step="5"></span>
-                  <span data-studio-step="6"></span>
-                  <span data-studio-step="7"></span>
-                </div>
-              </section>
-
-              <section id="seqTransport">
-                <h3>Transport</h3>
-                <div class="module transport">
-                  <button class="transport-play" type="button" title="Play" data-transport="play" data-display-only="true">&#9658;</button>
-                  <button class="transport-stop" type="button" title="Stop" data-transport="stop" data-display-only="true">&#9632;</button>
-                  <input id="studioTempoDisplay" type="text" size="3" min="30" max="250" value="0" class="transport-tempo" readonly />
-                </div>
-              </section>
-            </div>
-          </div>
-        </section>
-
         <section id="butterFeaturePanel" class="rounded-xl border border-white/10 bg-white/5 p-4">
           <div class="text-sm text-white/60">Loading Beatloop routing toolkit…</div>
         </section>
@@ -6269,26 +5824,11 @@ const AI_MELODY_SCALES = {
   const kitDetailsEl = document.getElementById('blKitDetails');
   const butterPanelEl = document.getElementById('butterFeaturePanel');
   const aiPanelEl = document.getElementById('aiAssistantPanel');
-  const studioVisualizerPanel = document.getElementById('studioVisualizerPanel');
-  const studioTempoDisplay = document.getElementById('studioTempoDisplay');
-  const studioPlayIndicator = studioVisualizerPanel ? studioVisualizerPanel.querySelector('[data-transport="play"]') : null;
-  const studioStopIndicator = studioVisualizerPanel ? studioVisualizerPanel.querySelector('[data-transport="stop"]') : null;
   let aiRowSelect = null;
   let aiDensitySlider = null;
   let aiDensityValue = null;
   let aiStatusEl = null;
   let aiMidiContextEl = null;
-  let studioMetronomeEls = [];
-  let studioMeterFillById = new Map();
-  let studioMeterPeakById = new Map();
-  let studioMeterPeakValues = new Map();
-  let studioStepLookup = new Map();
-  let studioMiniRowSteps = new Map();
-  let studioPrevStep = -1;
-  let studioMasterMeter = null;
-  let studioMeterRaf = null;
-  let studioChannelMeters = new Map();
-  const STUDIO_CHANNEL_IDS = new Map([[0, 'channel-0'], [1, 'channel-1']]);
   // --- Piano Roll UI refs (lazy) ---
   let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl, prKeysEl;
   let prPlayline = null;
@@ -6715,212 +6255,6 @@ const AI_MELODY_SCALES = {
     butterRouteListEl = butterPanelEl.querySelector('#butterRouteList');
     butterPluginEl = butterPanelEl.querySelector('#butterPluginControls');
     refreshButterToolkit();
-  }
-
-  function initStudioVisualizerPanel(){
-    if (!studioVisualizerPanel) return;
-    studioMetronomeEls = Array.from(studioVisualizerPanel.querySelectorAll('[data-metronome-step]'));
-    studioMeterFillById = new Map();
-    studioMeterPeakById = new Map();
-    studioMeterPeakValues = new Map();
-    studioStepLookup = new Map();
-    studioMiniRowSteps = new Map();
-    studioPrevStep = -1;
-
-    studioVisualizerPanel.querySelectorAll('[data-meter]').forEach(el => {
-      const id = el.dataset.meter;
-      if (!id) return;
-      el.style.transform = 'scaleX(0)';
-      el.style.opacity = 0.15;
-      const list = studioMeterFillById.get(id) || [];
-      list.push(el);
-      studioMeterFillById.set(id, list);
-    });
-
-    studioVisualizerPanel.querySelectorAll('[data-peak]').forEach(el => {
-      const id = el.dataset.peak;
-      if (!id) return;
-      el.style.transform = 'scaleX(0)';
-      el.style.opacity = 0.2;
-      const list = studioMeterPeakById.get(id) || [];
-      list.push(el);
-      studioMeterPeakById.set(id, list);
-    });
-
-    studioVisualizerPanel.querySelectorAll('[data-studio-row]').forEach(rowEl => {
-      const idx = Number.parseInt(rowEl.dataset.studioRow, 10);
-      if (!Number.isFinite(idx)) return;
-      const steps = [];
-      rowEl.querySelectorAll('[data-studio-step]').forEach(stepEl => {
-        const stepIdx = Number.parseInt(stepEl.dataset.studioStep, 10);
-        if (!Number.isFinite(stepIdx)) return;
-        stepEl.classList.remove('seq-playhead');
-        stepEl.classList.remove('seq-note');
-        steps.push(stepEl);
-        let lookup = studioStepLookup.get(stepIdx);
-        if (!lookup) {
-          lookup = [];
-          studioStepLookup.set(stepIdx, lookup);
-        }
-        lookup.push(stepEl);
-      });
-      studioMiniRowSteps.set(idx, steps);
-    });
-
-    if (Array.isArray(studioMetronomeEls)) {
-      studioMetronomeEls.forEach(el => el.classList.remove('active'));
-    }
-
-    const allIds = new Set([
-      ...studioMeterFillById.keys(),
-      ...studioMeterPeakById.keys()
-    ]);
-    allIds.forEach(id => applyMeterLevel(id, 0));
-    updateStudioTransportState(false);
-  }
-
-  function updateStudioTempoDisplay(bpm){
-    if (!studioTempoDisplay) return;
-    const num = Number(bpm);
-    const display = Number.isFinite(num) ? Math.round(num) : 0;
-    studioTempoDisplay.value = `${display} BPM`;
-  }
-
-  function normalizeMeterValue(raw){
-    const num = Number(raw);
-    if (!Number.isFinite(num)) return 0;
-    const clamped = Math.max(0, Math.min(1, num));
-    return Math.pow(clamped, 0.75);
-  }
-
-  function applyMeterLevel(id, value){
-    if (!id) return;
-    const level = Math.max(0, Math.min(1, Number(value) || 0));
-    const fills = studioMeterFillById.get(id);
-    if (fills) {
-      fills.forEach(el => {
-        el.style.transform = `scaleX(${level})`;
-        el.style.opacity = level > 0.05 ? 1 : 0.18;
-      });
-    }
-    const prev = studioMeterPeakValues.get(id) ?? 0;
-    const nextPeak = Math.max(level, prev * 0.92);
-    studioMeterPeakValues.set(id, nextPeak);
-    const peaks = studioMeterPeakById.get(id);
-    if (peaks) {
-      peaks.forEach(el => {
-        el.style.transform = `scaleX(${nextPeak})`;
-        el.style.opacity = nextPeak > 0.05 ? 0.8 : 0.25;
-      });
-    }
-  }
-
-  function ensureStudioMasterMeter(){
-    if (studioMasterMeter || typeof Tone === 'undefined') return studioMasterMeter;
-    try {
-      ensureMixBuses();
-      if (!masterVolume) masterVolume = new Tone.Volume(0).toDestination();
-      studioMasterMeter = new Tone.Meter({ normalRange: true, smoothing: 0.85 });
-      masterVolume.connect(studioMasterMeter);
-    } catch (err) {
-      console.warn('Beatloop Studio master meter failed', err);
-      studioMasterMeter = null;
-    }
-    return studioMasterMeter;
-  }
-
-  function resetStudioChannelMeters(){
-    studioChannelMeters.forEach(entry => {
-      try { entry.meter.dispose?.(); } catch {}
-    });
-    studioChannelMeters = new Map();
-  }
-
-  function createStudioChannelMeter(rowIdx){
-    if (!STUDIO_CHANNEL_IDS.has(rowIdx) || typeof Tone === 'undefined') return null;
-    const id = STUDIO_CHANNEL_IDS.get(rowIdx);
-    const meter = new Tone.Meter({ normalRange: true, smoothing: 0.75 });
-    studioChannelMeters.set(rowIdx, { id, meter });
-    return meter;
-  }
-
-  function maybeStartStudioMeterLoop(){
-    if (!studioVisualizerPanel) return;
-    if (!ensureStudioMasterMeter()) return;
-    if (studioMeterRaf) return;
-
-    const step = () => {
-      if (!studioMasterMeter) {
-        studioMeterRaf = null;
-        return;
-      }
-      const masterLevel = normalizeMeterValue(studioMasterMeter.getValue?.());
-      applyMeterLevel('mix', masterLevel);
-
-      STUDIO_CHANNEL_IDS.forEach((id, rowIdx) => {
-        const entry = studioChannelMeters.get(rowIdx);
-        if (entry?.meter) {
-          const value = normalizeMeterValue(entry.meter.getValue?.());
-          applyMeterLevel(id, value);
-        } else {
-          applyMeterLevel(id, 0);
-        }
-      });
-
-      studioMeterRaf = requestAnimationFrame(step);
-    };
-
-    studioMeterRaf = requestAnimationFrame(step);
-  }
-
-  function updateStudioPlayhead(step){
-    if (!studioStepLookup || !studioStepLookup.size) return;
-    const totalSteps = Math.max(1, getStepCount());
-    const normalized = ((Number(step) % totalSteps) + totalSteps) % totalSteps;
-    if (studioPrevStep >= 0) {
-      const prevEls = studioStepLookup.get(studioPrevStep);
-      if (prevEls) prevEls.forEach(el => el.classList.remove('seq-playhead'));
-    }
-    const currentEls = studioStepLookup.get(normalized);
-    if (currentEls) currentEls.forEach(el => el.classList.add('seq-playhead'));
-    studioPrevStep = normalized;
-  }
-
-  function updateStudioMetronome(step){
-    if (!Array.isArray(studioMetronomeEls) || !studioMetronomeEls.length) return;
-    const totalSteps = Math.max(1, getStepCount());
-    const beats = studioMetronomeEls.length;
-    const stepsPerBeat = Math.max(1, Math.round(totalSteps / beats));
-    const normalized = ((Number(step) % totalSteps) + totalSteps) % totalSteps;
-    const beatIndex = Math.floor(normalized / stepsPerBeat) % beats;
-    studioMetronomeEls.forEach((el, idx) => {
-      el.classList.toggle('active', idx === beatIndex);
-    });
-  }
-
-  function updateStudioMiniRows(){
-    if (!studioMiniRowSteps || !studioMiniRowSteps.size) return;
-    const pat = patterns[currentBank] || [];
-    studioMiniRowSteps.forEach((stepEls, rowIdx) => {
-      const rowPattern = pat[rowIdx] || [];
-      stepEls.forEach(stepEl => {
-        const idx = Number.parseInt(stepEl.dataset.studioStep, 10);
-        if (!Number.isFinite(idx)) return;
-        const has = !!rowPattern[idx];
-        stepEl.classList.toggle('seq-note', has);
-      });
-    });
-  }
-
-  function updateStudioTransportState(playing){
-    const isPlaying = !!playing;
-    if (studioPlayIndicator) {
-      studioPlayIndicator.classList.toggle('active', isPlaying);
-      studioPlayIndicator.setAttribute('aria-pressed', isPlaying ? 'true' : 'false');
-    }
-    if (studioStopIndicator) {
-      studioStopIndicator.classList.toggle('active', !isPlaying);
-    }
   }
 
   function clampEqValue(val){
@@ -7425,9 +6759,6 @@ const AI_MELODY_SCALES = {
   function renderIntegrationPanels(){
     renderButterDeck();
     renderAIAssistant();
-    initStudioVisualizerPanel();
-    updateStudioMiniRows();
-    updateStudioTempoDisplay(bpmRange ? bpmRange.value : 0);
   }
 
   function bindPRGridHandlers(){
@@ -7778,8 +7109,6 @@ let lastBar = -1;             // arranger playhead column
     if (lastStep >= 0) gridWrap.querySelectorAll(`[data-c="${lastStep}"]`).forEach(el=>el.classList.remove('playhead'));
     gridWrap.querySelectorAll(`[data-c="${step}"]`).forEach(el=>el.classList.add('playhead'));
     lastStep = step;
-    updateStudioPlayhead(step);
-    updateStudioMetronome(step);
   }
   function paintArrangerPlayhead(i){
   if (!arrGrid) return;
@@ -7896,7 +7225,6 @@ let lastBar = -1;             // arranger playhead column
 
             p[rr][cc] = !p[rr][cc];
             e.currentTarget.classList.toggle('on', p[rr][cc]);
-            updateStudioMiniRows();
           });
 
           table.appendChild(cell);
@@ -7907,7 +7235,6 @@ let lastBar = -1;             // arranger playhead column
     gridWrap.appendChild(table);
     refreshAIPanelRows();
     refreshButterToolkit();
-    updateStudioMiniRows();
   }
 
   // ---------- Audio graph ----------
@@ -7923,7 +7250,6 @@ let lastBar = -1;             // arranger playhead column
     rowGains.forEach(g=>g.dispose&&g.dispose());
     rowDistortions.forEach(d=>d.dispose&&d.dispose());
     kitSamplers=[]; loopPlayers=[]; volumes=[]; panners=[]; pitches=[]; rowGains=[]; rowDistortions=[];
-    resetStudioChannelMeters();
 
     const kit = KITS[currentKit];
     if (!kit){
@@ -7953,10 +7279,6 @@ let lastBar = -1;             // arranger playhead column
         const dest = getRouteNode(routeId) || Tone.Destination;
         vol.connect(dest);
         const pan=new Tone.Panner(0).connect(vol);
-        const channelMeter = createStudioChannelMeter(i);
-        if (channelMeter) {
-          try { pan.connect(channelMeter); } catch {}
-        }
         const state = ensurePluginState(i);
         const dist=new Tone.Distortion(state.drive);
         dist.wet.value = state.mix;
@@ -7977,10 +7299,6 @@ let lastBar = -1;             // arranger playhead column
         const dest = getRouteNode(routeId) || Tone.Destination;
         vol.connect(dest);
         const pan=new Tone.Panner(0).connect(vol);
-        const channelMeter = createStudioChannelMeter(row);
-        if (channelMeter) {
-          try { pan.connect(channelMeter); } catch {}
-        }
         const state = ensurePluginState(row);
         const dist=new Tone.Distortion(state.drive);
         dist.wet.value = state.mix;
@@ -7998,7 +7316,6 @@ let lastBar = -1;             // arranger playhead column
 
     drawGrid(labels);
     paintPlayhead(0);
-    maybeStartStudioMeterLoop();
   }
 
   // ---------- Sample pickers (Loops & Instruments) ----------
@@ -8571,7 +7888,6 @@ currentStep = (currentStep + 1) % STEPS;
     playPauseIcon.classList.toggle('play', !isPlaying);
     playPauseBtn.setAttribute('aria-pressed', isPlaying ? 'true' : 'false');
     playPauseBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
-    updateStudioTransportState(isPlaying);
   }
 
   window.setPlayPauseState = setPlayPauseState;
@@ -8580,7 +7896,6 @@ currentStep = (currentStep + 1) % STEPS;
   bpmRange.addEventListener('input', () => {
     bpmVal.textContent = bpmRange.value;
     Tone.Transport.bpm.value = +bpmRange.value; // live
-    updateStudioTempoDisplay(bpmRange.value);
   });
 
   patternSel?.addEventListener('change', ()=>{
