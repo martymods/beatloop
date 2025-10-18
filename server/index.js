@@ -330,78 +330,34 @@ const FRONTENDS = new Set(
     .filter(Boolean)
 );
 
-const LOCALHOST_CORS_ORIGIN_RE = /^https?:\/\/(?:localhost|127(?:\.\d+){3})(?::\d+)?$/i;
-const CORS_ALLOWED_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
-const CORS_ALLOWED_HEADERS = 'Content-Type, Authorization, X-Requested-With, Accept';
-
-function isAllowedCorsOrigin(origin) {
-  if (!origin || typeof origin !== 'string') return false;
-  if (LOCALHOST_CORS_ORIGIN_RE.test(origin)) return true;
-  try {
-    const url = new URL(origin);
-    const hostname = url.hostname?.toLowerCase?.() || '';
-    const normalizedOrigin = `${url.protocol}//${hostname}${url.port ? `:${url.port}` : ''}`;
-
-    return (
-      FRONTENDS.has(normalizedOrigin) ||
-      /\.onrender\.com$/.test(hostname) ||
-      hostname === 'beatloop.co' ||
-      hostname === 'www.beatloop.co' ||
-      hostname.endsWith('.beatloop.co')
-    );
-  } catch {
-    return false;
-  }
-}
-
-function applyCorsHeaders(res, origin) {
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', CORS_ALLOWED_METHODS);
-  res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
-  if (typeof res.append === 'function') {
-    res.append('Vary', 'Origin');
-  } else {
-    const existing = res.getHeader('Vary');
-    if (!existing) {
-      res.setHeader('Vary', 'Origin');
-    } else if (Array.isArray(existing)) {
-      if (!existing.includes('Origin')) {
-        res.setHeader('Vary', [...existing, 'Origin']);
-      }
-    } else if (typeof existing === 'string' && !existing.split(/,\s*/).includes('Origin')) {
-      res.setHeader('Vary', `${existing}, Origin`);
-    }
-  }
-}
-
 const corsOptions = {
   origin(origin, cb) {
     if (!origin) return cb(null, true); // server-to-server or same-origin
-    const allowed = isAllowedCorsOrigin(origin);
-    return cb(allowed ? null : new Error(`CORS blocked: ${origin}`), allowed);
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname?.toLowerCase?.() || '';
+      const normalizedOrigin = `${url.protocol}//${hostname}${url.port ? `:${url.port}` : ''}`;
+
+      const allowed =
+        FRONTENDS.has(normalizedOrigin) ||
+        /\.onrender\.com$/.test(hostname) ||
+        hostname === 'beatloop.co' ||
+        hostname === 'www.beatloop.co' ||
+        hostname.endsWith('.beatloop.co');
+
+      return cb(allowed ? null : new Error(`CORS blocked: ${origin}`), allowed);
+    } catch {
+      return cb(new Error('CORS bad origin'), false);
+    }
   },
-  methods: CORS_ALLOWED_METHODS.split(','),
-  allowedHeaders: CORS_ALLOWED_HEADERS.split(',').map(s => s.trim()),
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
   credentials: true,
   optionsSuccessStatus: 204
 };
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const allowed = origin && isAllowedCorsOrigin(origin);
-  if (allowed) {
-    applyCorsHeaders(res, origin);
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(204);
-    }
-  } else if (origin && req.method === 'OPTIONS') {
-    return res.status(403).send('CORS blocked');
-  }
-  next();
-});
-
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json({ limit: '5mb' }));
 const projectRoot = process.cwd();
