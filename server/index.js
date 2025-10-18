@@ -8,12 +8,19 @@ import morgan from 'morgan';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
-import { parseFile } from 'music-metadata';
+import { parseFile, parseBuffer } from 'music-metadata';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { lookup as mimeLookup } from 'mime-types';
 import dns from 'dns/promises';
+import {
+  durablePublicUrlForKey,
+  durableStorageEnabled,
+  getUploadsRoot,
+  writeBufferToUploads,
+  deleteUploadKey
+} from './storage/uploads.js';
 
 /* ============================ ENV ============================ */
 const {
@@ -286,11 +293,11 @@ app.options('*', cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json({ limit: '5mb' }));
 const projectRoot = process.cwd();
-const uploadsRoot = path.join(projectRoot, 'uploads');
-fs.mkdirSync(uploadsRoot, { recursive: true });
+const uploadsRoot = getUploadsRoot();
 const trackAudioDir = path.join(uploadsRoot, 'tracks');
 const trackCoverDir = path.join(uploadsRoot, 'covers');
 const messageAttachmentDir = path.join(uploadsRoot, 'messages');
+const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages']);
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
 fs.mkdirSync(messageAttachmentDir, { recursive: true });
@@ -500,9 +507,37 @@ function effectivePublicBase(req) {
   return `http://localhost:${PORT}`;
 }
 
-function publicUploadUrl(req, folder, filename) {
+function normalizeUploadKey(folder, name) {
+  if (!folder && !name) return '';
+  if (folder && typeof name === 'string' && name) {
+    const joined = `${folder}/${name}`.replace(/^\/+/, '');
+    return joined.replace(/^uploads\//, '');
+  }
+  if (typeof folder === 'string' && !name) {
+    return folder.replace(/^\/+/, '').replace(/^uploads\//, '');
+  }
+  return '';
+}
+
+function publicUploadUrl(req, folderOrKey, maybeFilename) {
+  if (/^https?:\/\//i.test(folderOrKey || '')) {
+    return folderOrKey;
+  }
+  if (/^https?:\/\//i.test(maybeFilename || '')) {
+    return maybeFilename;
+  }
+
+  const key = normalizeUploadKey(folderOrKey, maybeFilename);
+  if (!key) return '';
+
+  const prefix = key.split('/')[0];
+  if (maybeFilename === undefined && durableStorageEnabled() && DURABLE_STORAGE_PREFIXES.has(prefix)) {
+    const durableUrl = durablePublicUrlForKey(key);
+    if (durableUrl) return durableUrl;
+  }
+
   const base = effectivePublicBase(req);
-  return `${base}/uploads/${folder}/${filename}`;
+  return `${base}/uploads/${key}`;
 }
 
 const STATIC_ASSET_MOUNTS = [
@@ -620,8 +655,11 @@ function attachmentTypeFor(mimeType) {
 function presentMessageAttachment(req, attachment) {
   if (!attachment || !attachment.fileName) return null;
   const mimeType = attachment.mimeType || '';
+  const raw = attachment.fileName;
+  const hasPrefix = typeof raw === 'string' && raw.includes('/');
+  const key = hasPrefix ? normalizeUploadKey(raw) : '';
   return {
-    url: publicUploadUrl(req, 'messages', attachment.fileName),
+    url: hasPrefix ? (key ? publicUploadUrl(req, key) : '') : publicUploadUrl(req, 'messages', raw),
     mimeType,
     type: attachment.type || attachmentTypeFor(mimeType),
     originalName: attachment.originalName || '',
@@ -1173,20 +1211,31 @@ function messageAttachmentExt(file) {
   return '.bin';
 }
 
-const trackStorage = multer.diskStorage({
-  destination: (_req, file, cb) => {
-    if (file.fieldname === 'cover') return cb(null, trackCoverDir);
-    cb(null, trackAudioDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = file.fieldname === 'cover' ? avatarFileExt(file) : audioFileExt(file);
-    const name = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`;
-    cb(null, name);
-  }
-});
+function storageKey(prefix, ext) {
+  const safeExt = ext && ext.startsWith('.') ? ext : (ext ? `.${ext}` : '');
+  const suffix = crypto.randomBytes(8).toString('hex');
+  return `${prefix}/${Date.now()}-${suffix}${safeExt || ''}`;
+}
 
-const trackUpload = multer({
-  storage: trackStorage,
+async function persistBufferToStorage(file, { prefix, extResolver }) {
+  if (!file) return null;
+  const ext = extResolver(file);
+  const key = storageKey(prefix, ext);
+  const result = await writeBufferToUploads({
+    key,
+    buffer: file.buffer,
+    contentType: file.mimetype || undefined
+  });
+  file.storageKey = result.key;
+  file.storagePath = result.path || null;
+  if (typeof result.size === 'number') {
+    file.size = result.size;
+  }
+  return file;
+}
+
+const trackUploadMemory = multer({
+  storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.fieldname === 'cover') {
@@ -1204,6 +1253,51 @@ const trackUpload = multer({
     return cb(new Error('unsupported field'));
   }
 });
+
+function withTrackStorage(handler, { includeAudio, includeCover }) {
+  return (req, res, done) => {
+    handler(req, res, async (err) => {
+      if (err) return done(err);
+      const audioFiles = [];
+      const coverFiles = [];
+      if (Array.isArray(req.files?.audio)) audioFiles.push(...req.files.audio);
+      if (Array.isArray(req.files?.cover)) coverFiles.push(...req.files.cover);
+      if (req.file) {
+        if (req.file.fieldname === 'audio') audioFiles.push(req.file);
+        if (req.file.fieldname === 'cover') coverFiles.push(req.file);
+      }
+      const cleanupTargets = [];
+      if (includeAudio) cleanupTargets.push(...audioFiles);
+      if (includeCover) cleanupTargets.push(...coverFiles);
+
+      const cleanup = async () => {
+        await Promise.all(cleanupTargets.map(file => deleteUploadKey(file?.storageKey).catch(() => {})));
+      };
+
+      try {
+        if (includeAudio && audioFiles[0]) {
+          await persistBufferToStorage(audioFiles[0], { prefix: 'tracks', extResolver: audioFileExt });
+        }
+        if (includeCover && coverFiles[0]) {
+          await persistBufferToStorage(coverFiles[0], { prefix: 'covers', extResolver: avatarFileExt });
+        }
+        return done(null);
+      } catch (ex) {
+        await cleanup();
+        return done(ex);
+      }
+    });
+  };
+}
+
+const trackUpload = {
+  fields: (spec) => withTrackStorage(trackUploadMemory.fields(spec), { includeAudio: true, includeCover: true }),
+  single: (field) => {
+    const includeAudio = field === 'audio';
+    const includeCover = field === 'cover';
+    return withTrackStorage(trackUploadMemory.single(field), { includeAudio, includeCover });
+  }
+};
 
 const avatarDir = path.join(uploadsRoot, 'avatars');
 fs.mkdirSync(avatarDir, { recursive: true });
@@ -1239,17 +1333,8 @@ const avatarUpload = multer({
 const MESSAGE_ATTACHMENT_MAX_SIZE = 15 * 1024 * 1024; // 15MB per file
 const MESSAGE_ATTACHMENT_MAX_COUNT = 3;
 
-const messageAttachmentStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, messageAttachmentDir),
-  filename: (_req, file, cb) => {
-    const ext = messageAttachmentExt(file);
-    const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
-    cb(null, name);
-  }
-});
-
-const messageAttachmentUpload = multer({
-  storage: messageAttachmentStorage,
+const messageAttachmentUploadMemory = multer({
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: MESSAGE_ATTACHMENT_MAX_SIZE,
     files: MESSAGE_ATTACHMENT_MAX_COUNT
@@ -1261,6 +1346,28 @@ const messageAttachmentUpload = multer({
     cb(null, true);
   }
 });
+
+function withMessageStorage(handler) {
+  return (req, res, done) => {
+    handler(req, res, async (err) => {
+      if (err) return done(err);
+      const files = Array.isArray(req.files) ? req.files : [];
+      try {
+        for (const file of files) {
+          await persistBufferToStorage(file, { prefix: 'messages', extResolver: messageAttachmentExt });
+        }
+        return done(null);
+      } catch (ex) {
+        await Promise.all(files.map(file => deleteUploadKey(file?.storageKey).catch(() => {})));
+        return done(ex);
+      }
+    });
+  };
+}
+
+const messageAttachmentUpload = {
+  array: (field, maxCount) => withMessageStorage(messageAttachmentUploadMemory.array(field, maxCount))
+};
 
 function resolveUploadPath(url, folder) {
   if (!url) return null;
@@ -1286,11 +1393,27 @@ function safeUnlink(filePath) {
   fs.promises.unlink(filePath).catch(() => {});
 }
 
-function cleanupMessageUploads(files) {
-  if (!files) return;
-  for (const file of files) {
-    if (file?.path) safeUnlink(file.path);
+async function deleteStoredUpload(value, folder) {
+  if (!value) return;
+  if (typeof value === 'string' && /^https?:\/\//i.test(value)) {
+    const local = resolveUploadPath(value, folder);
+    if (local) safeUnlink(local);
+    return;
   }
+  const key = normalizeUploadKey(value);
+  if (!key) return;
+  await deleteUploadKey(key);
+}
+
+async function cleanupMessageUploads(files) {
+  if (!files) return;
+  await Promise.all(files.map(async (file) => {
+    if (file?.storageKey) {
+      await deleteUploadKey(file.storageKey);
+      return;
+    }
+    if (file?.path) safeUnlink(file.path);
+  }));
 }
 
 function messagePreview(message) {
@@ -1414,23 +1537,23 @@ app.post('/api/messages/with/:userId', auth, (req, res) => {
     try {
       const otherId = asObjectId(req.params.userId);
       if (!otherId) {
-        cleanupMessageUploads(files);
+        await cleanupMessageUploads(files);
         return res.status(400).json({ error: 'invalid user id' });
       }
       if (otherId.equals(req.user._id)) {
-        cleanupMessageUploads(files);
+        await cleanupMessageUploads(files);
         return res.status(400).json({ error: 'cannot message yourself' });
       }
 
       const otherUser = await User.findById(otherId).select('_id');
       if (!otherUser) {
-        cleanupMessageUploads(files);
+        await cleanupMessageUploads(files);
         return res.status(404).json({ error: 'user not found' });
       }
 
       const body = sanitizeMessageBody(req.body?.body);
       const attachments = files.map(file => ({
-        fileName: file.filename,
+        fileName: file.storageKey || file.filename,
         originalName: file.originalname || '',
         mimeType: file.mimetype || '',
         size: file.size || 0,
@@ -1438,7 +1561,7 @@ app.post('/api/messages/with/:userId', auth, (req, res) => {
       }));
 
       if (!body && attachments.length === 0) {
-        cleanupMessageUploads(files);
+        await cleanupMessageUploads(files);
         return res.status(400).json({ error: 'message cannot be empty' });
       }
 
@@ -1452,7 +1575,7 @@ app.post('/api/messages/with/:userId', auth, (req, res) => {
 
       res.status(201).json({ message: presentMessage(req, message, req.user._id) });
     } catch (ex) {
-      cleanupMessageUploads(files);
+      await cleanupMessageUploads(files);
       console.error('Failed to send direct message', ex);
       res.status(500).json({ error: 'failed to send message' });
     }
@@ -1594,30 +1717,31 @@ app.post('/api/tracks', auth, (req, res) => {
     const coverFile = Array.isArray(req.files?.cover) ? req.files.cover[0] : null;
 
     if (!audioFile) {
-      if (coverFile?.path) safeUnlink(coverFile.path);
+      if (coverFile?.storageKey) await deleteUploadKey(coverFile.storageKey).catch(() => {});
       return res.status(400).json({ error: 'missing audio file' });
     }
 
     if (audioFile.size > 10 * 1024 * 1024) {
-      safeUnlink(audioFile.path);
-      if (coverFile?.path) safeUnlink(coverFile.path);
+      await deleteUploadKey(audioFile.storageKey).catch(() => {});
+      if (coverFile?.storageKey) await deleteUploadKey(coverFile.storageKey).catch(() => {});
       return res.status(400).json({ error: 'track must be 10MB or less' });
     }
 
       if (coverFile && coverFile.size > 10 * 1024 * 1024) {
-        safeUnlink(audioFile.path);
-        safeUnlink(coverFile.path);
+        await deleteUploadKey(audioFile.storageKey).catch(() => {});
+        await deleteUploadKey(coverFile.storageKey).catch(() => {});
         return res.status(400).json({ error: 'cover art must be 10MB or less' });
       }
 
     try {
       let duration = null;
       try {
-        const meta = await parseFile(audioFile.path);
+        const meta = await parseBuffer(audioFile.buffer, audioFile.mimetype || null, { duration: true });
         if (meta?.format?.duration) {
           duration = Math.round(meta.format.duration * 1000) / 1000;
         }
       } catch {}
+      audioFile.buffer = null;
 
       const body = req.body || {};
       const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
@@ -1627,8 +1751,11 @@ app.post('/api/tracks', auth, (req, res) => {
 
       const title = rawTitle || (audioFile.originalname ? audioFile.originalname.replace(/\.[^.]+$/, '') : 'Untitled');
       const caption = rawCaption ? rawCaption.slice(0, 500) : '';
-      const audioUrl = publicUploadUrl(req, 'tracks', path.basename(audioFile.path));
-      const coverUrl = coverFile ? publicUploadUrl(req, 'covers', coverFile.filename) : '';
+      const audioKey = audioFile.storageKey;
+      const coverKey = coverFile ? coverFile.storageKey : '';
+      if (coverFile) coverFile.buffer = null;
+      const audioUrl = publicUploadUrl(req, audioKey);
+      const coverUrl = coverKey ? publicUploadUrl(req, coverKey) : '';
       const artist = (() => {
         const display = typeof req.user.displayName === 'string' ? req.user.displayName.trim() : '';
         if (display) return display;
@@ -1645,8 +1772,8 @@ app.post('/api/tracks', auth, (req, res) => {
         title,
         artist,
         bpm,
-        audioUrl,
-        coverUrl,
+        audioUrl: audioKey,
+        coverUrl: coverKey,
         audioDurationSec: duration || 0,
         caption
       });
@@ -1667,8 +1794,8 @@ app.post('/api/tracks', auth, (req, res) => {
         });
     } catch (ex) {
       console.error('Track upload failed', ex);
-      safeUnlink(audioFile.path);
-      if (coverFile?.path) safeUnlink(coverFile.path);
+      await deleteUploadKey(audioFile.storageKey).catch(() => {});
+      if (coverFile?.storageKey) await deleteUploadKey(coverFile.storageKey).catch(() => {});
       res.status(500).json({ error: 'could not save track' });
     }
   });
@@ -1695,12 +1822,12 @@ app.post('/api/tracks/:id/cover', auth, (req, res) => {
     }
 
     if (!trackDoc) {
-      if (req.file?.path) safeUnlink(req.file.path);
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
       return res.status(404).json({ error: 'track not found' });
     }
 
     if (!trackDoc.userId || trackDoc.userId.toString() !== req.user._id.toString()) {
-      if (req.file?.path) safeUnlink(req.file.path);
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
       return res.status(403).json({ error: 'not your track' });
     }
 
@@ -1709,22 +1836,22 @@ app.post('/api/tracks/:id/cover', auth, (req, res) => {
     }
 
     if (req.file.size > 10 * 1024 * 1024) {
-      safeUnlink(req.file.path);
+      await deleteUploadKey(req.file.storageKey).catch(() => {});
       return res.status(400).json({ error: 'cover art must be 10MB or less' });
     }
 
     try {
-      const previous = resolveUploadPath(trackDoc.coverUrl, 'covers');
-      if (previous) safeUnlink(previous);
+      await deleteStoredUpload(trackDoc.coverUrl, 'covers');
 
-      const coverUrl = publicUploadUrl(req, 'covers', req.file.filename);
-      trackDoc.coverUrl = coverUrl;
+      const coverKey = req.file.storageKey;
+      const coverUrl = publicUploadUrl(req, coverKey);
+      trackDoc.coverUrl = coverKey;
       await trackDoc.save();
 
       res.json({ ok: true, coverUrl });
     } catch (ex) {
       console.error('Track cover update failed', ex);
-      if (req.file?.path) safeUnlink(req.file.path);
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
       res.status(500).json({ error: 'could not save cover' });
     }
   });
@@ -1751,9 +1878,6 @@ app.delete('/api/tracks/:id', auth, async (req, res) => {
     return res.status(403).json({ error: 'not your track' });
   }
 
-  const audioPath = resolveUploadPath(trackDoc.audioUrl, 'tracks');
-  const coverPath = resolveUploadPath(trackDoc.coverUrl, 'covers');
-
   try {
     await Track.deleteOne({ _id: trackDoc._id });
     await TrackStats.deleteOne({ trackId: trackDoc._id });
@@ -1764,8 +1888,10 @@ app.delete('/api/tracks/:id', auth, async (req, res) => {
     return res.status(500).json({ error: 'could not delete track' });
   }
 
-  safeUnlink(audioPath);
-  safeUnlink(coverPath);
+  await Promise.all([
+    deleteStoredUpload(trackDoc.audioUrl, 'tracks'),
+    deleteStoredUpload(trackDoc.coverUrl, 'covers')
+  ]);
 
   res.json({ ok: true });
 });
@@ -1829,14 +1955,15 @@ app.get('/api/tracks', async (req, res) => {
 
     const tracks = docs.map(doc => {
       const userKey = toIdString(doc.userId);
-      const coverUrl = doc.coverUrl || '';
       const key = toIdString(doc._id) || String(doc._id);
+      const audioUrl = doc.audioUrl ? publicUploadUrl(req, doc.audioUrl) : '';
+      const coverUrl = doc.coverUrl ? publicUploadUrl(req, doc.coverUrl) : '';
       return {
         id: doc._id,
         title: doc.title || 'Untitled',
         artist: doc.artist || '',
         bpm: doc.bpm || 0,
-        audioUrl: doc.audioUrl,
+        audioUrl,
         coverUrl: coverUrl || null,
         duration: doc.audioDurationSec || null,
         caption: doc.caption || '',
@@ -2019,7 +2146,7 @@ app.post('/api/tracks/:id/comments', auth, async (req, res) => {
   res.json({ ok: true, comment: commentSummary(commentDoc), stats: statsSummary(stats) });
 });
 
-app.get('/api/leaderboard', auth, async (_req, res) => {
+app.get('/api/leaderboard', auth, async (req, res) => {
   try {
     const statsDocs = await TrackStat.find({}).sort({ plays: -1, likes: -1, reposts: -1, comments: -1 }).limit(200).lean();
     if (!statsDocs.length) {
@@ -2056,6 +2183,8 @@ app.get('/api/leaderboard', auth, async (_req, res) => {
       const stats = statsSummary(statsDoc);
       const score = computeLeaderboardScore(stats);
       const userKey = toIdString(trackDoc.userId);
+      const audioUrl = trackDoc.audioUrl ? publicUploadUrl(req, trackDoc.audioUrl) : '';
+      const coverUrl = trackDoc.coverUrl ? publicUploadUrl(req, trackDoc.coverUrl) : '';
       entries.push({
         score,
         stats,
@@ -2064,8 +2193,8 @@ app.get('/api/leaderboard', auth, async (_req, res) => {
           title: trackDoc.title || 'Untitled',
           artist: trackDoc.artist || '',
           bpm: trackDoc.bpm || 0,
-          audioUrl: trackDoc.audioUrl,
-          coverUrl: trackDoc.coverUrl || null,
+          audioUrl,
+          coverUrl: coverUrl || null,
           duration: trackDoc.audioDurationSec || null,
           caption: trackDoc.caption || '',
           createdAt: trackDoc.createdAt,
