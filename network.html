@@ -1379,6 +1379,226 @@
   </style>
 
   <style>
+    .profile-color-picker {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .profile-color-picker .color-picker-panel {
+      width: 100%;
+      max-width: 360px;
+      background: rgba(31, 35, 42, 0.85);
+      border: 1px solid rgba(54, 67, 71, 0.8);
+      border-radius: 12px;
+      padding: 16px 14px 18px;
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+    }
+
+    .profile-color-picker .panel-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 12px;
+    }
+
+    .profile-color-picker .panel-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .profile-color-picker .panel-row--maps {
+      align-items: stretch;
+    }
+
+    .profile-color-picker .spectrum-map {
+      position: relative;
+      width: 220px;
+      height: 200px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+
+    .profile-color-picker .hue-map {
+      position: relative;
+      width: 24px;
+      height: 200px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+
+    .profile-color-picker canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .profile-color-picker .color-cursor {
+      position: absolute;
+      border-radius: 999px;
+      border: 2px solid rgba(255, 255, 255, 0.95);
+      pointer-events: none;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      transition: transform 0.18s ease;
+    }
+
+    .profile-color-picker .color-cursor.dragging {
+      transition: none;
+    }
+
+    .profile-color-picker #spectrum-cursor {
+      width: 28px;
+      height: 28px;
+      margin-left: -14px;
+      margin-top: -14px;
+      top: 0;
+      left: 0;
+    }
+
+    .profile-color-picker #hue-cursor {
+      width: 22px;
+      height: 22px;
+      left: 50%;
+      margin-left: -11px;
+      margin-top: -11px;
+      top: 0;
+    }
+
+    .profile-color-picker .swatches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .profile-color-picker .swatch {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.12);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .profile-color-picker .swatch:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+    }
+
+    .profile-color-picker .button {
+      background: rgba(42, 49, 55, 0.9);
+      border-radius: 6px;
+      border: 1px solid rgba(54, 67, 71, 0.8);
+      color: #d1d5db;
+      font-size: 0.85rem;
+      padding: 8px 12px;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+    .profile-color-picker .button:hover:not([disabled]) {
+      background: rgba(60, 70, 80, 0.95);
+      transform: translateY(-1px);
+    }
+
+    .profile-color-picker .button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .profile-color-picker .button.mode-toggle {
+      margin-left: auto;
+    }
+
+    .profile-color-picker .value-fields {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .profile-color-picker .value-fields.active {
+      display: flex;
+    }
+
+    .profile-color-picker .field-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .profile-color-picker .field-label {
+      font-size: 0.75rem;
+      color: rgba(214, 222, 235, 0.7);
+    }
+
+    .profile-color-picker .field-input {
+      background: rgba(21, 25, 28, 0.95);
+      border: 1px solid rgba(54, 67, 71, 0.8);
+      border-radius: 4px;
+      padding: 6px 8px;
+      color: #f9fafb;
+      font-size: 0.85rem;
+      width: 60px;
+      text-align: center;
+    }
+
+    .profile-color-picker .rgb-fields .field-input {
+      width: 56px;
+    }
+
+    .profile-color-picker .hex-field .field-input {
+      width: 150px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .profile-color-picker .panel-header {
+      flex: 1 1 100%;
+      text-align: center;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(214, 222, 235, 0.7);
+      margin-bottom: -4px;
+    }
+
+    .profile-color-picker .panel-row--user-swatches {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .profile-color-picker .color-indicator {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      margin-right: 8px;
+    }
+
+    @media (max-width: 640px) {
+      .profile-color-picker .panel-row--maps {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .profile-color-picker .hue-map {
+        width: 220px;
+        height: 24px;
+      }
+
+      .profile-color-picker #hue-cursor {
+        top: 50%;
+        left: 0;
+        margin-left: -11px;
+        margin-top: -11px;
+      }
+    }
+  </style>
+
+  <style>
   /* Beatloop Studio helpers */
   .step{
     --step-off: rgba(56,189,248,.12);
@@ -2956,6 +3176,10 @@
       const tagDurationValue = typeof entry.tagDurationSec === 'number'
         ? entry.tagDurationSec
         : (typeof existing.tagDurationSec === 'number' ? existing.tagDurationSec : null)
+      const profileColorValue = sanitizeProfileColorHex(
+        (typeof entry.profileColor === 'string' && entry.profileColor)
+          || (typeof existing.profileColor === 'string' ? existing.profileColor : '')
+      )
 
       const next = {
         ...existing,
@@ -2968,6 +3192,7 @@
         avatar: avatarCandidate,
         tagUrl: tagCandidate,
         tagDurationSec: tagDurationValue,
+        profileColor: profileColorValue,
         joinedAt: entry.joinedAt || entry.createdAt || existing.joinedAt || Date.now(),
         totalOnlineSec: typeof entry.totalOnlineSec === 'number'
           ? entry.totalOnlineSec
@@ -3370,6 +3595,10 @@ function ensureLoggedIn() {
   const colors = window.userColors;
   if (activeUserId && colors instanceof Map) {
     currentUserColor = colors.get(activeUserId) || currentUserColor;
+    window.currentUserColor = currentUserColor;
+  }
+  if (!currentUserColor && currentUser?.profileColor) {
+    currentUserColor = sanitizeProfileColorHex(currentUser.profileColor);
     window.currentUserColor = currentUserColor;
   }
   try {
@@ -8803,6 +9032,8 @@ void main()
 }
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/tinycolor2@1.6.0/dist/tinycolor-min.js"></script>
+
 <script>
 (() => {
   const overlay = document.getElementById('timelineShaderOverlay');
@@ -9271,6 +9502,16 @@ void main()
                   <p class="text-xs uppercase tracking-wide text-white/50">Email address</p>
                   <p id="profileViewEmail" class="mt-1 text-lg font-semibold text-white break-all">—</p>
                 </div>
+                <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p class="text-xs uppercase tracking-wide text-white/50">Profile color</p>
+                  <div class="mt-3 flex items-center gap-3">
+                    <span id="profileViewColorSwatch" class="h-10 w-10 rounded-lg border border-white/10 bg-white/10"></span>
+                    <div class="flex flex-col">
+                      <span id="profileViewColorValue" class="text-sm font-semibold text-white">—</span>
+                      <span class="text-xs text-white/50">Shown on your public profile.</span>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div id="profileMessagesTab" class="hidden flex flex-col gap-4">
                 <div id="profileDmCard" class="bl-dm hidden">
@@ -9327,6 +9568,59 @@ void main()
                 <span class="text-xs uppercase tracking-wide text-white/50">Email address</span>
                 <input id="profileEmailInput" type="email" disabled class="cursor-not-allowed rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/70" />
               </label>
+              <div class="flex flex-col gap-2">
+                <span class="text-xs uppercase tracking-wide text-white/50">Profile color</span>
+                <div class="rounded-xl border border-white/10 bg-black/40 p-4">
+                  <input id="profileColorValue" type="hidden" />
+                  <div id="profileColorPickerPanel" class="profile-color-picker">
+                    <div class="color-picker-panel">
+                      <div class="panel-row panel-row--swatches">
+                        <div class="swatches default-swatches"></div>
+                        <button id="profileColorEyedropper" type="button" class="button eyedropper" title="Eyedropper (coming soon)" disabled>Get Color</button>
+                      </div>
+                      <div class="panel-row panel-row--maps">
+                        <div class="spectrum-map">
+                          <button id="spectrum-cursor" class="color-cursor" type="button" aria-hidden="true"></button>
+                          <canvas id="spectrum-canvas" width="220" height="200"></canvas>
+                        </div>
+                        <div class="hue-map">
+                          <button id="hue-cursor" class="color-cursor" type="button" aria-hidden="true"></button>
+                          <canvas id="hue-canvas" width="24" height="200"></canvas>
+                        </div>
+                      </div>
+                      <div class="panel-row panel-row--inputs">
+                        <div id="rgb-fields" class="field-group value-fields rgb-fields active">
+                          <div class="field-group">
+                            <label for="red" class="field-label">R:</label>
+                            <input type="number" max="255" min="0" id="red" class="field-input rgb-input" />
+                          </div>
+                          <div class="field-group">
+                            <label for="green" class="field-label">G:</label>
+                            <input type="number" max="255" min="0" id="green" class="field-input rgb-input" />
+                          </div>
+                          <div class="field-group">
+                            <label for="blue" class="field-label">B:</label>
+                            <input type="number" max="255" min="0" id="blue" class="field-input rgb-input" />
+                          </div>
+                        </div>
+                        <div id="hex-field" class="field-group value-fields hex-field">
+                          <label for="hex" class="field-label">Hex:</label>
+                          <input type="text" id="hex" class="field-input" />
+                        </div>
+                        <button id="mode-toggle" type="button" class="button mode-toggle">Mode</button>
+                      </div>
+                      <div class="panel-row panel-row--user-swatches">
+                        <h2 class="panel-header">User Colors</h2>
+                        <div id="user-swatches" class="swatches custom-swatches"></div>
+                        <button id="add-swatch" type="button" class="button add-swatch">
+                          <span id="color-indicator" class="color-indicator"></span><span>Add to Swatches</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="mt-3 text-xs text-white/50">Choose the accent color shown on your profile.</p>
+                </div>
+              </div>
               <div class="flex justify-end">
                 <button id="profileSaveButton" type="button" class="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary/80">✅ Save changes</button>
               </div>
@@ -9352,6 +9646,28 @@ void main()
     },
     hdr(){ return hasAuthToken(this.token) ? { 'Authorization': 'Bearer ' + this.token } : {}; }
   });
+
+  const PROFILE_COLOR_DEFAULT = '#7c3aed';
+
+  function sanitizeProfileColorHex(color, fallback = PROFILE_COLOR_DEFAULT) {
+    if (typeof color !== 'string') return fallback;
+    const trimmed = color.trim();
+    if (!trimmed) return fallback;
+    const hex = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+    if (/^[0-9a-fA-F]{6}$/.test(hex)) return `#${hex.toLowerCase()}`;
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+      return `#${hex.toLowerCase().split('').map((ch) => ch + ch).join('')}`;
+    }
+    return fallback;
+  }
+
+  function isValidProfileColor(color) {
+    if (typeof color !== 'string') return false;
+    const trimmed = color.trim();
+    if (!trimmed) return false;
+    const hex = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+    return /^[0-9a-fA-F]{6}$/.test(hex) || /^[0-9a-fA-F]{3}$/.test(hex);
+  }
 
   function hasAuthToken(value){
     const token = typeof value === 'string' ? value.trim() : '';
@@ -9473,6 +9789,10 @@ void main()
   const profileDisplayNameInput = document.getElementById('profileDisplayNameInput');
   const profileUsernameInput = document.getElementById('profileUsernameInput');
   const profileEmailInput = document.getElementById('profileEmailInput');
+  const profileViewColorSwatch = document.getElementById('profileViewColorSwatch');
+  const profileViewColorValue = document.getElementById('profileViewColorValue');
+  const profileColorValueInput = document.getElementById('profileColorValue');
+  const profileColorPickerPanel = document.getElementById('profileColorPickerPanel');
 
   const profileState = {
     user: null,
@@ -9481,6 +9801,7 @@ void main()
     pendingAvatarPreviewUrl: null,
     pendingTag: null,
     pendingTagUrl: null,
+    pendingColor: null,
     previousOverflow: ''
   };
   window.profileState = profileState;
@@ -9488,6 +9809,346 @@ void main()
   let profileActiveTab = 'details';
   let profileNavUnread = 0;
   let profileNavAnimationTimer = null;
+
+  function applyProfileColorPreview(colorValue) {
+    const sanitized = sanitizeProfileColorHex(colorValue);
+    if (profileViewColorSwatch) {
+      if (typeof tinycolor !== 'undefined') {
+        try {
+          const base = tinycolor(sanitized);
+          const lighter = base.clone().lighten(18).toHexString();
+          const darker = base.clone().darken(12).toHexString();
+          profileViewColorSwatch.style.background = `linear-gradient(135deg, ${lighter}, ${darker})`;
+        } catch {
+          profileViewColorSwatch.style.background = sanitized;
+        }
+      } else {
+        profileViewColorSwatch.style.background = sanitized;
+      }
+      profileViewColorSwatch.style.boxShadow = `0 0 0 1px rgba(255,255,255,0.12), 0 10px 28px ${sanitized}33`;
+    }
+    if (profileViewColorValue) {
+      profileViewColorValue.textContent = sanitized.toUpperCase();
+    }
+    return sanitized;
+  }
+
+  function updateProfileColorValue(colorValue, { userInteraction = false, preview = true } = {}) {
+    const sanitized = sanitizeProfileColorHex(colorValue);
+    if (profileColorValueInput) {
+      profileColorValueInput.value = sanitized;
+    }
+    if (userInteraction) {
+      profileState.pendingColor = sanitized;
+    }
+    if (preview) {
+      applyProfileColorPreview(userInteraction ? sanitized : (profileState.pendingColor || sanitized));
+    }
+    return sanitized;
+  }
+
+  const profileColorPicker = (() => {
+    if (!profileColorPickerPanel || typeof tinycolor === 'undefined') return null;
+
+    const addSwatch = document.getElementById('add-swatch');
+    const modeToggle = document.getElementById('mode-toggle');
+    const defaultSwatchesEl = profileColorPickerPanel.querySelector('.default-swatches');
+    const colorIndicator = document.getElementById('color-indicator');
+    const userSwatches = document.getElementById('user-swatches');
+    const spectrumCanvas = document.getElementById('spectrum-canvas');
+    const hueCanvas = document.getElementById('hue-canvas');
+    if (!spectrumCanvas || !hueCanvas) return null;
+
+    const spectrumCtx = spectrumCanvas.getContext('2d');
+    const hueCtx = hueCanvas.getContext('2d');
+    if (!spectrumCtx || !hueCtx) return null;
+
+    const spectrumCursor = document.getElementById('spectrum-cursor');
+    const hueCursor = document.getElementById('hue-cursor');
+
+    const rgbFields = document.getElementById('rgb-fields');
+    const hexField = document.getElementById('hex-field');
+    const red = document.getElementById('red');
+    const green = document.getElementById('green');
+    const blue = document.getElementById('blue');
+    const hex = document.getElementById('hex');
+    if (!red || !green || !blue || !hex) return null;
+
+    let spectrumRect = spectrumCanvas.getBoundingClientRect();
+    let hueRect = hueCanvas.getBoundingClientRect();
+    let currentColor = tinycolor(PROFILE_COLOR_DEFAULT);
+    let hue = currentColor.toHsl().h || 0;
+    let saturation = currentColor.toHsl().s || 1;
+    let lightness = currentColor.toHsl().l || 0.5;
+
+    const defaultSwatches = [
+      '#FFFFFF',
+      '#FFFB0D',
+      '#0532FF',
+      '#FF9300',
+      '#00F91A',
+      '#FF2700',
+      '#000000',
+      '#686868',
+      '#EE5464',
+      '#D27AEE',
+      '#5BA8C4',
+      '#E64AA9'
+    ];
+
+    const boundFlags = { spectrum: false, hue: false };
+
+    function refreshRects() {
+      spectrumRect = spectrumCanvas.getBoundingClientRect();
+      hueRect = hueCanvas.getBoundingClientRect();
+    }
+
+    function createShadeSpectrum(color) {
+      if (!spectrumCtx) return;
+      const baseColor = color || '#f00';
+      spectrumCtx.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+      spectrumCtx.fillStyle = baseColor;
+      spectrumCtx.fillRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+
+      const whiteGradient = spectrumCtx.createLinearGradient(0, 0, spectrumCanvas.width, 0);
+      whiteGradient.addColorStop(0, '#fff');
+      whiteGradient.addColorStop(1, 'transparent');
+      spectrumCtx.fillStyle = whiteGradient;
+      spectrumCtx.fillRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+
+      const blackGradient = spectrumCtx.createLinearGradient(0, 0, 0, spectrumCanvas.height);
+      blackGradient.addColorStop(0, 'transparent');
+      blackGradient.addColorStop(1, '#000');
+      spectrumCtx.fillStyle = blackGradient;
+      spectrumCtx.fillRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+
+      if (!boundFlags.spectrum) {
+        spectrumCanvas.addEventListener('mousedown', startGetSpectrumColor);
+        boundFlags.spectrum = true;
+      }
+    }
+
+    function createHueSpectrum() {
+      if (!hueCtx) return;
+      const hueGradient = hueCtx.createLinearGradient(0, 0, 0, hueCanvas.height);
+      hueGradient.addColorStop(0.0, 'hsl(0,100%,50%)');
+      hueGradient.addColorStop(0.17, 'hsl(298.8,100%,50%)');
+      hueGradient.addColorStop(0.33, 'hsl(241.2,100%,50%)');
+      hueGradient.addColorStop(0.50, 'hsl(180,100%,50%)');
+      hueGradient.addColorStop(0.67, 'hsl(118.8,100%,50%)');
+      hueGradient.addColorStop(0.83, 'hsl(61.2,100%,50%)');
+      hueGradient.addColorStop(1.0, 'hsl(360,100%,50%)');
+      hueCtx.fillStyle = hueGradient;
+      hueCtx.fillRect(0, 0, hueCanvas.width, hueCanvas.height);
+
+      if (!boundFlags.hue) {
+        hueCanvas.addEventListener('mousedown', startGetHueColor);
+        boundFlags.hue = true;
+      }
+    }
+
+    function updateHueCursor(y) {
+      if (!hueCursor) return;
+      const clamped = Math.min(Math.max(y, 0), hueRect.height);
+      hueCursor.style.top = `${clamped}px`;
+    }
+
+    function updateSpectrumCursor(x, y) {
+      if (!spectrumCursor) return;
+      const clampedX = Math.min(Math.max(x, 0), spectrumRect.width);
+      const clampedY = Math.min(Math.max(y, 0), spectrumRect.height);
+      spectrumCursor.style.left = `${clampedX}px`;
+      spectrumCursor.style.top = `${clampedY}px`;
+    }
+
+    function setColorValues(color) {
+      const tc = tinycolor(color);
+      if (!tc.isValid()) return;
+      const rgbValues = tc.toRgb();
+      red.value = Math.round(rgbValues.r);
+      green.value = Math.round(rgbValues.g);
+      blue.value = Math.round(rgbValues.b);
+      hex.value = tc.toHex().toUpperCase();
+    }
+
+    function setCurrentColor(color, options = {}) {
+      const tc = tinycolor(color);
+      if (!tc.isValid()) return;
+      currentColor = tc;
+      const hsl = tc.toHsl();
+      hue = hsl.h;
+      saturation = hsl.s;
+      lightness = hsl.l;
+      setColorValues(tc);
+      const hexString = `#${tc.toHex()}`;
+      if (colorIndicator) colorIndicator.style.backgroundColor = hexString;
+      if (spectrumCursor) spectrumCursor.style.backgroundColor = hexString;
+      if (hueCursor) hueCursor.style.backgroundColor = `hsl(${hsl.h}, 100%, 50%)`;
+      updateProfileColorValue(hexString, { userInteraction: !!options.userInteraction, preview: options.preview !== false });
+    }
+
+    function colorToPos(color, options = {}) {
+      const tc = tinycolor(color);
+      if (!tc.isValid()) return;
+      refreshRects();
+      const hsv = tc.toHsv();
+      const x = spectrumRect.width * hsv.s;
+      const y = spectrumRect.height * (1 - hsv.v);
+      const hueY = hueRect.height - ((tc.toHsl().h / 360) * hueRect.height);
+      updateSpectrumCursor(x, y);
+      updateHueCursor(hueY);
+      const hueColor = tinycolor({ h: tc.toHsl().h, s: 1, l: 0.5 }).toHexString();
+      createShadeSpectrum(hueColor);
+      setCurrentColor(tc, options);
+    }
+
+    function startGetSpectrumColor(event) {
+      getSpectrumColor(event);
+      spectrumCursor?.classList.add('dragging');
+      window.addEventListener('mousemove', getSpectrumColor);
+      window.addEventListener('mouseup', endGetSpectrumColor);
+    }
+
+    function getSpectrumColor(event) {
+      event.preventDefault();
+      refreshRects();
+      let x = event.pageX - spectrumRect.left;
+      let y = event.pageY - spectrumRect.top;
+      if (x > spectrumRect.width) x = spectrumRect.width;
+      if (x < 0) x = 0;
+      if (y > spectrumRect.height) y = spectrumRect.height;
+      if (y < 0) y = 0;
+      const xRatio = spectrumRect.width ? (x / spectrumRect.width) : 0;
+      const yRatio = spectrumRect.height ? (y / spectrumRect.height) : 0;
+      const hsvValue = 1 - yRatio;
+      const hsvSaturation = xRatio;
+      lightness = (hsvValue / 2) * (2 - hsvSaturation);
+      const denominator = 1 - Math.abs(2 * lightness - 1);
+      saturation = denominator === 0 ? 0 : ((hsvValue * hsvSaturation) / denominator);
+      const color = tinycolor(`hsl ${hue} ${Math.max(0, Math.min(1, saturation))} ${Math.max(0, Math.min(1, lightness))}`);
+      updateSpectrumCursor(x, y);
+      setCurrentColor(color, { userInteraction: true });
+    }
+
+    function endGetSpectrumColor() {
+      spectrumCursor?.classList.remove('dragging');
+      window.removeEventListener('mousemove', getSpectrumColor);
+      window.removeEventListener('mouseup', endGetSpectrumColor);
+    }
+
+    function startGetHueColor(event) {
+      getHueColor(event);
+      hueCursor?.classList.add('dragging');
+      window.addEventListener('mousemove', getHueColor);
+      window.addEventListener('mouseup', endGetHueColor);
+    }
+
+    function getHueColor(event) {
+      event.preventDefault();
+      refreshRects();
+      let y = event.pageY - hueRect.top;
+      if (y > hueRect.height) y = hueRect.height;
+      if (y < 0) y = 0;
+      const percent = hueRect.height ? (y / hueRect.height) : 0;
+      hue = 360 - (360 * percent);
+      const hueColor = tinycolor(`hsl ${hue} 1 .5`).toHslString();
+      const color = tinycolor(`hsl ${hue} ${Math.max(0, Math.min(1, saturation))} ${Math.max(0, Math.min(1, lightness))}`);
+      createShadeSpectrum(hueColor);
+      updateHueCursor(y);
+      setCurrentColor(color, { userInteraction: true });
+    }
+
+    function endGetHueColor() {
+      hueCursor?.classList.remove('dragging');
+      window.removeEventListener('mousemove', getHueColor);
+      window.removeEventListener('mouseup', endGetHueColor);
+    }
+
+    function createSwatch(target, color) {
+      if (!target) return;
+      const sanitized = sanitizeProfileColorHex(color);
+      const swatch = document.createElement('button');
+      swatch.type = 'button';
+      swatch.classList.add('swatch');
+      swatch.setAttribute('title', sanitized);
+      swatch.style.backgroundColor = sanitized;
+      swatch.addEventListener('click', () => {
+        colorToPos(sanitized, { userInteraction: true });
+      });
+      target.appendChild(swatch);
+    }
+
+    function addDefaultSwatches() {
+      if (!defaultSwatchesEl) return;
+      defaultSwatchesEl.innerHTML = '';
+      defaultSwatches.forEach((color) => createSwatch(defaultSwatchesEl, color));
+    }
+
+    addDefaultSwatches();
+    createShadeSpectrum();
+    createHueSpectrum();
+
+    const rgbInputs = [red, green, blue];
+    rgbInputs.forEach((input) => {
+      input.addEventListener('change', () => {
+        const color = tinycolor({
+          r: Number(red.value) || 0,
+          g: Number(green.value) || 0,
+          b: Number(blue.value) || 0
+        });
+        colorToPos(color, { userInteraction: true });
+      });
+    });
+
+    function handleHexInputChange() {
+      const raw = (hex.value || '').trim();
+      if (!raw) return;
+      const prefixed = raw.startsWith('#') ? raw : `#${raw}`;
+      if (isValidProfileColor(prefixed)) {
+        colorToPos(prefixed, { userInteraction: true });
+      }
+    }
+
+    hex.addEventListener('change', handleHexInputChange);
+    hex.addEventListener('blur', handleHexInputChange);
+
+    if (addSwatch) {
+      addSwatch.addEventListener('click', () => {
+        if (!userSwatches) return;
+        const value = sanitizeProfileColorHex(currentColor?.toHexString?.() || PROFILE_COLOR_DEFAULT);
+        createSwatch(userSwatches, value);
+      });
+    }
+
+    if (modeToggle && rgbFields && hexField) {
+      modeToggle.addEventListener('click', () => {
+        rgbFields.classList.toggle('active');
+        hexField.classList.toggle('active');
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      refreshRects();
+      colorToPos(currentColor, { userInteraction: false, preview: false });
+    });
+
+    colorToPos(currentColor, { userInteraction: false });
+
+    return {
+      setColor(color, options = {}) {
+        const sanitized = sanitizeProfileColorHex(color);
+        profileState.pendingColor = options.userInteraction ? sanitized : profileState.pendingColor;
+        colorToPos(sanitized, { userInteraction: !!options.userInteraction });
+      },
+      getColor() {
+        return sanitizeProfileColorHex(currentColor?.toHexString?.() || PROFILE_COLOR_DEFAULT);
+      },
+      refresh() {
+        refreshRects();
+        colorToPos(currentColor, { userInteraction: false });
+      }
+    };
+  })();
 
   const DM_MAX_ATTACHMENTS = 3;
   const DM_MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024;
@@ -10505,6 +11166,7 @@ void main()
     const email = typeof user.email === 'string' ? user.email : '';
     const tagUrl = typeof user.tagUrl === 'string' ? user.tagUrl : '';
     const tagDurationSec = typeof user.tagDurationSec === 'number' ? user.tagDurationSec : null;
+    const profileColor = sanitizeProfileColorHex(user.profileColor);
     const panelPrefs = {};
     const rawPrefs = user.studioPanelSizes;
     if (rawPrefs && typeof rawPrefs === 'object') {
@@ -10515,7 +11177,7 @@ void main()
         panelPrefs[key] = Math.round(clampNumber(numeric, limits.min, limits.max));
       });
     }
-    const sanitized = { ...user, avatar, displayName, firstName, lastName, name, email, tagUrl, tagDurationSec };
+    const sanitized = { ...user, avatar, displayName, firstName, lastName, name, email, tagUrl, tagDurationSec, profileColor };
     if (Object.keys(panelPrefs).length) {
       sanitized.studioPanelSizes = panelPrefs;
     } else if ('studioPanelSizes' in sanitized) {
@@ -10561,6 +11223,15 @@ void main()
   function populateProfile(user) {
     if (!user) return;
     resetPendingMedia();
+    if (profileState.pendingColor) {
+      profileState.pendingColor = sanitizeProfileColorHex(profileState.pendingColor);
+    }
+    const storedProfileColor = sanitizeProfileColorHex(user.profileColor);
+    const activeProfileColor = profileState.pendingColor || storedProfileColor;
+    updateProfileColorValue(activeProfileColor, { userInteraction: false });
+    if (profileColorPicker) {
+      profileColorPicker.setColor(activeProfileColor, { userInteraction: false });
+    }
     if (profileWelcomeName) profileWelcomeName.textContent = `Welcome, ${computeWelcomeName(user)}`;
     const avatarUrl = sanitizeAvatar(user.avatar);
     if (profileAvatarImage) {
@@ -10653,6 +11324,16 @@ void main()
     if (mode === 'edit') {
       setProfileTab('details', { silent: true });
     }
+    if (mode !== 'edit') {
+      profileState.pendingColor = null;
+      if (profileState.user) {
+        const storedColor = sanitizeProfileColorHex(profileState.user.profileColor);
+        updateProfileColorValue(storedColor, { userInteraction: false });
+        if (profileColorPicker) {
+          profileColorPicker.setColor(storedColor, { userInteraction: false });
+        }
+      }
+    }
     if (profileMessagesButton) {
       profileMessagesButton.disabled = mode === 'edit';
       profileMessagesButton.setAttribute('aria-disabled', mode === 'edit' ? 'true' : 'false');
@@ -10666,6 +11347,7 @@ void main()
     profileState.previousOverflow = '';
     clearPendingAttachments();
     resetPendingMedia();
+    profileState.pendingColor = null;
     if (profileState.user) populateProfile(profileState.user);
   }
 
@@ -10713,6 +11395,7 @@ void main()
   if (profileCancelButton) {
     profileCancelButton.addEventListener('click', () => {
       resetPendingMedia();
+      profileState.pendingColor = null;
       if (profileState.user) populateProfile(profileState.user);
       setProfileMode('view');
     });
@@ -10824,9 +11507,13 @@ void main()
         const first = profileFirstNameInput?.value?.trim() || '';
         const last = profileLastNameInput?.value?.trim() || '';
         const display = profileDisplayNameInput?.value?.trim() || '';
+        const storedColor = sanitizeProfileColorHex(profileState.user.profileColor);
+        const chosenColorRaw = profileColorValueInput?.value || storedColor;
+        const chosenColor = sanitizeProfileColorHex(chosenColorRaw);
         if (first !== (profileState.user.firstName || '')) updates.firstName = first;
         if (last !== (profileState.user.lastName || '')) updates.lastName = last;
         if (display !== (profileState.user.displayName || '')) updates.displayName = display;
+        if (chosenColor !== storedColor) updates.profileColor = chosenColor;
 
         if (Object.keys(updates).length) {
           const resp = await fetch(apiBase + '/api/users/profile', {
@@ -10873,6 +11560,7 @@ void main()
         if (refreshed) {
           persistUpdatedUser(refreshed);
           profileState.user = sanitizeProfileUser(refreshed);
+          profileState.pendingColor = null;
           applyStudioPanelPrefs();
           populateProfile(profileState.user);
           setProfileMode('view');
@@ -10958,7 +11646,8 @@ void main()
     get() { return rowLabels; },
     set(value) { rowLabels = Array.isArray(value) ? value : []; }
   });
-  currentUserColor = window.currentUserColor || currentUserColor || null;
+  const currentUserFallbackColor = currentUser?.profileColor ? sanitizeProfileColorHex(currentUser.profileColor) : null;
+  currentUserColor = window.currentUserColor || currentUserColor || currentUserFallbackColor || null;
   let sessionCleanupFns = [];
   currentUserId = normalizeUserId(window.currentUserId || currentUserId || null);
 
@@ -11407,6 +12096,18 @@ void main()
     const existing = document.getElementById('profileFly');
     if (existing) existing.remove();
     const safeAvatar = sanitizeAvatar(p.avatar);
+    const sanitizedColor = sanitizeProfileColorHex(p.profileColor);
+    let profileColorBackground = sanitizedColor;
+    try {
+      if (typeof tinycolor !== 'undefined') {
+        const tc = tinycolor(sanitizedColor);
+        const lighter = tc.clone().lighten(18).toHexString();
+        const darker = tc.clone().darken(12).toHexString();
+        profileColorBackground = `linear-gradient(135deg, ${lighter}, ${darker})`;
+      }
+    } catch {}
+    const profileColorShadow = `${sanitizedColor}33`;
+    const profileColorLabel = sanitizedColor.toUpperCase();
     const fly = document.createElement('div');
     fly.id = 'profileFly';
     fly.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200]';
@@ -11420,6 +12121,13 @@ void main()
           </div>
         </div>
         <div class="mt-4 text-sm text-white/70">Joined: ${p.joinedAt ? new Date(p.joinedAt).toLocaleString() : '—'}</div>
+        <div class="mt-4 flex items-center gap-3">
+          <div class="h-8 w-8 rounded-lg border border-white/15" style="background:${profileColorBackground};box-shadow:0 0 0 1px rgba(255,255,255,0.12),0 10px 24px ${profileColorShadow};"></div>
+          <div>
+            <div class="text-xs uppercase tracking-wide text-white/50">Profile color</div>
+            <div class="text-sm font-semibold text-white">${profileColorLabel}</div>
+          </div>
+        </div>
         <div class="mt-6 flex justify-end">
           <button class="rounded-lg bg-white/10 px-3 py-1.5" onclick="document.getElementById('profileFly').remove()">Close</button>
         </div>
@@ -11478,14 +12186,15 @@ void main()
     participants.forEach(p => {
       if (p && p.id) userColors.set(p.id, p.color || null);
     });
+    const userColorFallback = currentUser?.profileColor ? sanitizeProfileColorHex(currentUser.profileColor) : null;
     if (currentUserId) {
-      currentUserColor = userColors.get(currentUserId) || null;
+      currentUserColor = userColors.get(currentUserId) || userColorFallback || null;
       window.currentUserColor = currentUserColor;
     } else if (currentUser && currentUser.email) {
       const match = participants.find(p => p && p.email === currentUser.email);
       if (match && match.id) {
         recordCurrentUserId(match);
-        currentUserColor = userColors.get(match.id) || null;
+        currentUserColor = userColors.get(match.id) || userColorFallback || null;
         window.currentUserColor = currentUserColor;
       }
     }
@@ -11539,8 +12248,9 @@ void main()
     if (!u) return;
     currentUser = { ...u, avatar: sanitizeAvatar(u.avatar) };
     recordCurrentUserId(u);
+    const fallbackColor = currentUser?.profileColor ? sanitizeProfileColorHex(currentUser.profileColor) : null;
     if (currentUserId) {
-      currentUserColor = userColors.get(currentUserId) || null;
+      currentUserColor = userColors.get(currentUserId) || fallbackColor || null;
       window.currentUserColor = currentUserColor;
     }
     if (composerAvatarEl) {
