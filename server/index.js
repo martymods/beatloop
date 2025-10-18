@@ -932,6 +932,96 @@ function toIdString(value) {
   return match ? match[1].toLowerCase() : str;
 }
 
+function publicLeaderboardUserSummary(req, user) {
+  if (!user) return null;
+  const id = toIdString(user._id);
+  return {
+    id,
+    name: user.displayName || user.name || '',
+    displayName: user.displayName || user.name || '',
+    avatar: presentStoredUploadUrl(req, user.avatarUrl, user.avatarStorageKey)
+  };
+}
+
+async function buildLeaderboardEntries(req, { includeUserDetails = false, limit = 20 } = {}) {
+  const fetchLimit = Math.max(limit * 5, 200);
+  const statsDocs = await TrackStat.find({})
+    .sort({ plays: -1, likes: -1, reposts: -1, comments: -1 })
+    .limit(fetchLimit)
+    .lean();
+
+  if (!statsDocs.length) {
+    return [];
+  }
+
+  const trackIds = statsDocs.map(doc => doc.trackId).filter(Boolean);
+  const tracks = await Track.find({ _id: { $in: trackIds } }).lean();
+  const trackMap = new Map(tracks.map(doc => [toIdString(doc._id) || String(doc._id), doc]));
+
+  let userMap = new Map();
+  if (tracks.length) {
+    const userIds = Array.from(new Set(tracks.map(doc => toIdString(doc.userId)).filter(Boolean)));
+    if (userIds.length) {
+      const userObjectIds = userIds.map(id => {
+        try {
+          return new mongoose.Types.ObjectId(id);
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+      if (userObjectIds.length) {
+        const users = await User.find({ _id: { $in: userObjectIds } }).lean();
+        const summaries = includeUserDetails
+          ? await Promise.all(users.map(async u => {
+              const key = toIdString(u._id);
+              if (!key) return null;
+              return [key, await userSummary(req, u)];
+            }))
+          : users.map(u => {
+              const key = toIdString(u._id);
+              if (!key) return null;
+              return [key, publicLeaderboardUserSummary(req, u)];
+            });
+        userMap = new Map((summaries || []).filter(entry => Array.isArray(entry) && entry[0] && entry[1]));
+      }
+    }
+  }
+
+  const entries = [];
+  for (const statsDoc of statsDocs) {
+    const key = toIdString(statsDoc.trackId) || String(statsDoc.trackId);
+    if (!key) continue;
+    const trackDoc = trackMap.get(key);
+    if (!trackDoc) continue;
+    const stats = statsSummary(statsDoc);
+    const score = computeLeaderboardScore(stats);
+    const userKey = toIdString(trackDoc.userId);
+    const audioUrl = trackDoc.audioUrl ? publicUploadUrl(req, trackDoc.audioUrl) : '';
+    const coverUrl = trackDoc.coverUrl ? publicUploadUrl(req, trackDoc.coverUrl) : '';
+    entries.push({
+      score,
+      stats,
+      track: {
+        id: trackDoc._id,
+        title: trackDoc.title || 'Untitled',
+        artist: trackDoc.artist || '',
+        bpm: trackDoc.bpm || 0,
+        audioUrl,
+        coverUrl: coverUrl || null,
+        duration: trackDoc.audioDurationSec || null,
+        caption: trackDoc.caption || '',
+        createdAt: trackDoc.createdAt,
+        userId: trackDoc.userId,
+        user: userKey ? userMap.get(userKey) || null : null,
+        stats
+      }
+    });
+  }
+
+  entries.sort((a, b) => b.score - a.score);
+  return entries.slice(0, limit);
+}
+
 function ensureGridShape(sessionDoc) {
   if (!sessionDoc.grid || typeof sessionDoc.grid !== 'object') {
     sessionDoc.grid = { rows: 8, cols: 16, map: {} };
@@ -2236,67 +2326,20 @@ app.post('/api/tracks/:id/comments', auth, async (req, res) => {
 
 app.get('/api/leaderboard', auth, async (req, res) => {
   try {
-    const statsDocs = await TrackStat.find({}).sort({ plays: -1, likes: -1, reposts: -1, comments: -1 }).limit(200).lean();
-    if (!statsDocs.length) {
-      return res.json({ top: [] });
-    }
-
-    const trackIds = statsDocs.map(doc => doc.trackId).filter(Boolean);
-    const tracks = await Track.find({ _id: { $in: trackIds } }).lean();
-    const trackMap = new Map(tracks.map(doc => [toIdString(doc._id) || String(doc._id), doc]));
-
-    const userIds = Array.from(new Set(tracks.map(doc => toIdString(doc.userId)).filter(Boolean)));
-    let userMap = new Map();
-    if (userIds.length) {
-      const userObjectIds = userIds.map(id => {
-        try {
-          return new mongoose.Types.ObjectId(id);
-        } catch {
-          return null;
-        }
-      }).filter(Boolean);
-      if (userObjectIds.length) {
-        const users = await User.find({ _id: { $in: userObjectIds } });
-        const summaries = await Promise.all(users.map(async u => [toIdString(u._id), await userSummary(req, u)]));
-        userMap = new Map(summaries.filter(([key]) => Boolean(key)));
-      }
-    }
-
-    const entries = [];
-    for (const statsDoc of statsDocs) {
-      const key = toIdString(statsDoc.trackId) || String(statsDoc.trackId);
-      if (!key) continue;
-      const trackDoc = trackMap.get(key);
-      if (!trackDoc) continue;
-      const stats = statsSummary(statsDoc);
-      const score = computeLeaderboardScore(stats);
-      const userKey = toIdString(trackDoc.userId);
-      const audioUrl = trackDoc.audioUrl ? publicUploadUrl(req, trackDoc.audioUrl) : '';
-      const coverUrl = trackDoc.coverUrl ? publicUploadUrl(req, trackDoc.coverUrl) : '';
-      entries.push({
-        score,
-        stats,
-        track: {
-          id: trackDoc._id,
-          title: trackDoc.title || 'Untitled',
-          artist: trackDoc.artist || '',
-          bpm: trackDoc.bpm || 0,
-          audioUrl,
-          coverUrl: coverUrl || null,
-          duration: trackDoc.audioDurationSec || null,
-          caption: trackDoc.caption || '',
-          createdAt: trackDoc.createdAt,
-          userId: trackDoc.userId,
-          user: userKey ? userMap.get(userKey) || null : null,
-          stats
-        }
-      });
-    }
-
-    entries.sort((a, b) => b.score - a.score);
-    res.json({ top: entries.slice(0, 20) });
+    const top = await buildLeaderboardEntries(req, { includeUserDetails: true, limit: 20 });
+    res.json({ top });
   } catch (err) {
     console.error('Failed to build leaderboard', err);
+    res.status(500).json({ error: 'failed to load leaderboard' });
+  }
+});
+
+app.get('/api/public/leaderboard', async (req, res) => {
+  try {
+    const top = await buildLeaderboardEntries(req, { includeUserDetails: false, limit: 20 });
+    res.json({ top });
+  } catch (err) {
+    console.error('Failed to build public leaderboard', err);
     res.status(500).json({ error: 'failed to load leaderboard' });
   }
 });
