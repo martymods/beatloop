@@ -5245,118 +5245,163 @@ async function updateLeaderboard() {
   })
 }
 
+    function resolveTrackApiBase() {
+      if (typeof window.getApiBase === 'function') {
+        try {
+          const base = window.getApiBase()
+          if (typeof base === 'string' && base.trim()) {
+            return base.replace(/\/+$/, '')
+          }
+        } catch (err) {
+          console.warn('getApiBase() threw unexpectedly', err)
+        }
+      }
+      try {
+        const fallback = typeof window.API_BASE === 'string' ? window.API_BASE : ''
+        if (fallback && fallback.trim()) {
+          return fallback.replace(/\/+$/, '')
+        }
+      } catch (err) {
+        console.warn('Unable to read API_BASE fallback', err)
+      }
+      return 'http://localhost:10000'
+    }
+
+    async function appendCoverToFormData(fd, coverKey) {
+      if (!coverKey) return
+      let coverUrl = null
+      try {
+        coverUrl = await getBlobUrl('covers', coverKey)
+      } catch (err) {
+        console.warn('Failed to resolve cover blob for upload', err)
+        return
+      }
+      if (!coverUrl) return
+      try {
+        const response = await fetch(coverUrl)
+        const coverBlob = await response.blob()
+        fd.append('cover', coverBlob, 'cover.png')
+      } catch (err) {
+        console.warn('Failed to attach cover art to upload', err)
+      } finally {
+        try { URL.revokeObjectURL(coverUrl) } catch (_) {}
+      }
+    }
+
+    async function uploadTrackBlobToApi({ blob, title, bpm = 0, coverKey, filename, errorPrefix = 'Track upload failed' }) {
+      if (!blob) throw new Error('Audio blob required')
+      const apiBase = resolveTrackApiBase()
+      const fd = new FormData()
+      if (filename) fd.append('audio', blob, filename)
+      else fd.append('audio', blob)
+      await appendCoverToFormData(fd, coverKey)
+      const safeTitle = typeof title === 'string' ? title : ''
+      if (safeTitle) fd.append('title', safeTitle)
+      const bpmValue = Number.isFinite(bpm) ? bpm : 0
+      fd.append('bpm', String(bpmValue))
+      let token = ''
+      try { token = localStorage.getItem('jwt') || '' } catch (_) {}
+      const headers = token && token.trim() ? { Authorization: 'Bearer ' + token.trim() } : {}
+      const response = await fetch(`${apiBase}/api/tracks`, {
+        method: 'POST',
+        headers,
+        body: fd
+      })
+      if (!response.ok) {
+        let detail = ''
+        try {
+          const data = await response.json()
+          detail = (data && (data.error || data.message)) || ''
+        } catch (_) {
+          try { detail = await response.text() } catch (_) {}
+        }
+        const trimmed = String(detail || '').trim()
+        const message = trimmed ? `${errorPrefix}: ${trimmed}` : `${errorPrefix} (HTTP ${response.status})`
+        const error = new Error(message)
+        error.isApiFailure = true
+        error.status = response.status
+        throw error
+      }
+      const payload = await response.json().catch(() => ({}))
+      return payload || {}
+    }
 
     // ---------- Upload track -> IDB blob + meta in localStorage
-uploadTrackInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0]
-  if (!file) return
-  const getApiBase = () => (typeof window.getApiBase === 'function'
-    ? window.getApiBase()
-    : (window.API_BASE || API_BASE_DEFAULT))
-  const token = localStorage.getItem('jwt') || ''
-  const idLocal = 'custom-' + Date.now()
+    uploadTrackInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0]
+      if (!file) return
+      const idLocal = 'custom-' + Date.now()
 
-  // Build a tiny meta now so we can still post locally if API fails
-  const metaLocal = {
-    id: idLocal,
-    title: file.name.replace(/\.[^/.]+$/, ''),
-    artist: (currentUser?.name || currentUser?.email || 'me'),
-    bpm: 0, db: true, coverKey: pendingCoverKey || null, createdAt: Date.now()
-  }
-
-  try {
-    // 1) Try API save
-    const fd = new FormData()
-    fd.append('audio', file)
-    if (pendingCoverKey) {
-      // resolve cover blob from IDB and attach
-      const coverUrl = await getBlobUrl('covers', pendingCoverKey)
-      if (coverUrl) {
-        const coverBlob = await fetch(coverUrl).then(r=>r.blob())
-        fd.append('cover', coverBlob, 'cover.png')
+      // Build a tiny meta now so we can still post locally if API fails
+      const metaLocal = {
+        id: idLocal,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        artist: (currentUser?.name || currentUser?.email || 'me'),
+        bpm: 0, db: true, coverKey: pendingCoverKey || null, createdAt: Date.now()
       }
-    }
-    fd.append('title', metaLocal.title)
-    fd.append('bpm', String(metaLocal.bpm))
 
-    const r = await fetch(getApiBase() + '/api/tracks', {
-      method: 'POST',
-      headers: token ? { Authorization: 'Bearer ' + token } : {},
-      body: fd
-    })
-
-    if (r.ok) {
-      // server returns {id,title,artist,bpm,coverUrl,audioUrl}
-      const saved = await r.json()
-      // Show the post immediately with server URLs
-      saved.caption = saved.caption || (composerTextEl ? composerTextEl.value.trim() : '')
-      createPost(saved, { prepend: true })
-      scheduleLeaderboardRefresh()
-      const titleForNotification = String(saved.title || metaLocal.title || 'Untitled').trim() || 'Untitled'
-      recordNotification('upload', `Uploaded “${titleForNotification}”`, 'Your track is live on Beatloop.', {
-        trackId: saved.id || metaLocal.id,
-        trackTitle: titleForNotification,
-        timestamp: Date.now(),
-        storage: 'cloud'
-      })
-      pendingMeta = null
-      pendingCoverKey = null
-      return
-    }
-    // Non-OK API response → surface to the user instead of silently falling back
-    let detail = ''
-    try {
-      const raw = await r.text()
-      if (raw) {
-        try {
-          const data = JSON.parse(raw)
-          detail = (data && (data.error || data.message)) || raw
-        } catch {
-          detail = raw
+      let savedRemote = null
+      try {
+        savedRemote = await uploadTrackBlobToApi({
+          blob: file,
+          title: metaLocal.title,
+          bpm: metaLocal.bpm,
+          coverKey: pendingCoverKey,
+          filename: file.name,
+          errorPrefix: 'Track upload failed'
+        })
+      } catch (err) {
+        const isApiFailure = err && typeof err === 'object' && err.isApiFailure
+        if (isApiFailure) {
+          alert(err.message || 'Track upload failed.')
+          pendingMeta = null
+          e.target.value = ''
+          return
         }
-        if (detail) detail = String(detail).trim()
+        console.warn('Track upload failed remotely, falling back to local save', err)
       }
-    } catch {}
-    const message = detail
-      ? ('Track upload failed: ' + detail)
-      : ('Track upload failed (HTTP ' + r.status + ')')
-    const error = new Error(message)
-    error.isApiFailure = true
-    error.status = r.status
-    throw error
-  } catch (err) {
-    // 2) Local fallback (IDB)
-    const isApiFailure = err && typeof err === 'object' && err.isApiFailure
-    if (isApiFailure) {
-      alert(err.message || 'Track upload failed.')
-      pendingMeta = null
-      return
-    }
-    try {
-      await putBlob('tracks', idLocal, file)
-      customMeta.push(metaLocal)
-      if (customMeta.length > 30) customMeta.shift()
-      setJSON('custom_tracks', customMeta)
 
-      const coverUrl = metaLocal.coverKey ? (await getBlobUrl('covers', metaLocal.coverKey)) : DEFAULT_TRACK_COVER
-      const url = URL.createObjectURL(file)
-      createPost({ ...metaLocal, url, cover: coverUrl }, { prepend: true })
-      scheduleLeaderboardRefresh()
-      const titleForNotification = String(metaLocal.title || 'Untitled').trim() || 'Untitled'
-      recordNotification('upload', `Added “${titleForNotification}”`, 'Saved locally to your library.', {
-        trackId: metaLocal.id,
-        trackTitle: titleForNotification,
-        timestamp: Date.now(),
-        storage: 'local'
-      })
-      pendingMeta = metaLocal
-    } catch (saveErr) {
-      alert('Save failed: ' + (saveErr?.message || saveErr))
-    }
-  } finally {
-    e.target.value = ''
-  }
-})
+      if (savedRemote) {
+        savedRemote.caption = savedRemote.caption || (composerTextEl ? composerTextEl.value.trim() : '')
+        createPost(savedRemote, { prepend: true })
+        scheduleLeaderboardRefresh()
+        const titleForNotification = String(savedRemote.title || metaLocal.title || 'Untitled').trim() || 'Untitled'
+        recordNotification('upload', `Uploaded “${titleForNotification}”`, 'Your track is live on Beatloop.', {
+          trackId: savedRemote.id || metaLocal.id,
+          trackTitle: titleForNotification,
+          timestamp: Date.now(),
+          storage: 'cloud'
+        })
+        pendingMeta = null
+        pendingCoverKey = null
+        e.target.value = ''
+        return
+      }
+
+      try {
+        await putBlob('tracks', idLocal, file)
+        customMeta.push(metaLocal)
+        if (customMeta.length > 30) customMeta.shift()
+        setJSON('custom_tracks', customMeta)
+
+        const coverUrl = metaLocal.coverKey ? (await getBlobUrl('covers', metaLocal.coverKey)) : DEFAULT_TRACK_COVER
+        const url = URL.createObjectURL(file)
+        createPost({ ...metaLocal, url, cover: coverUrl }, { prepend: true })
+        scheduleLeaderboardRefresh()
+        const titleForNotification = String(metaLocal.title || 'Untitled').trim() || 'Untitled'
+        recordNotification('upload', `Added “${titleForNotification}”`, 'Saved locally to your library.', {
+          trackId: metaLocal.id,
+          trackTitle: titleForNotification,
+          timestamp: Date.now(),
+          storage: 'local'
+        })
+        pendingMeta = metaLocal
+      } catch (saveErr) {
+        alert('Save failed: ' + (saveErr?.message || saveErr))
+      } finally {
+        e.target.value = ''
+      }
+    })
 
 
     // ---------- Optional cover upload -> IDB
@@ -5467,15 +5512,52 @@ uploadTrackInput.addEventListener('change', async (e) => {
           mediaRecorder.onstop = async () => {
             const blob = new Blob(recordedChunks, { type: 'audio/webm' })
             const id = 'rec-' + Date.now()
+            const createdAt = Date.now()
+            const meta = {
+              id,
+              title: 'Recording ' + new Date().toLocaleTimeString(),
+              artist: (currentUser?.name || currentUser?.email || 'me'),
+              bpm: 0,
+              db: true,
+              coverKey: pendingCoverKey || null,
+              createdAt
+            }
             try {
-              await putBlob('tracks', id, blob)
-              const createdAt = Date.now()
-              const meta = {
-                id,
-                title: 'Recording ' + new Date().toLocaleTimeString(),
-                artist: (currentUser?.name || currentUser?.email || 'me'),
-                bpm: 0, db: true, coverKey: pendingCoverKey || null, createdAt
+              let savedRemote = null
+              try {
+                savedRemote = await uploadTrackBlobToApi({
+                  blob,
+                  title: meta.title,
+                  bpm: meta.bpm,
+                  coverKey: meta.coverKey,
+                  filename: 'recording.webm',
+                  errorPrefix: 'Recording upload failed'
+                })
+              } catch (uploadErr) {
+                if (uploadErr && uploadErr.isApiFailure) {
+                  alert(uploadErr.message || 'Recording upload failed.')
+                } else if (uploadErr) {
+                  console.warn('Recording upload failed remotely, saving locally instead', uploadErr)
+                }
               }
+
+              if (savedRemote) {
+                savedRemote.caption = savedRemote.caption || (composerTextEl ? composerTextEl.value.trim() : '')
+                createPost(savedRemote, { prepend: true })
+                scheduleLeaderboardRefresh()
+                const recordingTitle = String(savedRemote.title || meta.title || 'Recording').trim() || 'Recording'
+                recordNotification('recording', `Recorded “${recordingTitle}”`, 'Your live recording is live on Beatloop.', {
+                  trackId: savedRemote.id || meta.id,
+                  trackTitle: recordingTitle,
+                  timestamp: createdAt,
+                  storage: 'cloud'
+                })
+                pendingMeta = null
+                pendingCoverKey = null
+                return
+              }
+
+              await putBlob('tracks', id, blob)
               customMeta.push(meta); if (customMeta.length > 30) customMeta.shift()
               setJSON('custom_tracks', customMeta)
               const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
@@ -5491,7 +5573,7 @@ uploadTrackInput.addEventListener('change', async (e) => {
               })
               pendingMeta = meta
             } catch (err) {
-              alert('Recording save failed: ' + err.message)
+              alert('Recording save failed: ' + (err?.message || err))
             } finally {
               recordBtn.textContent = 'Record Track'
               recordingStatus.classList.add('hidden')
