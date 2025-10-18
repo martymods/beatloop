@@ -8,7 +8,7 @@ import morgan from 'morgan';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
-import { parseFile, parseBuffer } from 'music-metadata';
+import { parseBuffer } from 'music-metadata';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -105,10 +105,12 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, unique: true, index: true },
   passwordHash: String,
   avatarUrl: String,
+  avatarStorageKey: { type: String, default: '' },
   firstName: { type: String, default: '' },
   lastName: { type: String, default: '' },
   displayName: { type: String, default: '' },
   tagUrl: String,            // 3-sec sound tag URL
+  tagStorageKey: { type: String, default: '' },
   tagDurationSec: Number,
   totalOnlineSec: { type: Number, default: 0 },
   lastPingAt: Date,
@@ -198,7 +200,8 @@ const TrackCommentSchema = new mongoose.Schema({
     name: { type: String, default: '' },
     displayName: { type: String, default: '' },
     email: { type: String, default: '' },
-    avatar: { type: String, default: '' }
+    avatar: { type: String, default: '' },
+    avatarStorageKey: { type: String, default: '' }
   }
 });
 
@@ -310,7 +313,7 @@ const uploadsRoot = getUploadsRoot();
 const trackAudioDir = path.join(uploadsRoot, 'tracks');
 const trackCoverDir = path.join(uploadsRoot, 'covers');
 const messageAttachmentDir = path.join(uploadsRoot, 'messages');
-const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages']);
+const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags']);
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
 fs.mkdirSync(messageAttachmentDir, { recursive: true });
@@ -470,11 +473,13 @@ async function buildVerifiedFallbacks() {
 VERIFIED_FALLBACK_BASES = await buildVerifiedFallbacks();
 
 function requestBaseFromHeaders(req) {
+  if (!req) return null;
+  const headers = req.headers || {};
   const headerValue = value => (typeof value === 'string' ? value.split(',')[0].trim() : '');
-  const forwardedHost = headerValue(req.headers['x-forwarded-host']);
-  const forwardedProto = headerValue(req.headers['x-forwarded-proto']);
-  const origin = headerValue(req.headers.origin);
-  const hostHeader = forwardedHost || headerValue(req.headers.host) || (typeof req.get === 'function' ? headerValue(req.get('host')) : '');
+  const forwardedHost = headerValue(headers['x-forwarded-host']);
+  const forwardedProto = headerValue(headers['x-forwarded-proto']);
+  const origin = headerValue(headers.origin);
+  const hostHeader = forwardedHost || headerValue(headers.host) || (typeof req.get === 'function' ? headerValue(req.get('host')) : '');
   const protocol = forwardedProto || (origin ? origin.split('://')[0] : '') || req.protocol || 'http';
 
   if (hostHeader) {
@@ -599,14 +604,30 @@ async function auth(req, res, next) {
   }
 }
 
-async function userSummary(u) {
+function isAbsoluteUrl(value) {
+  return typeof value === 'string' && /^https?:\/\//i.test(value);
+}
+
+function presentStoredUploadUrl(req, url, storageKey) {
+  const rawUrl = typeof url === 'string' ? url : '';
+  if (isAbsoluteUrl(rawUrl)) return rawUrl;
+  const fallback = typeof storageKey === 'string' && storageKey ? storageKey : rawUrl;
+  const key = normalizeUploadKey(fallback);
+  if (!key) return rawUrl;
+  return publicUploadUrl(req, key);
+}
+
+async function userSummary(reqOrUser, maybeUser) {
+  const hasReq = maybeUser !== undefined;
+  const req = hasReq ? reqOrUser : null;
+  const u = hasReq ? maybeUser : reqOrUser;
   if (!u) return null;
   return {
     id: u._id,
     name: u.name,
     email: u.email,
-    avatar: u.avatarUrl,
-    tagUrl: u.tagUrl,
+    avatar: presentStoredUploadUrl(req, u.avatarUrl, u.avatarStorageKey),
+    tagUrl: presentStoredUploadUrl(req, u.tagUrl, u.tagStorageKey),
     tagDurationSec: u.tagDurationSec,
     joinedAt: u.createdAt,
     firstName: u.firstName,
@@ -705,15 +726,17 @@ function presentMessage(req, doc, viewerId) {
   };
 }
 
-function normalizeUserForConversation(summary, fallback = {}) {
+function normalizeUserForConversation(summary, fallback = {}, req) {
   if (!summary && !fallback) return null;
   const base = summary || {};
   const alt = fallback || {};
+  const avatarValue = base.avatar || alt.avatarUrl || '';
+  const avatarStorageKey = base.avatarStorageKey || alt.avatarStorageKey || '';
   return {
     id: idToString(base.id) || idToString(alt._id) || idToString(alt.id),
     name: base.name || alt.name || '',
     email: base.email || alt.email || '',
-    avatar: base.avatar || alt.avatarUrl || '',
+    avatar: presentStoredUploadUrl(req, avatarValue, avatarStorageKey),
     displayName: base.displayName || alt.displayName || '',
     firstName: base.firstName || alt.firstName || '',
     lastName: base.lastName || alt.lastName || '',
@@ -811,30 +834,32 @@ async function incrementTrackStats({
   return stats;
 }
 
-function commentSummary(doc) {
+function commentSummary(req, doc) {
   if (!doc) return null;
+  const snapshot = doc.userSnapshot || {};
   return {
     id: doc._id,
     text: doc.text,
     time: Number(doc.timeSec) || 0,
     createdAt: doc.createdAt,
     userId: doc.userId,
-    user: doc.userSnapshot?.email || '',
-    displayName: doc.userSnapshot?.displayName || doc.userSnapshot?.name || '',
-    avatar: doc.userSnapshot?.avatar || '',
+    user: snapshot?.email || '',
+    displayName: snapshot?.displayName || snapshot?.name || '',
+    avatar: presentStoredUploadUrl(req, snapshot?.avatar, snapshot?.avatarStorageKey),
     clientId: doc.clientId || null
   };
 }
 
-function commentSnapshot(user) {
+function commentSnapshot(req, user) {
   if (!user) {
-    return { name: '', displayName: '', email: '', avatar: '' };
+    return { name: '', displayName: '', email: '', avatar: '', avatarStorageKey: '' };
   }
   return {
     name: typeof user.name === 'string' ? user.name : '',
     displayName: typeof user.displayName === 'string' ? user.displayName : '',
     email: typeof user.email === 'string' ? user.email : '',
-    avatar: typeof user.avatarUrl === 'string' ? user.avatarUrl : ''
+    avatar: presentStoredUploadUrl(req, user.avatarUrl, user.avatarStorageKey),
+    avatarStorageKey: typeof user.avatarStorageKey === 'string' ? user.avatarStorageKey : ''
   };
 }
 
@@ -974,16 +999,16 @@ function ensureParticipantHistory(sessionDoc, userId) {
   return true;
 }
 
-async function rosterFor(sessionDoc) {
+async function rosterFor(sessionDoc, req) {
   const ids = (sessionDoc.participants || []).map(id => new mongoose.Types.ObjectId(id));
   if (!ids.length) return [];
-  const users = await User.find({ _id: { $in: ids } }).select('name email avatarUrl tagUrl createdAt');
+  const users = await User.find({ _id: { $in: ids } }).select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey createdAt');
   return users.map(u => ({
     id: u._id,
     name: u.name,
     email: u.email,
-    avatar: u.avatarUrl,
-    tagUrl: u.tagUrl,
+    avatar: presentStoredUploadUrl(req, u.avatarUrl, u.avatarStorageKey),
+    tagUrl: presentStoredUploadUrl(req, u.tagUrl, u.tagStorageKey),
     joinedAt: u.createdAt,
     color: (() => {
       const idStr = toIdString(u._id);
@@ -995,7 +1020,7 @@ async function rosterFor(sessionDoc) {
   }));
 }
 
-async function participantHistoryFor(sessionDoc) {
+async function participantHistoryFor(sessionDoc, req) {
   const rawKeys = [];
   for (const entry of sessionDoc.participantsHistory || []) {
     const key = participantKey(entry);
@@ -1012,7 +1037,7 @@ async function participantHistoryFor(sessionDoc) {
     })
     .filter(Boolean);
   if (!objectIds.length) return [];
-  const users = await User.find({ _id: { $in: objectIds } }).select('name email avatarUrl tagUrl createdAt');
+  const users = await User.find({ _id: { $in: objectIds } }).select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey createdAt');
   const userMap = new Map(users.map(u => [participantKey(u._id), u]));
   const ordered = [];
   const seen = new Set();
@@ -1025,8 +1050,8 @@ async function participantHistoryFor(sessionDoc) {
       id: user._id,
       name: user.name,
       email: user.email,
-      avatar: user.avatarUrl,
-      tagUrl: user.tagUrl,
+      avatar: presentStoredUploadUrl(req, user.avatarUrl, user.avatarStorageKey),
+      tagUrl: presentStoredUploadUrl(req, user.tagUrl, user.tagStorageKey),
       joinedAt: user.createdAt
     });
   }
@@ -1073,7 +1098,7 @@ app.post('/api/auth/signup', async (req, res) => {
     lastName: last,
     displayName: display
   });
-  res.json({ token: sign(user), user: await userSummary(user) });
+  res.json({ token: sign(user), user: await userSummary(req, user) });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -1088,11 +1113,11 @@ app.post('/api/auth/login', async (req, res) => {
   if (!user.passwordHash) return res.status(401).json({ error: 'invalid credentials' });
   const ok = await bcrypt.compare(passwordValue, user.passwordHash);
   if (!ok) return res.status(401).json({ error: 'invalid credentials' });
-  res.json({ token: sign(user), user: await userSummary(user) });
+  res.json({ token: sign(user), user: await userSummary(req, user) });
 });
 
 app.get('/api/auth/me', auth, async (req, res) => {
-  res.json({ user: await userSummary(req.user) });
+  res.json({ user: await userSummary(req, req.user) });
 });
 
 /* ---- profile update: change username (unique) and/or avatarUrl ---- */
@@ -1116,16 +1141,19 @@ async function handleProfileUpdate(req, res) {
     const trimmed = typeof displayName === 'string' ? displayName.trim() : '';
     req.user.displayName = trimmed;
   }
-  if (avatarUrl !== undefined) req.user.avatarUrl = avatarUrl;
+  if (avatarUrl !== undefined) {
+    req.user.avatarUrl = avatarUrl;
+    req.user.avatarStorageKey = '';
+  }
   await req.user.save();
-  res.json({ user: await userSummary(req.user) });
+  res.json({ user: await userSummary(req, req.user) });
 }
 
 app.patch('/api/users/profile', auth, handleProfileUpdate);
 app.put('/api/users/profile', auth, handleProfileUpdate);
 
 app.get('/api/users/me', auth, async (req, res) => {
-  res.json({ user: await userSummary(req.user) });
+  res.json({ user: await userSummary(req, req.user) });
 });
 
 app.get('/api/users/directory', async (req, res) => {
@@ -1135,14 +1163,14 @@ app.get('/api/users/directory', async (req, res) => {
     const users = await User.find()
       .sort({ createdAt: -1 })
       .limit(limit)
-      .select('name email avatarUrl tagUrl totalOnlineSec createdAt');
+      .select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey totalOnlineSec createdAt displayName firstName lastName tagDurationSec');
 
     const directory = users.map(u => ({
       id: u._id,
       name: u.name,
       email: u.email,
-      avatar: u.avatarUrl,
-      tagUrl: u.tagUrl,
+      avatar: presentStoredUploadUrl(req, u.avatarUrl, u.avatarStorageKey),
+      tagUrl: presentStoredUploadUrl(req, u.tagUrl, u.tagStorageKey),
       tagDurationSec: u.tagDurationSec,
       joinedAt: u.createdAt,
       totalOnlineSec: typeof u.totalOnlineSec === 'number' ? u.totalOnlineSec : 0,
@@ -1187,17 +1215,8 @@ const TAG_ALLOWED_MIME = new Set([
   'audio/aac'
 ].map(normalizeMime));
 
-const tagStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, tagDir),
-  filename: (_req, file, cb) => {
-    const base = crypto.randomBytes(8).toString('hex');
-    const ext = (path.extname(file.originalname) || '').toLowerCase() || '.ogg';
-    cb(null, `${Date.now()}-${base}${ext}`);
-  }
-});
-
 const tagUpload = multer({
-  storage: tagStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const mimetype = normalizeMime(file?.mimetype);
@@ -1365,17 +1384,8 @@ function avatarFileExt(file) {
   return IMAGE_MIME_EXT[mimetype] || '.png';
 }
 
-const avatarStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, avatarDir),
-  filename: (_req, file, cb) => {
-    const ext = avatarFileExt(file);
-    const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
-    cb(null, name);
-  }
-});
-
 const avatarUpload = multer({
-  storage: avatarStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 3 * 1024 * 1024 }, // 3MB avatar cap
   fileFilter: (_req, file, cb) => {
     const mimetype = normalizeMime(file.mimetype);
@@ -1525,7 +1535,7 @@ app.get('/api/messages/conversations', auth, async (req, res) => {
       .filter(Boolean);
 
     const users = await User.find({ _id: { $in: otherObjectIds } })
-      .select('name email avatarUrl displayName firstName lastName createdAt')
+      .select('name email avatarUrl avatarStorageKey displayName firstName lastName createdAt')
       .lean();
 
     const userMap = new Map(users.map(u => [idToString(u._id), u]));
@@ -1534,8 +1544,8 @@ app.get('/api/messages/conversations', auth, async (req, res) => {
     for (const { doc, otherId } of conversations.values()) {
       const userRaw = userMap.get(otherId);
       if (!userRaw) continue;
-      const summary = await userSummary(userRaw);
-      const user = normalizeUserForConversation(summary, userRaw);
+      const summary = await userSummary(req, userRaw);
+      const user = normalizeUserForConversation(summary, userRaw, req);
       if (!user?.id) continue;
       const message = presentMessage(req, doc, viewerId);
       message.preview = messagePreview(message);
@@ -1564,7 +1574,7 @@ app.get('/api/messages/with/:userId', auth, async (req, res) => {
     }
 
     const otherUser = await User.findById(otherId)
-      .select('name email avatarUrl displayName firstName lastName createdAt')
+      .select('name email avatarUrl avatarStorageKey displayName firstName lastName createdAt')
       .lean();
     if (!otherUser) return res.status(404).json({ error: 'user not found' });
 
@@ -1574,8 +1584,8 @@ app.get('/api/messages/with/:userId', auth, async (req, res) => {
       .lean();
 
     const messages = docs.map(doc => presentMessage(req, doc, req.user._id));
-    const summary = await userSummary(otherUser);
-    const user = normalizeUserForConversation(summary, otherUser);
+    const summary = await userSummary(req, otherUser);
+    const user = normalizeUserForConversation(summary, otherUser, req);
 
     res.json({ user, messages });
   } catch (err) {
@@ -1714,25 +1724,38 @@ app.post('/api/users/tag', auth, (req, res) => {
       return res.status(400).json({ error: message });
     }
     if (!req.file) return res.status(400).json({ error: 'missing file' });
-    const full = req.file.path;
+    const file = req.file;
+    let duration = 0;
     try {
-      const meta = await parseFile(full);
-      const duration = meta.format.duration || 0;
-      if (duration > 3.05) {
-        await fs.promises.unlink(full).catch(() => {});
-        return res.status(400).json({ error: 'tag must be 3 seconds or less' });
-      }
+      const meta = await parseBuffer(file.buffer, file.mimetype || null, { duration: true });
+      duration = meta?.format?.duration || 0;
+    } catch (ex) {
+      file.buffer = null;
+      return res.status(500).json({ error: 'could not process audio tag' });
+    }
+    if (duration > 3.05) {
+      file.buffer = null;
+      return res.status(400).json({ error: 'tag must be 3 seconds or less' });
+    }
 
-      const previous = resolveUploadPath(req.user.tagUrl, 'tags');
-      if (previous) fs.promises.unlink(previous).catch(() => {});
-
-      const url = publicUploadUrl(req, 'tags', path.basename(full));
-      req.user.tagUrl = url;
+    const previous = req.user.tagStorageKey || req.user.tagUrl || '';
+    try {
+      await persistBufferToStorage(file, { prefix: 'tags', extResolver: audioFileExt });
+      file.buffer = null;
+      const storageKey = file.storageKey || '';
+      req.user.tagStorageKey = storageKey;
+      req.user.tagUrl = storageKey ? publicUploadUrl(req, storageKey) : '';
       req.user.tagDurationSec = Math.round(duration * 1000) / 1000;
       await req.user.save();
-      res.json({ ok: true, tagUrl: url, duration: req.user.tagDurationSec });
+      if (previous) {
+        await deleteStoredUpload(previous, 'tags').catch(() => {});
+      }
+      res.json({ ok: true, tagUrl: req.user.tagUrl, duration: req.user.tagDurationSec });
     } catch (ex) {
-      await fs.promises.unlink(full).catch(() => {});
+      file.buffer = null;
+      if (file?.storageKey) {
+        await deleteUploadKey(file.storageKey).catch(() => {});
+      }
       res.status(500).json({ error: 'could not process audio tag' });
     }
   });
@@ -1747,18 +1770,24 @@ app.post('/api/users/avatar', auth, (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'missing file' });
     }
+    const file = req.file;
+    const previous = req.user.avatarStorageKey || req.user.avatarUrl || '';
     try {
-      const previous = resolveUploadPath(req.user.avatarUrl, 'avatars');
-      if (previous) {
-        fs.promises.unlink(previous).catch(() => {});
-      }
-      const url = publicUploadUrl(req, 'avatars', req.file.filename);
+      await persistBufferToStorage(file, { prefix: 'avatars', extResolver: avatarFileExt });
+      file.buffer = null;
+      const storageKey = file.storageKey || '';
+      const url = storageKey ? publicUploadUrl(req, storageKey) : '';
+      req.user.avatarStorageKey = storageKey;
       req.user.avatarUrl = url;
       await req.user.save();
+      if (previous) {
+        await deleteStoredUpload(previous, 'avatars').catch(() => {});
+      }
       res.json({ ok: true, avatarUrl: url });
     } catch (ex) {
-      if (req.file?.path) {
-        fs.promises.unlink(req.file.path).catch(() => {});
+      file.buffer = null;
+      if (file?.storageKey) {
+        await deleteUploadKey(file.storageKey).catch(() => {});
       }
       res.status(500).json({ error: 'could not save avatar' });
     }
@@ -1837,7 +1866,7 @@ app.post('/api/tracks', auth, (req, res) => {
         caption
       });
 
-      const summary = await userSummary(req.user);
+      const summary = await userSummary(req, req.user);
         res.json({
           id: trackDoc._id,
           title: trackDoc.title,
@@ -1988,7 +2017,7 @@ app.get('/api/tracks', async (req, res) => {
       }).filter(Boolean);
       if (objectIds.length) {
         const users = await User.find({ _id: { $in: objectIds } });
-        const summaries = await Promise.all(users.map(async (u) => [toIdString(u._id), await userSummary(u)]));
+        const summaries = await Promise.all(users.map(async (u) => [toIdString(u._id), await userSummary(req, u)]));
         userMap = new Map(summaries.filter(([key]) => Boolean(key)));
       }
     }
@@ -2008,7 +2037,7 @@ app.get('/api/tracks', async (req, res) => {
         if (!commentsByTrack.has(key)) commentsByTrack.set(key, []);
         const list = commentsByTrack.get(key);
         if (list.length >= 100) continue;
-        list.push(commentSummary(comment));
+        list.push(commentSummary(req, comment));
       }
     }
 
@@ -2134,7 +2163,7 @@ app.get('/api/tracks/:id/comments', auth, async (req, res) => {
   const id = asObjectId(req.params.id);
   if (!id) return res.status(400).json({ error: 'invalid track id' });
   const comments = await TrackComment.find({ trackId: id }).sort({ createdAt: 1 }).limit(200);
-  res.json({ comments: comments.map(commentSummary) });
+  res.json({ comments: comments.map(comment => commentSummary(req, comment)) });
 });
 
 app.post('/api/tracks/:id/comments', auth, async (req, res) => {
@@ -2163,7 +2192,7 @@ app.post('/api/tracks/:id/comments', auth, async (req, res) => {
     text,
     timeSec,
     clientId,
-    userSnapshot: commentSnapshot(req.user)
+    userSnapshot: commentSnapshot(req, req.user)
   };
 
   let created = false;
@@ -2202,7 +2231,7 @@ app.post('/api/tracks/:id/comments', auth, async (req, res) => {
     );
   }
 
-  res.json({ ok: true, comment: commentSummary(commentDoc), stats: statsSummary(stats) });
+  res.json({ ok: true, comment: commentSummary(req, commentDoc), stats: statsSummary(stats) });
 });
 
 app.get('/api/leaderboard', auth, async (req, res) => {
@@ -2228,7 +2257,7 @@ app.get('/api/leaderboard', auth, async (req, res) => {
       }).filter(Boolean);
       if (userObjectIds.length) {
         const users = await User.find({ _id: { $in: userObjectIds } });
-        const summaries = await Promise.all(users.map(async u => [toIdString(u._id), await userSummary(u)]));
+        const summaries = await Promise.all(users.map(async u => [toIdString(u._id), await userSummary(req, u)]));
         userMap = new Map(summaries.filter(([key]) => Boolean(key)));
       }
     }
@@ -2273,16 +2302,16 @@ app.get('/api/leaderboard', auth, async (req, res) => {
 });
 
 /* ============================ Sessions API ============================ */
-app.get('/api/sessions', async (_req, res) => {
+app.get('/api/sessions', async (req, res) => {
   await reapStaleSessions({ emit: false });
   const sessionsRaw = await Session.find({ isActive: true }).sort({ createdAt: -1 }).lean();
   const sessions = sessionsRaw.filter(s => Array.isArray(s.participants) ? s.participants.length > 0 : false);
   // include host info + name + counts for the feed
   const hostIds = sessions.map(s => s.hostUserId).filter(Boolean);
-  const hosts = await User.find({ _id: { $in: hostIds } }).select('name avatarUrl');
+  const hosts = await User.find({ _id: { $in: hostIds } }).select('name avatarUrl avatarStorageKey');
   const hostMap = new Map(hosts.map(h => {
     const key = toIdString(h._id) || String(h._id);
-    return [key, { name: h.name, avatar: h.avatarUrl }];
+    return [key, { name: h.name, avatar: presentStoredUploadUrl(req, h.avatarUrl, h.avatarStorageKey) }];
   }));
   const out = sessions.map(s => ({
     id: s._id,
@@ -2354,8 +2383,8 @@ app.post('/api/sessions/:id/join', auth, async (req, res) => {
   const historyAdded = ensureParticipantHistory(s, req.user._id);
   if (historyAdded) changed = true;
   if (changed) await s.save();
-  const participants = await rosterFor(s);
-  const history = await participantHistoryFor(s);
+  const participants = await rosterFor(s, req);
+  const history = await participantHistoryFor(s, req);
   const { rows = 8, cols = 16, map = {} } = s.grid || {};
   const plainMap = {};
   for (const [key, value] of Object.entries(map || {})) {
@@ -2390,8 +2419,8 @@ app.post('/api/sessions/:id/join', auth, async (req, res) => {
 app.get('/api/sessions/:id', auth, async (req, res) => {
   const s = await Session.findById(req.params.id);
   if (!s || !s.isActive) return res.status(404).json({ error: 'session not found' });
-  const roster = await rosterFor(s);
-  const history = await participantHistoryFor(s);
+  const roster = await rosterFor(s, req);
+  const history = await participantHistoryFor(s, req);
   res.json({
     id: s._id.toString(),
     name: s.name || 'Untitled',
@@ -2470,16 +2499,18 @@ io.use(async (socket, next) => {
     const user = await User.findById(uid);
     if (!user) return next(new Error('bad user'));
     socket.data.user = user;
+    socket.data.user.avatarUrl = presentStoredUploadUrl(socket.request, user.avatarUrl, user.avatarStorageKey);
+    socket.data.user.tagUrl = presentStoredUploadUrl(socket.request, user.tagUrl, user.tagStorageKey);
     next();
   } catch {
     next(new Error('bad token'));
   }
 });
 
-async function broadcastRoster(sessionId) {
+async function broadcastRoster(sessionId, req) {
   const s = await Session.findById(sessionId);
   if (!s) return;
-  const list = await rosterFor(s);
+  const list = await rosterFor(s, req);
   io.to(`session:${sessionId}`).emit('participants', { list });
 }
 
@@ -2513,7 +2544,7 @@ io.on('connection', (socket) => {
     if (changed) await s.save();
     socket.join(`session:${sessionId}`);
     socket.data.sessions.add(sessionId);
-    await broadcastRoster(sessionId);
+    await broadcastRoster(sessionId, socket.request);
 
     // Play this user's tag once, aligned to next step
     if (socket.data.user.tagUrl) {
@@ -2545,7 +2576,7 @@ io.on('connection', (socket) => {
     });
     if (s.participants.length === 0) s.lastEmptyAt = new Date();
     await s.save();
-    await broadcastRoster(sessionId);
+    await broadcastRoster(sessionId, socket.request);
     if (typeof ack === 'function') {
       ack({ ok: true, participants: s.participants.length });
     }
@@ -2568,7 +2599,7 @@ io.on('connection', (socket) => {
         s.lastEmptyAt = undefined;
         await s.save();
       }
-      await broadcastRoster(sessionId);
+      await broadcastRoster(sessionId, socket.request);
     }
     socket.data.sessions?.clear?.();
   });
