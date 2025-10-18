@@ -72,6 +72,10 @@ const AUDIO_MIME_EXT = {
   'audio/x-aiff': '.aiff'
 };
 const AUDIO_ALLOWED_MIME = new Set(Object.keys(AUDIO_MIME_EXT));
+const MESSAGE_ALLOWED_MIME = new Set([
+  ...Object.keys(IMAGE_MIME_EXT),
+  ...Object.keys(AUDIO_MIME_EXT)
+]);
 /* ============================ DB ============================ */
 await mongoose.connect(MONGODB_URI, { dbName: 'beatloop' });
 
@@ -180,12 +184,49 @@ const TrackCommentSchema = new mongoose.Schema({
 
 TrackCommentSchema.index({ trackId: 1, clientId: 1 }, { unique: true, sparse: true });
 
+const MessageAttachmentSchema = new mongoose.Schema({
+  fileName: { type: String, required: true },
+  originalName: { type: String, default: '' },
+  mimeType: { type: String, default: '' },
+  size: { type: Number, default: 0 },
+  type: { type: String, enum: ['image', 'audio'], required: true }
+}, { _id: false });
+
+const DirectMessageSchema = new mongoose.Schema({
+  conversationKey: { type: String, index: true },
+  senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  recipientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  body: { type: String, default: '' },
+  attachments: { type: [MessageAttachmentSchema], default: [] },
+  editedAt: { type: Date, default: null },
+  deletedAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+DirectMessageSchema.pre('validate', function(next) {
+  this.conversationKey = conversationKeyFor(this.senderId, this.recipientId) || this.conversationKey;
+  if (!this.conversationKey) {
+    return next(new Error('invalid conversation participants'));
+  }
+  next();
+});
+
+DirectMessageSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+DirectMessageSchema.index({ conversationKey: 1, createdAt: 1 });
+DirectMessageSchema.index({ senderId: 1, recipientId: 1, createdAt: -1 });
+
 const User = mongoose.model('User', UserSchema);
 const Session = mongoose.model('Session', SessionSchema);
 const Track = mongoose.model('Track', TrackSchema);
 const TrackStat = mongoose.model('TrackStat', TrackStatsSchema);
 const TrackEvent = mongoose.model('TrackEvent', TrackEventSchema);
 const TrackComment = mongoose.model('TrackComment', TrackCommentSchema);
+const DirectMessage = mongoose.model('DirectMessage', DirectMessageSchema);
 
 /* ============================ APP ============================ */
 const app = express();
@@ -249,8 +290,10 @@ const uploadsRoot = path.join(projectRoot, 'uploads');
 fs.mkdirSync(uploadsRoot, { recursive: true });
 const trackAudioDir = path.join(uploadsRoot, 'tracks');
 const trackCoverDir = path.join(uploadsRoot, 'covers');
+const messageAttachmentDir = path.join(uploadsRoot, 'messages');
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
+fs.mkdirSync(messageAttachmentDir, { recursive: true });
 
 const UPLOAD_CACHE_CONTROL = 'public, max-age=604800, immutable';
 
@@ -531,6 +574,99 @@ function asObjectId(value) {
   } catch {
     return null;
   }
+}
+
+function idToString(value) {
+  if (!value) return null;
+  try {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed && trimmed !== 'null' && trimmed !== 'undefined' ? trimmed : null;
+    }
+    if (value instanceof mongoose.Types.ObjectId) {
+      return value.toString();
+    }
+    if (typeof value === 'object' && typeof value.toString === 'function') {
+      const str = value.toString();
+      return str && str !== '[object Object]' ? str : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function conversationKeyFor(a, b) {
+  const left = asObjectId(a);
+  const right = asObjectId(b);
+  if (!left || !right) return null;
+  const [first, second] = [left.toString(), right.toString()].sort();
+  return `${first}:${second}`;
+}
+
+function sanitizeMessageBody(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.slice(0, 2000);
+}
+
+function attachmentTypeFor(mimeType) {
+  if (!mimeType) return 'audio';
+  if (IMAGE_MIME_EXT[mimeType]) return 'image';
+  return 'audio';
+}
+
+function presentMessageAttachment(req, attachment) {
+  if (!attachment || !attachment.fileName) return null;
+  const mimeType = attachment.mimeType || '';
+  return {
+    url: publicUploadUrl(req, 'messages', attachment.fileName),
+    mimeType,
+    type: attachment.type || attachmentTypeFor(mimeType),
+    originalName: attachment.originalName || '',
+    size: Number.isFinite(attachment.size) ? attachment.size : 0
+  };
+}
+
+function presentMessage(req, doc, viewerId) {
+  if (!doc) return null;
+  const raw = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  const senderId = idToString(raw.senderId);
+  const recipientId = idToString(raw.recipientId);
+  const deletedAt = raw.deletedAt ? new Date(raw.deletedAt) : null;
+  const attachments = Array.isArray(raw.attachments)
+    ? raw.attachments.map(att => presentMessageAttachment(req, att)).filter(Boolean)
+    : [];
+
+  return {
+    id: idToString(raw._id),
+    senderId,
+    recipientId,
+    body: deletedAt ? '' : (raw.body || ''),
+    attachments: deletedAt ? [] : attachments,
+    createdAt: raw.createdAt || null,
+    updatedAt: raw.updatedAt || raw.createdAt || null,
+    editedAt: raw.editedAt || null,
+    deletedAt,
+    isSender: viewerId ? idToString(viewerId) === senderId : false
+  };
+}
+
+function normalizeUserForConversation(summary, fallback = {}) {
+  if (!summary && !fallback) return null;
+  const base = summary || {};
+  const alt = fallback || {};
+  return {
+    id: idToString(base.id) || idToString(alt._id) || idToString(alt.id),
+    name: base.name || alt.name || '',
+    email: base.email || alt.email || '',
+    avatar: base.avatar || alt.avatarUrl || '',
+    displayName: base.displayName || alt.displayName || '',
+    firstName: base.firstName || alt.firstName || '',
+    lastName: base.lastName || alt.lastName || '',
+    joinedAt: base.joinedAt || alt.createdAt || alt.joinedAt || null
+  };
 }
 
 function sanitizeCount(value) {
@@ -1025,6 +1161,18 @@ function audioFileExt(file) {
   return AUDIO_MIME_EXT[file.mimetype] || '.mp3';
 }
 
+function messageAttachmentExt(file) {
+  const mapped = IMAGE_MIME_EXT[file.mimetype] || AUDIO_MIME_EXT[file.mimetype];
+  if (mapped) return mapped;
+  const fromName = (path.extname(file.originalname) || '').toLowerCase();
+  if (fromName) return fromName;
+  if (file.mimetype && file.mimetype.includes('/')) {
+    const subtype = file.mimetype.split('/').pop();
+    if (subtype) return `.${subtype}`;
+  }
+  return '.bin';
+}
+
 const trackStorage = multer.diskStorage({
   destination: (_req, file, cb) => {
     if (file.fieldname === 'cover') return cb(null, trackCoverDir);
@@ -1088,6 +1236,32 @@ const avatarUpload = multer({
   }
 });
 
+const MESSAGE_ATTACHMENT_MAX_SIZE = 15 * 1024 * 1024; // 15MB per file
+const MESSAGE_ATTACHMENT_MAX_COUNT = 3;
+
+const messageAttachmentStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, messageAttachmentDir),
+  filename: (_req, file, cb) => {
+    const ext = messageAttachmentExt(file);
+    const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
+    cb(null, name);
+  }
+});
+
+const messageAttachmentUpload = multer({
+  storage: messageAttachmentStorage,
+  limits: {
+    fileSize: MESSAGE_ATTACHMENT_MAX_SIZE,
+    files: MESSAGE_ATTACHMENT_MAX_COUNT
+  },
+  fileFilter: (_req, file, cb) => {
+    if (!file?.mimetype || !MESSAGE_ALLOWED_MIME.has(file.mimetype)) {
+      return cb(new Error('attachments must be images or audio files'));
+    }
+    cb(null, true);
+  }
+});
+
 function resolveUploadPath(url, folder) {
   if (!url) return null;
   const prefix = `/uploads/${folder}/`;
@@ -1111,6 +1285,245 @@ function safeUnlink(filePath) {
   if (!filePath) return;
   fs.promises.unlink(filePath).catch(() => {});
 }
+
+function cleanupMessageUploads(files) {
+  if (!files) return;
+  for (const file of files) {
+    if (file?.path) safeUnlink(file.path);
+  }
+}
+
+function messagePreview(message) {
+  if (!message) return '';
+  if (message.deletedAt) return '';
+  if (message.body) return message.body;
+  if (Array.isArray(message.attachments) && message.attachments.length > 0) {
+    const count = message.attachments.length;
+    return count === 1 ? '[Attachment]' : `[${count} attachments]`;
+  }
+  return '';
+}
+
+/* ============================ Direct Messages ============================ */
+app.get('/api/messages/conversations', auth, async (req, res) => {
+  try {
+    const viewerId = req.user._id;
+    const viewerStr = idToString(viewerId);
+    const docs = await DirectMessage.find({
+      $or: [{ senderId: viewerId }, { recipientId: viewerId }]
+    })
+      .sort({ createdAt: -1 })
+      .limit(400)
+      .lean();
+
+    if (!docs || docs.length === 0) {
+      return res.json({ conversations: [] });
+    }
+
+    const conversations = new Map();
+    const otherIds = new Set();
+
+    for (const doc of docs) {
+      if (!doc || !doc.conversationKey || conversations.has(doc.conversationKey)) continue;
+      const senderId = idToString(doc.senderId);
+      const recipientId = idToString(doc.recipientId);
+      if (!senderId || !recipientId) continue;
+      const otherId = senderId === viewerStr ? recipientId : senderId;
+      if (!otherId) continue;
+      conversations.set(doc.conversationKey, { doc, otherId });
+      otherIds.add(otherId);
+    }
+
+    if (conversations.size === 0) {
+      return res.json({ conversations: [] });
+    }
+
+    const otherObjectIds = Array.from(otherIds)
+      .map(id => asObjectId(id))
+      .filter(Boolean);
+
+    const users = await User.find({ _id: { $in: otherObjectIds } })
+      .select('name email avatarUrl displayName firstName lastName createdAt')
+      .lean();
+
+    const userMap = new Map(users.map(u => [idToString(u._id), u]));
+
+    const response = [];
+    for (const { doc, otherId } of conversations.values()) {
+      const userRaw = userMap.get(otherId);
+      if (!userRaw) continue;
+      const summary = await userSummary(userRaw);
+      const user = normalizeUserForConversation(summary, userRaw);
+      if (!user?.id) continue;
+      const message = presentMessage(req, doc, viewerId);
+      message.preview = messagePreview(message);
+      response.push({ user, lastMessage: message });
+    }
+
+    response.sort((a, b) => {
+      const at = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+      const bt = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+      return bt - at;
+    });
+
+    res.json({ conversations: response });
+  } catch (err) {
+    console.error('Failed to load direct message conversations', err);
+    res.status(500).json({ error: 'failed to load conversations' });
+  }
+});
+
+app.get('/api/messages/with/:userId', auth, async (req, res) => {
+  try {
+    const otherId = asObjectId(req.params.userId);
+    if (!otherId) return res.status(400).json({ error: 'invalid user id' });
+    if (otherId.equals(req.user._id)) {
+      return res.status(400).json({ error: 'cannot message yourself' });
+    }
+
+    const otherUser = await User.findById(otherId)
+      .select('name email avatarUrl displayName firstName lastName createdAt')
+      .lean();
+    if (!otherUser) return res.status(404).json({ error: 'user not found' });
+
+    const conversationKey = conversationKeyFor(req.user._id, otherId);
+    const docs = await DirectMessage.find({ conversationKey })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const messages = docs.map(doc => presentMessage(req, doc, req.user._id));
+    const summary = await userSummary(otherUser);
+    const user = normalizeUserForConversation(summary, otherUser);
+
+    res.json({ user, messages });
+  } catch (err) {
+    console.error('Failed to load direct message thread', err);
+    res.status(500).json({ error: 'failed to load conversation' });
+  }
+});
+
+app.post('/api/messages/with/:userId', auth, (req, res) => {
+  messageAttachmentUpload.array('attachments', MESSAGE_ATTACHMENT_MAX_COUNT)(req, res, async (err) => {
+    if (err) {
+      const message = err.message || 'upload failed';
+      return res.status(400).json({ error: message });
+    }
+
+    const files = Array.isArray(req.files) ? req.files : [];
+
+    try {
+      const otherId = asObjectId(req.params.userId);
+      if (!otherId) {
+        cleanupMessageUploads(files);
+        return res.status(400).json({ error: 'invalid user id' });
+      }
+      if (otherId.equals(req.user._id)) {
+        cleanupMessageUploads(files);
+        return res.status(400).json({ error: 'cannot message yourself' });
+      }
+
+      const otherUser = await User.findById(otherId).select('_id');
+      if (!otherUser) {
+        cleanupMessageUploads(files);
+        return res.status(404).json({ error: 'user not found' });
+      }
+
+      const body = sanitizeMessageBody(req.body?.body);
+      const attachments = files.map(file => ({
+        fileName: file.filename,
+        originalName: file.originalname || '',
+        mimeType: file.mimetype || '',
+        size: file.size || 0,
+        type: attachmentTypeFor(file.mimetype)
+      }));
+
+      if (!body && attachments.length === 0) {
+        cleanupMessageUploads(files);
+        return res.status(400).json({ error: 'message cannot be empty' });
+      }
+
+      const message = await DirectMessage.create({
+        conversationKey: conversationKeyFor(req.user._id, otherId),
+        senderId: req.user._id,
+        recipientId: otherId,
+        body,
+        attachments
+      });
+
+      res.status(201).json({ message: presentMessage(req, message, req.user._id) });
+    } catch (ex) {
+      cleanupMessageUploads(files);
+      console.error('Failed to send direct message', ex);
+      res.status(500).json({ error: 'failed to send message' });
+    }
+  });
+});
+
+app.patch('/api/messages/:messageId', auth, async (req, res) => {
+  try {
+    const messageId = asObjectId(req.params.messageId);
+    if (!messageId) return res.status(400).json({ error: 'invalid message id' });
+
+    const message = await DirectMessage.findById(messageId);
+    if (!message) return res.status(404).json({ error: 'message not found' });
+    if (!message.senderId.equals(req.user._id)) {
+      return res.status(403).json({ error: 'not allowed' });
+    }
+    if (message.deletedAt) {
+      return res.status(400).json({ error: 'message already deleted' });
+    }
+
+    const body = sanitizeMessageBody(req.body?.body);
+    const hasAttachments = Array.isArray(message.attachments) && message.attachments.length > 0;
+    if (!body && !hasAttachments) {
+      return res.status(400).json({ error: 'message cannot be empty' });
+    }
+
+    message.body = body;
+    message.editedAt = new Date();
+    await message.save();
+
+    res.json({ message: presentMessage(req, message, req.user._id) });
+  } catch (err) {
+    console.error('Failed to edit direct message', err);
+    res.status(500).json({ error: 'failed to edit message' });
+  }
+});
+
+app.delete('/api/messages/:messageId', auth, async (req, res) => {
+  try {
+    const messageId = asObjectId(req.params.messageId);
+    if (!messageId) return res.status(400).json({ error: 'invalid message id' });
+
+    const message = await DirectMessage.findById(messageId);
+    if (!message) return res.status(404).json({ error: 'message not found' });
+    if (!message.senderId.equals(req.user._id)) {
+      return res.status(403).json({ error: 'not allowed' });
+    }
+
+    if (message.deletedAt) {
+      return res.json({ message: presentMessage(req, message, req.user._id) });
+    }
+
+    const attachments = Array.isArray(message.attachments) ? [...message.attachments] : [];
+    message.body = '';
+    message.attachments = [];
+    message.deletedAt = new Date();
+    message.editedAt = null;
+    await message.save();
+
+    for (const att of attachments) {
+      if (att?.fileName) {
+        safeUnlink(path.join(messageAttachmentDir, att.fileName));
+      }
+    }
+
+    res.json({ message: presentMessage(req, message, req.user._id) });
+  } catch (err) {
+    console.error('Failed to delete direct message', err);
+    res.status(500).json({ error: 'failed to delete message' });
+  }
+});
 
 app.post('/api/users/tag', auth, (req, res) => {
   tagUpload.single('tag')(req, res, async (err) => {
