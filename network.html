@@ -2839,9 +2839,10 @@
 
     // ---------- IndexedDB (for blobs)
     const DB_NAME = 'beatloop'
+    const DB_VERSION = 2
     function openDB() {
       return new Promise((res, rej) => {
-        const req = indexedDB.open(DB_NAME, 1)
+        const req = indexedDB.open(DB_NAME, DB_VERSION)
         req.onupgradeneeded = e => {
           const db = e.target.result
           if (!db.objectStoreNames.contains('tracks')) db.createObjectStore('tracks')
