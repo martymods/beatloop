@@ -3910,6 +3910,54 @@ function markLeaderboardTracks(tracks = []) {
   tracks.forEach(track => { try { registerLeaderboardTrack(track || {}) } catch {} })
 }
 
+let hoverTagPreviewAudio = null
+let hoverTagPreviewKey = ''
+let hoverTagPreviewTimeout = null
+
+function stopHoverTagPreview() {
+  if (hoverTagPreviewTimeout) {
+    clearTimeout(hoverTagPreviewTimeout)
+    hoverTagPreviewTimeout = null
+  }
+  if (hoverTagPreviewAudio) {
+    try { hoverTagPreviewAudio.pause() } catch {}
+    try { hoverTagPreviewAudio.currentTime = 0 } catch {}
+  }
+  hoverTagPreviewAudio = null
+  hoverTagPreviewKey = ''
+}
+
+function playHoverTagPreview(user) {
+  if (!user || !user.tagUrl) return
+  const url = toAssetUrl(user.tagUrl)
+  if (!url) return
+  if (hoverTagPreviewKey === url && hoverTagPreviewAudio && !hoverTagPreviewAudio.paused) {
+    return
+  }
+  stopHoverTagPreview()
+  try {
+    const audio = new Audio(url)
+    audio.volume = 0.85
+    hoverTagPreviewAudio = audio
+    hoverTagPreviewKey = url
+    const rawDuration = Number(user.tagDurationSec)
+    const duration = Number.isFinite(rawDuration) && rawDuration > 0
+      ? rawDuration * 1000
+      : 4500
+    hoverTagPreviewTimeout = setTimeout(() => {
+      if (hoverTagPreviewAudio === audio) {
+        stopHoverTagPreview()
+      }
+    }, duration)
+    audio.addEventListener('ended', () => {
+      if (hoverTagPreviewAudio === audio) {
+        stopHoverTagPreview()
+      }
+    }, { once: true })
+    audio.play().catch(() => {})
+  } catch {}
+}
+
 function createPost(track, { prepend = false } = {}) {
   const normalized = normalizeTrackForRendering(track)
   if (!normalized) return null
@@ -3950,6 +3998,34 @@ function createPost(track, { prepend = false } = {}) {
   avatar.onerror = () => { avatar.src = fallbackAvatar }
   avatar.alt = 'avatar'
   avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
+  avatar.classList.add('cursor-pointer')
+  avatar.tabIndex = 0
+  avatar.setAttribute('role', 'button')
+  const profileLabel = author.displayName || author.name || author.email || normalized.artist || 'Beatloop creator'
+  avatar.setAttribute('aria-label', 'View profile for ' + profileLabel)
+  const authorProfile = author ? { ...author } : null
+  const handleAvatarActivate = (event) => {
+    if (event) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    stopHoverTagPreview()
+    if (authorProfile && typeof openWhoProfile === 'function') {
+      openWhoProfile({ ...authorProfile })
+    }
+  }
+  avatar.addEventListener('click', handleAvatarActivate)
+  avatar.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      handleAvatarActivate(event)
+    }
+  })
+  if (authorProfile && authorProfile.tagUrl) {
+    avatar.addEventListener('mouseenter', () => playHoverTagPreview(authorProfile))
+    avatar.addEventListener('focus', () => playHoverTagPreview(authorProfile))
+    avatar.addEventListener('mouseleave', stopHoverTagPreview)
+    avatar.addEventListener('blur', stopHoverTagPreview)
+  }
   header.appendChild(avatar)
 
   const info = document.createElement('div')
@@ -5973,11 +6049,27 @@ const AI_MELODY_SCALES = {
   let aiStatusEl = null;
   let aiMidiContextEl = null;
   const STUDIO_PANEL_STORAGE_KEY = 'beatloop_studio_panel_sizes_v1';
-  const STUDIO_PANEL_LIMITS = {
-    controlsWidth: { min: 240, max: 560 },
-    gridHeight: { min: 260, max: 820 },
-    arrangerHeight: { min: 200, max: 700 },
-    integrationsHeight: { min: 220, max: 720 },
+  const STUDIO_PANEL_LIMITS = (typeof window !== 'undefined' && window.STUDIO_PANEL_LIMITS && typeof window.STUDIO_PANEL_LIMITS === 'object')
+    ? { ...window.STUDIO_PANEL_LIMITS }
+    : {
+      controlsWidth: { min: 240, max: 560 },
+      gridHeight: { min: 260, max: 820 },
+      arrangerHeight: { min: 200, max: 700 },
+      integrationsHeight: { min: 220, max: 720 },
+    };
+  if (typeof window !== 'undefined') {
+    window.STUDIO_PANEL_LIMITS = STUDIO_PANEL_LIMITS;
+  }
+
+  const getStudioPanelLimits = (key) => {
+    if (typeof STUDIO_PANEL_LIMITS !== 'undefined') {
+      return STUDIO_PANEL_LIMITS[key] || {};
+    }
+    if (typeof window !== 'undefined' && window.STUDIO_PANEL_LIMITS && typeof window.STUDIO_PANEL_LIMITS === 'object') {
+      const source = window.STUDIO_PANEL_LIMITS;
+      return (source && typeof source === 'object' && source[key]) ? source[key] : {};
+    }
+    return {};
   };
 
   function clampNumber(value, min, max) {
@@ -6029,7 +6121,7 @@ const AI_MELODY_SCALES = {
     Object.keys(partial).forEach((key) => {
       const incoming = partial[key];
       if (Number.isFinite(incoming)) {
-        const limits = STUDIO_PANEL_LIMITS[key] || {};
+        const limits = getStudioPanelLimits(key);
         next[key] = Math.round(clampNumber(incoming, limits.min, limits.max));
       }
     });
@@ -6065,7 +6157,8 @@ const AI_MELODY_SCALES = {
     if (studioLayoutEl) {
       const stored = Number(prefs.controlsWidth);
       if (Number.isFinite(stored)) {
-        const width = clampNumber(stored, STUDIO_PANEL_LIMITS.controlsWidth.min, STUDIO_PANEL_LIMITS.controlsWidth.max);
+        const controlsLimits = getStudioPanelLimits('controlsWidth');
+        const width = clampNumber(stored, controlsLimits.min, controlsLimits.max);
         studioLayoutEl.style.setProperty('--studio-left-width', `${width}px`);
       } else {
         studioLayoutEl.style.removeProperty('--studio-left-width');
@@ -6075,7 +6168,7 @@ const AI_MELODY_SCALES = {
     const applyHeight = (el, value, key) => {
       if (!el) return;
       if (Number.isFinite(value)) {
-        const limits = STUDIO_PANEL_LIMITS[key] || {};
+        const limits = getStudioPanelLimits(key);
         const height = clampNumber(value, limits.min, limits.max);
         el.style.height = `${height}px`;
         el.dataset.studioHeight = String(height);
@@ -6112,7 +6205,7 @@ const AI_MELODY_SCALES = {
     handle.setAttribute('aria-label', axis === 'x' ? 'Resize width' : 'Resize height');
     element.appendChild(handle);
 
-    const limits = STUDIO_PANEL_LIMITS[key] || {};
+    const limits = getStudioPanelLimits(key);
     const minLimit = Number.isFinite(min) ? min : limits.min;
     const maxLimit = Number.isFinite(max) ? max : limits.max;
 
@@ -6202,8 +6295,8 @@ const AI_MELODY_SCALES = {
       element: studioControlPanelEl,
       axis: 'x',
       key: 'controlsWidth',
-      min: STUDIO_PANEL_LIMITS.controlsWidth.min,
-      max: STUDIO_PANEL_LIMITS.controlsWidth.max,
+      min: getStudioPanelLimits('controlsWidth').min,
+      max: getStudioPanelLimits('controlsWidth').max,
       measure: () => {
         if (!studioLayoutEl) return undefined;
         const raw = parseFloat(getComputedStyle(studioLayoutEl).getPropertyValue('--studio-left-width'));
@@ -6220,8 +6313,8 @@ const AI_MELODY_SCALES = {
       element: studioGridWrapEl,
       axis: 'y',
       key: 'gridHeight',
-      min: STUDIO_PANEL_LIMITS.gridHeight.min,
-      max: STUDIO_PANEL_LIMITS.gridHeight.max,
+      min: getStudioPanelLimits('gridHeight').min,
+      max: getStudioPanelLimits('gridHeight').max,
       apply: (value) => {
         if (studioGridWrapEl) {
           studioGridWrapEl.style.height = `${value}px`;
@@ -6233,8 +6326,8 @@ const AI_MELODY_SCALES = {
       element: arrangerWrap,
       axis: 'y',
       key: 'arrangerHeight',
-      min: STUDIO_PANEL_LIMITS.arrangerHeight.min,
-      max: STUDIO_PANEL_LIMITS.arrangerHeight.max,
+      min: getStudioPanelLimits('arrangerHeight').min,
+      max: getStudioPanelLimits('arrangerHeight').max,
       apply: (value) => {
         if (arrangerWrap) {
           arrangerWrap.style.height = `${value}px`;
@@ -6246,8 +6339,8 @@ const AI_MELODY_SCALES = {
       element: studioIntegrationPanelsEl,
       axis: 'y',
       key: 'integrationsHeight',
-      min: STUDIO_PANEL_LIMITS.integrationsHeight.min,
-      max: STUDIO_PANEL_LIMITS.integrationsHeight.max,
+      min: getStudioPanelLimits('integrationsHeight').min,
+      max: getStudioPanelLimits('integrationsHeight').max,
       apply: (value) => {
         if (studioIntegrationPanelsEl) {
           studioIntegrationPanelsEl.style.height = `${value}px`;
@@ -9868,7 +9961,7 @@ stopBtn.addEventListener('click', () => {
       Object.keys(rawPrefs).forEach((key) => {
         const numeric = Number(rawPrefs[key]);
         if (!Number.isFinite(numeric)) return;
-        const limits = STUDIO_PANEL_LIMITS[key] || {};
+        const limits = getStudioPanelLimits(key);
         panelPrefs[key] = Math.round(clampNumber(numeric, limits.min, limits.max));
       });
     }
