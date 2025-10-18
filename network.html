@@ -1014,7 +1014,249 @@
     }
   </style>
 
-<style>
+  <style>
+    .bl-profile-nav {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .bl-profile-nav__ball {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 999px;
+      border: 3px solid rgba(255, 255, 255, 0.85);
+      background-color: rgba(17, 17, 24, 0.92);
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+      overflow: visible;
+      transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+    }
+
+    .bl-profile-nav__halo {
+      position: absolute;
+      inset: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.35);
+      filter: blur(0.5px);
+      opacity: 0;
+      transform: scale(0.6);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+    }
+
+    .bl-profile-nav__msg-count {
+      position: absolute;
+      top: -6px;
+      left: -6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 2px solid #fff;
+      background: linear-gradient(135deg, #e80202, #ff5f5f);
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 14px rgba(232, 2, 2, 0.4);
+      opacity: 0;
+      transform: scale(0.6);
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .bl-profile-nav__notif {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      width: 190px;
+      transform: translateX(-50%) scale(0.85);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      z-index: 20;
+    }
+
+    .bl-profile-nav__bar {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      border-radius: 999px;
+      background: #fff;
+      padding: 0.35rem 0.8rem 0.35rem 0.6rem;
+      box-shadow: 0 12px 28px rgba(15, 15, 20, 0.45);
+      overflow: hidden;
+    }
+
+    .bl-profile-nav__action {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.85), rgba(14, 165, 233, 0.9));
+      border: 1px solid rgba(124, 58, 237, 0.4);
+      box-shadow: 0 0 0 2px #fff;
+    }
+
+    .bl-profile-nav__action::after {
+      content: '';
+      border-left: 5px solid #fff;
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      display: block;
+      margin: 6px auto 0;
+      width: 0;
+    }
+
+    .bl-profile-nav__text {
+      font-size: 0.7rem;
+      color: #3f3f46;
+      margin: 0;
+      line-height: 1.35;
+    }
+
+    .bl-profile-nav__arrow {
+      display: block;
+      margin: 0.35rem auto 0;
+      width: 0;
+      height: 0;
+      border-top: 7px solid #fff;
+      border-left: 7px solid transparent;
+      border-right: 7px solid transparent;
+      transform-origin: top center;
+      transform: scale(0.7);
+    }
+
+    .bl-profile-nav--has-unread .bl-profile-nav__msg-count {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .bl-profile-nav--has-unread .bl-profile-nav__notif {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+
+    .bl-profile-nav--has-unread .bl-profile-nav__halo {
+      opacity: 0.75;
+    }
+
+    .bl-profile-nav--animate .bl-profile-nav__halo {
+      animation: blProfileHalo 1.4s ease-out forwards;
+    }
+
+    .bl-profile-nav--animate .bl-profile-nav__ball {
+      animation: blProfileBounce 0.6s ease-out;
+    }
+
+    .bl-profile-nav--animate .bl-profile-nav__notif {
+      animation: blProfileNotif 0.8s ease-out forwards;
+    }
+
+    @keyframes blProfileHalo {
+      0% { opacity: 0.8; transform: scale(0.8); }
+      60% { opacity: 0; transform: scale(1.5); }
+      100% { opacity: 0; transform: scale(1.7); }
+    }
+
+    @keyframes blProfileBounce {
+      0% { transform: scale(0.95); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes blProfileNotif {
+      0% { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.85); }
+      60% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.02); }
+      100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+    }
+
+    #profileMessagesButton {
+      position: relative;
+    }
+
+    #profileMessagesButton[disabled] {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    #profileMessagesButton[aria-pressed="true"] {
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.85), rgba(14, 165, 233, 0.85));
+      box-shadow: 0 12px 24px rgba(124, 58, 237, 0.35);
+    }
+
+    #profileMessagesButton[aria-pressed="true"] .profile-messages-button-icon {
+      filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.4));
+    }
+
+    #profileMessagesBadge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.45rem;
+      height: 1.45rem;
+      margin-left: 0.4rem;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.9), rgba(14, 165, 233, 0.9));
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #fff;
+      padding: 0 0.45rem;
+      box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35);
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    #profileMessagesBadge.is-hidden {
+      opacity: 0;
+      transform: scale(0.6);
+      pointer-events: none;
+      min-width: 0;
+      width: 0;
+      margin-left: 0;
+      padding: 0;
+    }
+
+    #profileDmCard .bl-dm__person-badge {
+      position: absolute;
+      bottom: 0.75rem;
+      right: 1.1rem;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.9), rgba(14, 165, 233, 0.85));
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(124, 58, 237, 0.35);
+      opacity: 0;
+      transform: scale(0.6);
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    #profileDmCard .bl-dm__person--unread .bl-dm__person-badge {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    #profileDmCard .bl-dm__person--unread .bl-dm__person-name {
+      color: #fff;
+    }
+
+    #profileDmCard .bl-dm__person--unread .bl-dm__person-preview {
+      color: rgba(255, 255, 255, 0.82);
+    }
+  </style>
+
+  <style>
   /* Beatloop Studio helpers */
   .step{
     --step-off: rgba(56,189,248,.12);
@@ -1240,7 +1482,22 @@
         <a href="index.html" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🏠</span> Home</a>
         <a href="#explore" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🔍</span> Explore</a>
         <a id="notificationsNav" href="#notifications" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>🔔</span> Notifications</a>
-        <a href="#profile" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5"><span>👤</span> Profile</a>
+        <a href="#profile" class="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5">
+          <span class="bl-profile-nav" aria-hidden="true">
+            <span id="profileNavBall" class="bl-profile-nav__ball" style="background-image: url('./img/avatar-default.svg');">
+              <span class="bl-profile-nav__halo"></span>
+              <span id="profileNavCount" class="bl-profile-nav__msg-count">0</span>
+              <span class="bl-profile-nav__notif" id="profileNavNotif">
+                <span class="bl-profile-nav__bar">
+                  <span class="bl-profile-nav__action"></span>
+                  <p id="profileNavPreview" class="bl-profile-nav__text" aria-live="polite">All caught up!</p>
+                </span>
+                <span class="bl-profile-nav__arrow"></span>
+              </span>
+            </span>
+          </span>
+          <span>Profile</span>
+        </a>
         <button id="btnLogout" class="mt-4 w-full rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Log out</button>
       </nav>
     </aside>
@@ -7894,8 +8151,13 @@ stopBtn.addEventListener('click', () => {
             <p class="text-xs uppercase tracking-[0.25em] text-white/40">Profile</p>
             <h3 id="profileWelcomeName" class="mt-1 text-2xl font-semibold text-white">Welcome, Creator</h3>
           </div>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <button id="profileCancelButton" class="hidden rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15">❌ Cancel</button>
+            <button id="profileMessagesButton" type="button" class="flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary/40" aria-pressed="false">
+              <span id="profileMessagesButtonIcon" class="profile-messages-button-icon" aria-hidden="true">💬</span>
+              <span id="profileMessagesButtonText">Messages</span>
+              <span id="profileMessagesBadge" class="is-hidden">0</span>
+            </button>
             <button id="profileEditButton" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary/80">✏️ Edit account details</button>
           </div>
         </div>
@@ -7916,56 +8178,60 @@ stopBtn.addEventListener('click', () => {
           </div>
           <div class="flex flex-col gap-4">
             <div id="profileViewSection" class="flex flex-col gap-4">
-              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p class="text-xs uppercase tracking-wide text-white/50">First name</p>
-                <p id="profileViewFirstName" class="mt-1 text-lg font-semibold text-white">—</p>
-              </div>
-              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p class="text-xs uppercase tracking-wide text-white/50">Last name</p>
-                <p id="profileViewLastName" class="mt-1 text-lg font-semibold text-white">—</p>
-              </div>
-              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p class="text-xs uppercase tracking-wide text-white/50">Display name</p>
-                <p id="profileViewDisplayName" class="mt-1 text-lg font-semibold text-white">—</p>
-                <p class="mt-2 text-xs text-white/50">Your display name is shown on your posts and public activity.</p>
-              </div>
-              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p class="text-xs uppercase tracking-wide text-white/50">Username</p>
-                <p id="profileViewUsername" class="mt-1 text-lg font-semibold text-white">—</p>
-                <p class="mt-2 text-xs text-white/50">Log in using your user name.</p>
-              </div>
-              <div id="profileDmCard" class="bl-dm hidden">
-                <div class="bl-dm__left">
-                  <div class="bl-dm__search">
-                    <input id="blDmSearch" type="text" placeholder="Search creators or conversations" autocomplete="off" />
-                    <button id="blDmRefresh" type="button" class="bl-dm__search-btn" title="Refresh conversations"></button>
-                  </div>
-                  <div id="blDmEmptyState" class="bl-dm__empty">No direct messages yet. Start a chat by searching above.</div>
-                  <ul id="blDmPeople" class="bl-dm__people"></ul>
+              <div id="profileDetailsTab" class="flex flex-col gap-4">
+                <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p class="text-xs uppercase tracking-wide text-white/50">First name</p>
+                  <p id="profileViewFirstName" class="mt-1 text-lg font-semibold text-white">—</p>
                 </div>
-                <div class="bl-dm__right">
-                  <div class="bl-dm__header">
-                    <div>
-                      <p class="bl-dm__to">Direct message</p>
-                      <p id="blDmActiveName" class="bl-dm__name">Select a creator</p>
+                <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p class="text-xs uppercase tracking-wide text-white/50">Last name</p>
+                  <p id="profileViewLastName" class="mt-1 text-lg font-semibold text-white">—</p>
+                </div>
+                <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p class="text-xs uppercase tracking-wide text-white/50">Display name</p>
+                  <p id="profileViewDisplayName" class="mt-1 text-lg font-semibold text-white">—</p>
+                  <p class="mt-2 text-xs text-white/50">Your display name is shown on your posts and public activity.</p>
+                </div>
+                <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p class="text-xs uppercase tracking-wide text-white/50">Username</p>
+                  <p id="profileViewUsername" class="mt-1 text-lg font-semibold text-white">—</p>
+                  <p class="mt-2 text-xs text-white/50">Log in using your user name.</p>
+                </div>
+                <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p class="text-xs uppercase tracking-wide text-white/50">Email address</p>
+                  <p id="profileViewEmail" class="mt-1 text-lg font-semibold text-white break-all">—</p>
+                </div>
+              </div>
+              <div id="profileMessagesTab" class="hidden flex flex-col gap-4">
+                <div id="profileDmCard" class="bl-dm hidden">
+                  <div class="bl-dm__left">
+                    <div class="bl-dm__search">
+                      <input id="blDmSearch" type="text" placeholder="Search creators or conversations" autocomplete="off" />
+                      <button id="blDmRefresh" type="button" class="bl-dm__search-btn" title="Refresh conversations"></button>
                     </div>
-                    <div id="blDmActiveMeta" class="bl-dm__meta"></div>
+                    <div id="blDmEmptyState" class="bl-dm__empty">No direct messages yet. Start a chat by searching above.</div>
+                    <ul id="blDmPeople" class="bl-dm__people"></ul>
                   </div>
-                  <div id="blDmChat" class="bl-dm__chat">
-                    <div class="bl-dm__placeholder">Choose a conversation or start a new one to see messages.</div>
-                  </div>
-                  <div id="blDmAttachmentPreview" class="bl-dm__attachments hidden"></div>
-                  <div class="bl-dm__composer">
-                    <button id="blDmAttach" type="button" class="bl-dm__composer-btn bl-dm__composer-btn--attach" title="Attach image or audio"></button>
-                    <input id="blDmInput" type="text" placeholder="Type a message" autocomplete="off" />
-                    <button id="blDmSend" type="button" class="bl-dm__composer-btn bl-dm__composer-btn--send" title="Send message"></button>
-                    <input id="blDmFileInput" type="file" accept="image/*,audio/*" multiple class="hidden" />
+                  <div class="bl-dm__right">
+                    <div class="bl-dm__header">
+                      <div>
+                        <p class="bl-dm__to">Direct message</p>
+                        <p id="blDmActiveName" class="bl-dm__name">Select a creator</p>
+                      </div>
+                      <div id="blDmActiveMeta" class="bl-dm__meta"></div>
+                    </div>
+                    <div id="blDmChat" class="bl-dm__chat">
+                      <div class="bl-dm__placeholder">Choose a conversation or start a new one to see messages.</div>
+                    </div>
+                    <div id="blDmAttachmentPreview" class="bl-dm__attachments hidden"></div>
+                    <div class="bl-dm__composer">
+                      <button id="blDmAttach" type="button" class="bl-dm__composer-btn bl-dm__composer-btn--attach" title="Attach image or audio"></button>
+                      <input id="blDmInput" type="text" placeholder="Type a message" autocomplete="off" />
+                      <button id="blDmSend" type="button" class="bl-dm__composer-btn bl-dm__composer-btn--send" title="Send message"></button>
+                      <input id="blDmFileInput" type="file" accept="image/*,audio/*" multiple class="hidden" />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p class="text-xs uppercase tracking-wide text-white/50">Email address</p>
-                <p id="profileViewEmail" class="mt-1 text-lg font-semibold text-white break-all">—</p>
               </div>
             </div>
             <div id="profileEditSection" class="hidden flex flex-col gap-4">
@@ -8122,6 +8388,16 @@ stopBtn.addEventListener('click', () => {
   const profileViewEmail = document.getElementById('profileViewEmail');
   const profileViewSection = document.getElementById('profileViewSection');
   const profileEditSection = document.getElementById('profileEditSection');
+  const profileDetailsTab = document.getElementById('profileDetailsTab');
+  const profileMessagesTab = document.getElementById('profileMessagesTab');
+  const profileMessagesButton = document.getElementById('profileMessagesButton');
+  const profileMessagesButtonIcon = document.getElementById('profileMessagesButtonIcon');
+  const profileMessagesButtonText = document.getElementById('profileMessagesButtonText');
+  const profileMessagesBadge = document.getElementById('profileMessagesBadge');
+  const profileNavContainer = document.querySelector('.bl-profile-nav');
+  const profileNavBall = document.getElementById('profileNavBall');
+  const profileNavCount = document.getElementById('profileNavCount');
+  const profileNavPreview = document.getElementById('profileNavPreview');
   const profileFirstNameInput = document.getElementById('profileFirstNameInput');
   const profileLastNameInput = document.getElementById('profileLastNameInput');
   const profileDisplayNameInput = document.getElementById('profileDisplayNameInput');
@@ -8137,6 +8413,10 @@ stopBtn.addEventListener('click', () => {
     pendingTagUrl: null,
     previousOverflow: ''
   };
+
+  let profileActiveTab = 'details';
+  let profileNavUnread = 0;
+  let profileNavAnimationTimer = null;
 
   const DM_MAX_ATTACHMENTS = 3;
   const DM_MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024;
@@ -8173,6 +8453,9 @@ stopBtn.addEventListener('click', () => {
     query: '',
     selfId: null
   };
+
+  const DM_READ_STORAGE_KEY = 'bl_dm_read_state_v1';
+  let dmReadState = loadDmReadState();
 
   function sanitizeDmUser(user) {
     if (!user) return null;
@@ -8332,6 +8615,205 @@ stopBtn.addEventListener('click', () => {
     });
   }
 
+  function loadDmReadState() {
+    try {
+      const raw = getJSON(DM_READ_STORAGE_KEY, '{}');
+      if (raw && typeof raw === 'object') {
+        const keys = Object.keys(raw);
+        const legacyFormat = keys.length > 0 && keys.every(key => {
+          const value = raw[key];
+          if (!value || typeof value !== 'object') return false;
+          const props = Object.keys(value);
+          return props.every(prop => prop === 'id' || prop === 'ts');
+        });
+        if (legacyFormat) {
+          return { default: raw };
+        }
+        return raw;
+      }
+      return {};
+    } catch (err) {
+      console.warn('Unable to load DM read state', err);
+      return {};
+    }
+  }
+
+  function saveDmReadState() {
+    try {
+      setJSON(DM_READ_STORAGE_KEY, dmReadState || {});
+    } catch (err) {
+      console.warn('Unable to persist DM read state', err);
+    }
+  }
+
+  function readStoreKey() {
+    return normalizeUserId(dmState.selfId || profileState.user?.id || profileState.user?._id || window.currentUserId || null) || 'default';
+  }
+
+  function getReadStore() {
+    if (!dmReadState || typeof dmReadState !== 'object') dmReadState = {};
+    const key = readStoreKey();
+    if (!dmReadState[key] || typeof dmReadState[key] !== 'object') dmReadState[key] = {};
+    return { store: dmReadState[key], key };
+  }
+
+  function getReadPointer(userId) {
+    if (!userId) return null;
+    const { store } = getReadStore();
+    return store[userId] || null;
+  }
+
+  function setReadPointer(userId, message) {
+    if (!userId) return;
+    const { store, key } = getReadStore();
+    const pointer = {};
+    if (message?.id) pointer.id = message.id;
+    pointer.ts = message?.createdAt || new Date().toISOString();
+    store[userId] = pointer;
+    dmReadState[key] = store;
+    saveDmReadState();
+  }
+
+  function safeTime(value) {
+    if (!value) return 0;
+    const date = value instanceof Date ? value : new Date(value);
+    const time = Number.isFinite(date.getTime()) ? date.getTime() : 0;
+    return time > 0 ? time : 0;
+  }
+
+  function computeUnreadCountFor(userId, lastMessage) {
+    if (!userId) return 0;
+    const pointer = getReadPointer(userId);
+    const readTime = pointer?.ts ? safeTime(pointer.ts) : 0;
+    const messages = dmState.messagesByUser.get(userId);
+    let count = 0;
+    if (Array.isArray(messages) && messages.length) {
+      for (const message of messages) {
+        if (!message || message.isSender) continue;
+        if (pointer?.id && message.id === pointer.id) continue;
+        const created = safeTime(message.createdAt);
+        if (readTime && created && created <= readTime) continue;
+        count += 1;
+      }
+      if (count > 0) return count;
+    }
+    if (lastMessage && !lastMessage.isSender) {
+      if (pointer?.id && pointer.id === lastMessage.id) return 0;
+      const created = safeTime(lastMessage.createdAt);
+      if (readTime && created && created <= readTime) return 0;
+      return 1;
+    }
+    return 0;
+  }
+
+  function limitPreview(text, max = 70) {
+    if (!text) return '';
+    const trimmed = text.trim();
+    if (trimmed.length <= max) return trimmed;
+    return `${trimmed.slice(0, max - 1)}…`;
+  }
+
+  function formatPreviewSnippet(message, user) {
+    const name = user ? dmDisplayName(user) : 'A creator';
+    if (!message) return `${name} sent you a message — open messages!`;
+    if (message.deletedAt) return `${name} sent a message — open messages!`;
+    const preview = limitPreview(message.preview || message.body || '', 70);
+    if (preview) return `${name} says: ${preview} — open messages!`;
+    const attachments = Array.isArray(message.attachments) ? message.attachments.length : 0;
+    if (attachments === 1) {
+      const kind = message.attachments[0].type === 'image' ? 'an image' : 'an audio clip';
+      return `${name} sent ${kind} — open messages!`;
+    }
+    if (attachments > 1) {
+      return `${name} sent ${attachments} attachments — open messages!`;
+    }
+    return `${name} sent you a message — open messages!`;
+  }
+
+  function triggerProfileNavAnimation() {
+    if (!profileNavContainer) return;
+    profileNavContainer.classList.remove('bl-profile-nav--animate');
+    void profileNavContainer.offsetWidth;
+    profileNavContainer.classList.add('bl-profile-nav--animate');
+    if (profileNavAnimationTimer) clearTimeout(profileNavAnimationTimer);
+    profileNavAnimationTimer = setTimeout(() => {
+      profileNavContainer?.classList.remove('bl-profile-nav--animate');
+    }, 1600);
+  }
+
+  function updateProfileNavIndicator(totalUnread, latestMessage, latestUser) {
+    if (!profileNavContainer || !profileNavBall) return;
+    const hasUnread = totalUnread > 0;
+    profileNavContainer.classList.toggle('bl-profile-nav--has-unread', hasUnread);
+    if (profileNavCount) {
+      profileNavCount.textContent = hasUnread ? (totalUnread > 99 ? '99+' : String(totalUnread)) : '0';
+      profileNavCount.setAttribute('aria-hidden', hasUnread ? 'false' : 'true');
+    }
+    if (profileNavPreview) {
+      profileNavPreview.textContent = hasUnread
+        ? formatPreviewSnippet(latestMessage, latestUser)
+        : 'All caught up!';
+    }
+    if (hasUnread && totalUnread > profileNavUnread) {
+      triggerProfileNavAnimation();
+    }
+    profileNavUnread = totalUnread;
+  }
+
+  function updateProfileMessagesButton(totalUnread) {
+    if (profileMessagesBadge) {
+      if (totalUnread > 0) {
+        profileMessagesBadge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
+        profileMessagesBadge.classList.remove('is-hidden');
+      } else {
+        profileMessagesBadge.classList.add('is-hidden');
+      }
+    }
+    if (profileMessagesButton) {
+      const base = profileActiveTab === 'messages' ? 'View profile info' : 'View messages';
+      if (totalUnread > 0) {
+        profileMessagesButton.setAttribute('aria-label', `${base}. ${totalUnread} unread message${totalUnread === 1 ? '' : 's'}.`);
+      } else {
+        profileMessagesButton.setAttribute('aria-label', base);
+      }
+    }
+  }
+
+  function applyUnreadState() {
+    let total = 0;
+    let latestEntry = null;
+    dmState.conversations.forEach(entry => {
+      if (!entry || !entry.user) return;
+      const count = computeUnreadCountFor(entry.user.id, entry.lastMessage);
+      entry.unreadCount = count;
+      if (count > 0) {
+        total += count;
+        if (!latestEntry) {
+          latestEntry = entry;
+        } else {
+          const latestTime = safeTime(latestEntry.lastMessage?.createdAt);
+          const entryTime = safeTime(entry.lastMessage?.createdAt);
+          if (entryTime > latestTime) latestEntry = entry;
+        }
+      }
+    });
+    updateProfileNavIndicator(total, latestEntry?.lastMessage || null, latestEntry?.user || null);
+    updateProfileMessagesButton(total);
+  }
+
+  function markConversationRead(userId) {
+    const normalized = normalizeUserId(userId);
+    if (!normalized) return;
+    const messages = dmState.messagesByUser.get(normalized);
+    const last = Array.isArray(messages) && messages.length ? messages[messages.length - 1] : null;
+    setReadPointer(normalized, last);
+    if (profileActiveTab === 'messages') {
+      renderConversationList();
+    } else {
+      applyUnreadState();
+    }
+  }
+
   function setComposerEnabled(enabled) {
     if (dmElements.input) dmElements.input.disabled = !enabled;
     if (dmElements.send) dmElements.send.disabled = !enabled;
@@ -8367,20 +8849,22 @@ stopBtn.addEventListener('click', () => {
     const seen = new Set();
 
     sortConversations();
+    applyUnreadState();
 
     dmState.conversations.forEach(entry => {
       const user = sanitizeDmUser(entry.user);
       if (!user) return;
       if (query && !matchesDmQuery(user, query)) return;
       const message = entry.lastMessage ? normalizeMessageFromResponse(entry.lastMessage) : null;
-      items.push({ type: 'conversation', user, message });
+      const unread = Math.max(0, Number(entry.unreadCount) || 0);
+      items.push({ type: 'conversation', user, message, unread });
       seen.add(user.id);
     });
 
     dmState.directory
       .filter(user => user && !seen.has(user.id) && matchesDmQuery(user, query))
       .slice(0, 12)
-      .forEach(user => items.push({ type: 'suggestion', user, message: null }));
+      .forEach(user => items.push({ type: 'suggestion', user, message: null, unread: 0 }));
 
     if (!items.length) {
       if (dmElements.empty) dmElements.empty.classList.remove('hidden');
@@ -8395,6 +8879,7 @@ stopBtn.addEventListener('click', () => {
       li.dataset.userId = item.user.id;
       li.dataset.kind = item.type;
       if (item.user.id === dmState.activeUserId) li.classList.add('active');
+      if (item.unread > 0) li.classList.add('bl-dm__person--unread');
 
       const avatar = document.createElement('img');
       avatar.className = 'bl-dm__avatar';
@@ -8426,6 +8911,19 @@ stopBtn.addEventListener('click', () => {
       li.appendChild(avatar);
       li.appendChild(body);
       li.appendChild(timeEl);
+
+      const badge = document.createElement('span');
+      badge.className = 'bl-dm__person-badge';
+      if (item.unread > 0) {
+        badge.textContent = item.unread > 99 ? '99+' : String(item.unread);
+        badge.setAttribute('aria-label', `${item.unread} unread message${item.unread === 1 ? '' : 's'}`);
+        badge.setAttribute('aria-hidden', 'false');
+      } else {
+        badge.textContent = '';
+        badge.setAttribute('aria-hidden', 'true');
+      }
+      li.appendChild(badge);
+
       dmElements.list.appendChild(li);
     });
   }
@@ -8526,6 +9024,10 @@ stopBtn.addEventListener('click', () => {
     requestAnimationFrame(() => {
       dmElements.chat.scrollTop = dmElements.chat.scrollHeight;
     });
+
+    if (userId && profileActiveTab === 'messages' && profileState.mode === 'view') {
+      markConversationRead(userId);
+    }
   }
 
   function upsertMessage(userId, message) {
@@ -8560,6 +9062,7 @@ stopBtn.addEventListener('click', () => {
     } else {
       dmState.conversations.push({ user: sanitized, lastMessage: entryMessage });
     }
+    applyUnreadState();
   }
 
   function clearPendingAttachments() {
@@ -8730,6 +9233,8 @@ stopBtn.addEventListener('click', () => {
     if (!dmElements.wrapper) return;
     if (!hasAuthToken(AUTH.token)) {
       dmElements.wrapper.classList.add('hidden');
+      updateProfileNavIndicator(0, null, null);
+      updateProfileMessagesButton(0);
       return;
     }
     dmElements.wrapper.classList.remove('hidden');
@@ -8970,9 +9475,13 @@ stopBtn.addEventListener('click', () => {
     if (!user) return;
     resetPendingMedia();
     if (profileWelcomeName) profileWelcomeName.textContent = `Welcome, ${computeWelcomeName(user)}`;
+    const avatarUrl = sanitizeAvatar(user.avatar);
     if (profileAvatarImage) {
       profileAvatarImage.onerror = () => { profileAvatarImage.onerror = null; profileAvatarImage.src = fallbackAvatar; };
-      profileAvatarImage.src = sanitizeAvatar(user.avatar);
+      profileAvatarImage.src = avatarUrl;
+    }
+    if (profileNavBall) {
+      profileNavBall.style.backgroundImage = `url("${avatarUrl}")`;
     }
     if (profileViewFirstName) profileViewFirstName.textContent = user.firstName ? user.firstName : '—';
     if (profileViewLastName) profileViewLastName.textContent = user.lastName ? user.lastName : '—';
@@ -9017,6 +9526,35 @@ stopBtn.addEventListener('click', () => {
     }
   }
 
+  function setProfileTab(tab, options = {}) {
+    const desired = tab === 'messages' ? 'messages' : 'details';
+    const silent = options && options.silent === true;
+    profileActiveTab = desired;
+    if (profileDetailsTab) profileDetailsTab.classList.toggle('hidden', desired !== 'details');
+    if (profileMessagesTab) profileMessagesTab.classList.toggle('hidden', desired !== 'messages');
+    if (profileMessagesButton) {
+      profileMessagesButton.setAttribute('aria-pressed', desired === 'messages' ? 'true' : 'false');
+      profileMessagesButton.classList.toggle('bg-white/10', desired !== 'messages');
+      profileMessagesButton.classList.toggle('hover:bg-white/15', desired !== 'messages');
+      profileMessagesButton.classList.toggle('bg-primary/80', desired === 'messages');
+      profileMessagesButton.classList.toggle('hover:bg-primary/80', desired === 'messages');
+      profileMessagesButton.classList.toggle('shadow-glow', desired === 'messages');
+    }
+    if (profileMessagesButtonIcon && profileMessagesButtonText) {
+      if (desired === 'messages') {
+        profileMessagesButtonIcon.textContent = '📁';
+        profileMessagesButtonText.textContent = 'Profile info';
+      } else {
+        profileMessagesButtonIcon.textContent = '💬';
+        profileMessagesButtonText.textContent = 'Messages';
+      }
+    }
+    updateProfileMessagesButton(profileNavUnread);
+    if (!silent && desired === 'messages') {
+      triggerProfileNavAnimation();
+    }
+  }
+
   function setProfileMode(mode) {
     profileState.mode = mode;
     if (profileViewSection) profileViewSection.classList.toggle('hidden', mode === 'edit');
@@ -9025,6 +9563,13 @@ stopBtn.addEventListener('click', () => {
     if (profileCancelButton) profileCancelButton.classList.toggle('hidden', mode !== 'edit');
     if (profileAvatarUploadBtn) profileAvatarUploadBtn.classList.toggle('hidden', mode !== 'edit');
     if (profileTagUploadBtn) profileTagUploadBtn.classList.toggle('hidden', mode !== 'edit');
+    if (mode === 'edit') {
+      setProfileTab('details', { silent: true });
+    }
+    if (profileMessagesButton) {
+      profileMessagesButton.disabled = mode === 'edit';
+      profileMessagesButton.setAttribute('aria-disabled', mode === 'edit' ? 'true' : 'false');
+    }
   }
 
   function closeProfileOverlay() {
@@ -9046,6 +9591,7 @@ stopBtn.addEventListener('click', () => {
     }
     profileState.user = user;
     populateProfile(user);
+    setProfileTab('details', { silent: true });
     setProfileMode('view');
     initDirectMessages();
     refreshDirectMessages({ force: true });
@@ -9060,6 +9606,19 @@ stopBtn.addEventListener('click', () => {
     profileEditButton.addEventListener('click', () => {
       setProfileMode('edit');
       setTimeout(() => { profileFirstNameInput?.focus?.(); }, 0);
+    });
+  }
+
+  if (profileMessagesButton) {
+    profileMessagesButton.setAttribute('aria-disabled', 'false');
+    profileMessagesButton.addEventListener('click', () => {
+      if (profileState.mode === 'edit') return;
+      const next = profileActiveTab === 'messages' ? 'details' : 'messages';
+      setProfileTab(next);
+      if (next === 'messages') {
+        initDirectMessages();
+        refreshDirectMessages({ force: true });
+      }
     });
   }
 
@@ -9085,20 +9644,26 @@ stopBtn.addEventListener('click', () => {
     profileAvatarInput.addEventListener('change', (event) => {
       const file = event.target?.files?.[0] || null;
       clearPendingAvatarPreview();
-        if (file) {
-          profileState.pendingAvatar = file;
-          profileState.pendingAvatarPreviewUrl = URL.createObjectURL(file);
-          if (profileAvatarImage) {
-            profileAvatarImage.src = profileState.pendingAvatarPreviewUrl;
-          }
-        } else {
-          profileState.pendingAvatar = null;
-          if (profileState.user && profileAvatarImage) {
-            profileAvatarImage.src = sanitizeAvatar(profileState.user.avatar);
-          } else if (profileAvatarImage) {
-            profileAvatarImage.src = fallbackAvatar;
-          }
+      if (file) {
+        profileState.pendingAvatar = file;
+        profileState.pendingAvatarPreviewUrl = URL.createObjectURL(file);
+        const previewUrl = profileState.pendingAvatarPreviewUrl;
+        if (profileAvatarImage) {
+          profileAvatarImage.src = previewUrl;
         }
+        if (profileNavBall) {
+          profileNavBall.style.backgroundImage = `url("${previewUrl}")`;
+        }
+      } else {
+        profileState.pendingAvatar = null;
+        const avatarUrl = profileState.user ? sanitizeAvatar(profileState.user.avatar) : fallbackAvatar;
+        if (profileAvatarImage) {
+          profileAvatarImage.src = avatarUrl;
+        }
+        if (profileNavBall) {
+          profileNavBall.style.backgroundImage = `url("${avatarUrl}")`;
+        }
+      }
       if (event.target) event.target.value = '';
     });
   }
