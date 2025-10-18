@@ -8,6 +8,7 @@ import morgan from 'morgan';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
+import Stripe from 'stripe';
 import { parseFile, parseBuffer } from 'music-metadata';
 import path from 'path';
 import fs from 'fs';
@@ -30,11 +31,28 @@ const {
   PUBLIC_BASE_URL = `http://localhost:${PORT}`,
   FRONTEND_ORIGINS = 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,https://beatloop.co,http://localhost:8080',
   API_FALLBACK_BASE_URLS = 'https://beatloop-api.onrender.com',
-  RENDER_EXTERNAL_URL
+  RENDER_EXTERNAL_URL,
+  STRIPE_SECRET_KEY,
+  STRIPE_PUBLISHABLE_KEY,
+  STRIPE_WEBHOOK_SECRET,
+  STRIPE_PRICE_DEPOSIT
 } = process.env;
 
 if (!MONGODB_URI) {
   console.warn('⚠️  MONGODB_URI not set. Add it in .env / Render Environment.');
+}
+
+let stripe = null;
+let stripeConfigured = false;
+if (STRIPE_SECRET_KEY) {
+  try {
+    stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+    stripeConfigured = true;
+  } catch (err) {
+    console.warn('⚠️  Failed to initialize Stripe SDK:', err?.message || err);
+  }
+} else {
+  console.warn('⚠️  STRIPE_SECRET_KEY not set. Checkout is disabled.');
 }
 
 const SESSION_EMPTY_TTL_MS = 3 * 60 * 1000;
@@ -53,6 +71,10 @@ const PLAYER_COLOR_PALETTE = [
 ];
 const LEADERBOARD_THRESHOLDS = Object.freeze({ likes: 12, reposts: 4 });
 const LEADERBOARD_WEIGHTS = Object.freeze({ plays: 15, comments: 9, likes: 2, reposts: 3 });
+const DEFAULT_PREVIEW_SECONDS = 60;
+const MAX_PREVIEW_SECONDS = 600;
+const MAX_TAG_FREQUENCY = 120;
+const MAX_LICENSE_OPTIONS = 5;
 const IMAGE_MIME_EXT = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -129,6 +151,24 @@ const SessionSchema = new mongoose.Schema({
   }
 });
 
+const TrackLicenseOptionSchema = new mongoose.Schema({
+  key: { type: String, required: true },
+  label: { type: String, default: '' },
+  description: { type: String, default: '' },
+  amountUsd: { type: Number, default: 0 },
+  allowCustomAmount: { type: Boolean, default: false },
+  minAmountUsd: { type: Number, default: 0 },
+  maxAmountUsd: { type: Number, default: 0 }
+}, { _id: false });
+
+const TrackMonetizationSchema = new mongoose.Schema({
+  allowFreeDownload: { type: Boolean, default: true },
+  previewSeconds: { type: Number, default: 60 },
+  tagFrequencySec: { type: Number, default: 0 },
+  options: { type: [TrackLicenseOptionSchema], default: [] },
+  updatedAt: { type: Date, default: Date.now }
+}, { _id: false });
+
 const TrackSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   title: { type: String, default: '' },
@@ -139,7 +179,8 @@ const TrackSchema = new mongoose.Schema({
   audioDurationSec: { type: Number, default: 0 },
   caption: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  monetization: { type: TrackMonetizationSchema, default: () => ({}) }
 });
 
 TrackSchema.pre('save', function(next) {
@@ -233,11 +274,38 @@ const Track = mongoose.model('Track', TrackSchema);
 const TrackStat = mongoose.model('TrackStat', TrackStatsSchema);
 const TrackEvent = mongoose.model('TrackEvent', TrackEventSchema);
 const TrackComment = mongoose.model('TrackComment', TrackCommentSchema);
+const TrackSaleSchema = new mongoose.Schema({
+  trackId: { type: mongoose.Schema.Types.ObjectId, ref: 'Track', required: true, index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  buyerEmail: { type: String, default: '' },
+  sessionId: { type: String, unique: true, index: true },
+  amountTotal: { type: Number, default: 0 },
+  currency: { type: String, default: 'usd' },
+  status: { type: String, default: 'created', index: true },
+  items: {
+    type: [new mongoose.Schema({
+      optionKey: { type: String, default: '' },
+      optionLabel: { type: String, default: '' },
+      amountUsd: { type: Number, default: 0 },
+      unitAmount: { type: Number, default: 0 },
+      quantity: { type: Number, default: 1 }
+    }, { _id: false })],
+    default: []
+  },
+  metadata: { type: Object, default: {} },
+  createdAt: { type: Date, default: Date.now },
+  completedAt: { type: Date, default: null }
+});
+const TrackSale = mongoose.model('TrackSale', TrackSaleSchema);
 const DirectMessage = mongoose.model('DirectMessage', DirectMessageSchema);
 
 /* ============================ APP ============================ */
 const app = express();
 app.set('trust proxy', true);
+
+if (stripeConfigured) {
+  app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
+}
 
 /* ---- CORS (Express + Socket.IO use the SAME rule) ---- */
 function normalizeOrigin(value) {
@@ -586,6 +654,20 @@ async function auth(req, res, next) {
   }
 }
 
+async function identifyUser(req) {
+  const hdr = req.headers.authorization || '';
+  const token = hdr.startsWith('Bearer ') ? hdr.slice(7) : null;
+  if (!token) return null;
+  try {
+    const { uid } = jwt.verify(token, JWT_SECRET);
+    if (!uid) return null;
+    const user = await User.findById(uid);
+    return user || null;
+  } catch {
+    return null;
+  }
+}
+
 async function userSummary(u) {
   if (!u) return null;
   return {
@@ -749,6 +831,191 @@ function statsSummary(doc) {
     reposts: Number(reposts) || 0,
     comments: Number(comments) || 0
   };
+}
+
+function clampNumber(value, { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY, fallback = null } = {}) {
+  if (value === null || typeof value === 'undefined') return fallback;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  if (num < min) return min;
+  if (num > max) return max;
+  return num;
+}
+
+function slugifyKey(label, fallback = 'option') {
+  if (typeof label !== 'string') return fallback;
+  const trimmed = label.trim().toLowerCase();
+  if (!trimmed) return fallback;
+  return trimmed
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+    || fallback;
+}
+
+function normalizeMonetizationInput(raw, { defaultPreviewSeconds = DEFAULT_PREVIEW_SECONDS } = {}) {
+  if (!raw) {
+    return {
+      allowFreeDownload: true,
+      previewSeconds: defaultPreviewSeconds,
+      tagFrequencySec: 0,
+      options: []
+    };
+  }
+
+  let data = raw;
+  if (typeof raw === 'string') {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = {};
+    }
+  }
+
+  const allowFreeDownload = data && data.allowFreeDownload !== false;
+  const previewValue = clampNumber(data?.previewSeconds, { min: 0, max: MAX_PREVIEW_SECONDS, fallback: defaultPreviewSeconds });
+  const previewSeconds = previewValue && previewValue > 0 ? previewValue : null;
+  const tagValue = clampNumber(data?.tagFrequencySec, { min: 0, max: MAX_TAG_FREQUENCY, fallback: 0 });
+  const tagFrequencySec = tagValue && tagValue > 0 ? tagValue : 0;
+
+  const options = [];
+  const seenKeys = new Set();
+  if (Array.isArray(data?.options)) {
+    for (let i = 0; i < data.options.length && options.length < MAX_LICENSE_OPTIONS; i += 1) {
+      const opt = data.options[i] || {};
+      const label = typeof opt.label === 'string' ? opt.label.trim().slice(0, 80) : '';
+      const baseKey = slugifyKey(opt.key || label, `option-${i + 1}`);
+      let key = baseKey;
+      let suffix = 2;
+      while (seenKeys.has(key)) {
+        key = `${baseKey}-${suffix++}`;
+      }
+      seenKeys.add(key);
+      const amount = clampNumber(opt.amountUsd ?? opt.amount, { min: 0, max: 500000, fallback: 0 });
+      const minAmount = clampNumber(opt.minAmountUsd, { min: 0, max: 500000, fallback: 0 });
+      const maxAmount = clampNumber(opt.maxAmountUsd, { min: 0, max: 500000, fallback: 0 });
+      const allowCustomAmount = opt.allowCustomAmount === true;
+      const normalizedAmount = amount > 0 ? amount : (allowCustomAmount ? minAmount || 0 : 0);
+      if (!allowCustomAmount && normalizedAmount <= 0) {
+        continue;
+      }
+      options.push({
+        key,
+        label: label || opt.key || `Option ${i + 1}`,
+        description: typeof opt.description === 'string' ? opt.description.trim().slice(0, 200) : '',
+        amountUsd: Math.round(normalizedAmount * 100) / 100,
+        allowCustomAmount,
+        minAmountUsd: allowCustomAmount ? Math.round(Math.max(minAmount, 0) * 100) / 100 : 0,
+        maxAmountUsd: allowCustomAmount && maxAmount > 0 ? Math.round(maxAmount * 100) / 100 : 0
+      });
+    }
+  }
+
+  return {
+    allowFreeDownload: allowFreeDownload || options.length === 0,
+    previewSeconds,
+    tagFrequencySec,
+    options
+  };
+}
+
+function presentTrackMonetization(doc) {
+  if (!doc) {
+    return {
+      allowFreeDownload: true,
+      previewSeconds: null,
+      tagFrequencySec: 0,
+      options: []
+    };
+  }
+  const allowFreeDownload = doc.allowFreeDownload !== false || !Array.isArray(doc.options) || doc.options.length === 0;
+  const previewSeconds = Number.isFinite(doc.previewSeconds) && doc.previewSeconds > 0 ? doc.previewSeconds : null;
+  const tagFrequencySec = Number.isFinite(doc.tagFrequencySec) && doc.tagFrequencySec > 0 ? doc.tagFrequencySec : 0;
+  const options = Array.isArray(doc.options)
+    ? doc.options
+        .filter(opt => opt && (opt.allowCustomAmount || (Number.isFinite(opt.amountUsd) && opt.amountUsd > 0)))
+        .slice(0, MAX_LICENSE_OPTIONS)
+        .map(opt => ({
+          key: opt.key,
+          label: opt.label,
+          description: opt.description || '',
+          amountUsd: opt.allowCustomAmount ? null : (Number.isFinite(opt.amountUsd) ? opt.amountUsd : null),
+          allowCustomAmount: opt.allowCustomAmount === true,
+          minAmountUsd: Number.isFinite(opt.minAmountUsd) ? opt.minAmountUsd : null,
+          maxAmountUsd: Number.isFinite(opt.maxAmountUsd) && opt.maxAmountUsd > 0 ? opt.maxAmountUsd : null
+        }))
+    : [];
+  return {
+    allowFreeDownload,
+    previewSeconds,
+    tagFrequencySec,
+    options
+  };
+}
+
+async function handleStripeWebhook(req, res) {
+  if (!stripeConfigured || !stripe) {
+    return res.status(503).send('stripe disabled');
+  }
+
+  const signature = req.headers['stripe-signature'];
+  let event;
+  try {
+    if (STRIPE_WEBHOOK_SECRET && signature) {
+      event = stripe.webhooks.constructEvent(req.body, signature, STRIPE_WEBHOOK_SECRET);
+    } else {
+      const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : req.body;
+      event = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    }
+  } catch (err) {
+    console.error('Stripe webhook verification failed', err);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (!event || !event.type) {
+    return res.status(400).send('Webhook Error: invalid event');
+  }
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data?.object || {};
+        const update = {
+          status: 'completed',
+          completedAt: new Date(),
+          amountTotal: typeof session.amount_total === 'number' ? session.amount_total : undefined,
+          currency: session.currency || 'usd',
+          buyerEmail: session.customer_details?.email || session.customer_email || undefined,
+          metadata: session.metadata || {}
+        };
+        await TrackSale.findOneAndUpdate(
+          { sessionId: session.id },
+          { $set: Object.fromEntries(Object.entries(update).filter(([, value]) => typeof value !== 'undefined')) },
+          { new: true }
+        );
+        break;
+      }
+      case 'checkout.session.expired':
+      case 'checkout.session.async_payment_failed': {
+        const session = event.data?.object || {};
+        await TrackSale.findOneAndUpdate(
+          { sessionId: session.id },
+          { $set: { status: 'expired', completedAt: new Date() } },
+          { new: true }
+        );
+        break;
+      }
+      default: {
+        // no-op for other events
+      }
+    }
+  } catch (err) {
+    console.error('Failed to process Stripe webhook event', err);
+  }
+
+  res.json({ received: true });
 }
 
 async function trackById(id) {
@@ -1756,6 +2023,11 @@ app.post('/api/tracks', auth, (req, res) => {
       if (coverFile) coverFile.buffer = null;
       const audioUrl = publicUploadUrl(req, audioKey);
       const coverUrl = coverKey ? publicUploadUrl(req, coverKey) : '';
+      const previewDefault = duration && duration > 0
+        ? Math.min(DEFAULT_PREVIEW_SECONDS, Math.max(Math.round(duration), 15))
+        : DEFAULT_PREVIEW_SECONDS;
+      const monetization = normalizeMonetizationInput(body.monetization, { defaultPreviewSeconds: previewDefault });
+      monetization.updatedAt = new Date();
       const artist = (() => {
         const display = typeof req.user.displayName === 'string' ? req.user.displayName.trim() : '';
         if (display) return display;
@@ -1775,7 +2047,8 @@ app.post('/api/tracks', auth, (req, res) => {
         audioUrl: audioKey,
         coverUrl: coverKey,
         audioDurationSec: duration || 0,
-        caption
+        caption,
+        monetization
       });
 
       const summary = await userSummary(req.user);
@@ -1790,7 +2063,8 @@ app.post('/api/tracks', auth, (req, res) => {
           caption: trackDoc.caption || '',
           createdAt: trackDoc.createdAt,
           userId: trackDoc.userId,
-          user: summary
+          user: summary,
+          monetization: presentTrackMonetization(trackDoc.monetization)
         });
     } catch (ex) {
       console.error('Track upload failed', ex);
@@ -1855,6 +2129,207 @@ app.post('/api/tracks/:id/cover', auth, (req, res) => {
       res.status(500).json({ error: 'could not save cover' });
     }
   });
+});
+
+app.patch('/api/tracks/:id/monetization', auth, async (req, res) => {
+  const trackId = asObjectId(req.params?.id);
+  if (!trackId) {
+    return res.status(400).json({ error: 'invalid track id' });
+  }
+
+  let trackDoc = null;
+  try {
+    trackDoc = await Track.findById(trackId);
+  } catch (ex) {
+    console.error('Track lookup failed during monetization update', ex);
+  }
+
+  if (!trackDoc) {
+    return res.status(404).json({ error: 'track not found' });
+  }
+
+  if (!trackDoc.userId || trackDoc.userId.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ error: 'not your track' });
+  }
+
+  try {
+    const payload = typeof req.body?.monetization !== 'undefined' ? req.body.monetization : req.body;
+    const duration = Number.isFinite(trackDoc.audioDurationSec) ? trackDoc.audioDurationSec : 0;
+    const previewDefault = duration > 0
+      ? Math.min(DEFAULT_PREVIEW_SECONDS, Math.max(Math.round(duration), 15))
+      : DEFAULT_PREVIEW_SECONDS;
+    const monetization = normalizeMonetizationInput(payload, { defaultPreviewSeconds: previewDefault });
+    monetization.updatedAt = new Date();
+    trackDoc.monetization = monetization;
+    await trackDoc.save();
+    res.json({ ok: true, monetization: presentTrackMonetization(trackDoc.monetization) });
+  } catch (ex) {
+    console.error('Failed to update monetization', ex);
+    res.status(500).json({ error: 'could not update monetization' });
+  }
+});
+
+app.post('/api/tracks/:id/checkout', async (req, res) => {
+  if (!stripeConfigured || !stripe) {
+    return res.status(503).json({ error: 'checkout unavailable' });
+  }
+
+  const trackId = asObjectId(req.params?.id);
+  if (!trackId) {
+    return res.status(400).json({ error: 'invalid track id' });
+  }
+
+  let trackDoc = null;
+  try {
+    trackDoc = await Track.findById(trackId);
+  } catch (ex) {
+    console.error('Track lookup failed during checkout', ex);
+  }
+
+  if (!trackDoc) {
+    return res.status(404).json({ error: 'track not found' });
+  }
+
+  const monetization = presentTrackMonetization(trackDoc.monetization);
+  if (monetization.allowFreeDownload && monetization.options.length === 0) {
+    return res.status(400).json({ error: 'track is free to download' });
+  }
+
+  try {
+    const buyer = await identifyUser(req);
+    const body = req.body || {};
+    const selections = [];
+    const providedOptions = Array.isArray(body.options) ? body.options : [];
+    const providedKeys = Array.isArray(body.optionKeys) ? body.optionKeys : [];
+    const fallbackKey = typeof body.optionKey === 'string' ? body.optionKey : null;
+    const selectionPayloads = [...providedOptions];
+    providedKeys.forEach(key => selectionPayloads.push({ key }));
+    if (fallbackKey) selectionPayloads.push({ key: fallbackKey });
+
+    const optionMap = new Map((monetization.options || []).map(opt => [opt.key, opt]));
+    const uniqueKeys = new Set();
+
+    for (let i = 0; i < selectionPayloads.length; i += 1) {
+      const payload = selectionPayloads[i] || {};
+      const key = typeof payload.key === 'string' ? payload.key.trim() : '';
+      if (!key || uniqueKeys.has(key)) continue;
+      const option = optionMap.get(key);
+      if (!option) continue;
+      uniqueKeys.add(key);
+      let amountUsd = option.amountUsd;
+      if (option.allowCustomAmount) {
+        const min = Number.isFinite(option.minAmountUsd) && option.minAmountUsd > 0 ? option.minAmountUsd : 1;
+        const max = Number.isFinite(option.maxAmountUsd) && option.maxAmountUsd > 0 ? option.maxAmountUsd : 500000;
+        amountUsd = clampNumber(payload.amountUsd ?? payload.amount, { min, max, fallback: min });
+      }
+      if (!amountUsd || amountUsd <= 0) continue;
+      selections.push({
+        key,
+        label: option.label || key,
+        description: option.description || '',
+        amountUsd: Math.round(amountUsd * 100) / 100,
+        allowCustomAmount: option.allowCustomAmount === true
+      });
+    }
+
+    if (selections.length === 0) {
+      return res.status(400).json({ error: 'no valid price options selected' });
+    }
+
+    const lineItems = selections.map(sel => ({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: `${trackDoc.title || 'Track license'} — ${sel.label}`,
+          metadata: {
+            trackId: String(trackDoc._id),
+            optionKey: sel.key,
+            licenseLabel: sel.label
+          }
+        },
+        unit_amount: Math.round(sel.amountUsd * 100)
+      },
+      quantity: 1
+    }));
+
+    const total = lineItems.reduce((sum, item) => sum + (item.price_data?.unit_amount || 0), 0);
+    if (total <= 0) {
+      return res.status(400).json({ error: 'invalid total amount' });
+    }
+
+    const baseUrl = (RENDER_EXTERNAL_URL || PUBLIC_BASE_URL || '').replace(/\/$/, '') || `http://localhost:${PORT}`;
+    const successPath = typeof body.successPath === 'string' && body.successPath.trim()
+      ? body.successPath.trim()
+      : `/network.html?purchase=success&track=${trackDoc._id}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelPath = typeof body.cancelPath === 'string' && body.cancelPath.trim()
+      ? body.cancelPath.trim()
+      : `/network.html?purchase=cancelled&track=${trackDoc._id}`;
+
+    const successUrl = successPath.startsWith('http') ? successPath : `${baseUrl}${successPath.startsWith('/') ? '' : '/'}${successPath}`;
+    const cancelUrl = cancelPath.startsWith('http') ? cancelPath : `${baseUrl}${cancelPath.startsWith('/') ? '' : '/'}${cancelPath}`;
+
+    const metadata = {
+      trackId: String(trackDoc._id),
+      optionKeys: selections.map(sel => sel.key).join(','),
+      trackTitle: trackDoc.title || 'Untitled'
+    };
+
+    const sessionPayload = {
+      mode: 'payment',
+      line_items: lineItems,
+      allow_promotion_codes: true,
+      automatic_tax: { enabled: true },
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      customer_creation: 'if_required',
+      consent_collection: { terms_of_service: 'none' },
+      client_reference_id: body.clientReferenceId || String(trackDoc._id),
+      metadata
+    };
+
+    const emailCandidate = typeof body.email === 'string' ? body.email.trim() : '';
+    if (buyer?.email) {
+      sessionPayload.customer_email = buyer.email;
+    } else if (emailCandidate) {
+      sessionPayload.customer_email = emailCandidate;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionPayload);
+
+    try {
+      await TrackSale.findOneAndUpdate(
+        { sessionId: session.id },
+        {
+          trackId: trackDoc._id,
+          userId: trackDoc.userId,
+          buyerEmail: sessionPayload.customer_email || '',
+          status: 'pending',
+          currency: 'usd',
+          amountTotal: total,
+          items: selections.map(sel => ({
+            optionKey: sel.key,
+            optionLabel: sel.label,
+            amountUsd: sel.amountUsd,
+            unitAmount: Math.round(sel.amountUsd * 100),
+            quantity: 1
+          })),
+          metadata
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    } catch (ex) {
+      console.warn('Failed to persist track sale draft', ex);
+    }
+
+    res.json({
+      url: session.url,
+      sessionId: session.id,
+      publishableKey: STRIPE_PUBLISHABLE_KEY || null
+    });
+  } catch (err) {
+    console.error('Failed to create checkout session', err);
+    res.status(500).json({ error: 'failed to create checkout session' });
+  }
 });
 
 app.delete('/api/tracks/:id', auth, async (req, res) => {
@@ -1970,6 +2445,7 @@ app.get('/api/tracks', async (req, res) => {
         createdAt: doc.createdAt,
         userId: doc.userId,
         user: userKey ? userMap.get(userKey) || null : null,
+        monetization: presentTrackMonetization(doc.monetization),
         stats: statsSummary(statsMap.get(key)),
         comments: commentsByTrack.get(key) || []
       };
