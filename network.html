@@ -20,6 +20,97 @@
     /* add glow used by buttons */
     .shadow-glow{box-shadow:0 0 0 2px rgba(124,58,237,.25),0 5px 25px rgba(124,58,237,.35)}
 
+    /* ---------- Beatloop Studio layout resizing ---------- */
+    #beatloopStudioLayout {
+      --studio-left-width: 300px;
+      --studio-left-min: 240px;
+    }
+
+    @media (min-width: 768px) {
+      #beatloopStudioLayout {
+        grid-template-columns: minmax(var(--studio-left-min), var(--studio-left-width)) minmax(0, 1fr);
+      }
+    }
+
+    .studio-resizable {
+      position: relative;
+    }
+
+    .studio-resize-handle {
+      position: absolute;
+      z-index: 30;
+      border: none;
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      touch-action: none;
+      opacity: 0;
+      transition: opacity .2s ease;
+    }
+
+    .studio-resizable:hover .studio-resize-handle,
+    .studio-resize-handle:focus-visible,
+    body.studio-resize-active .studio-resize-handle.active {
+      opacity: 1;
+    }
+
+    .studio-resize-handle::before {
+      content: '';
+      display: block;
+      background: linear-gradient(180deg, rgba(124,58,237,.85), rgba(34,211,238,.75));
+      border-radius: 999px;
+    }
+
+    .studio-resize-handle:hover::before,
+    .studio-resize-handle:focus-visible::before {
+      box-shadow: 0 0 0 2px rgba(15,15,23,.9), 0 0 0 4px rgba(124,58,237,.45);
+    }
+
+    .studio-resize-handle:focus-visible {
+      outline: none;
+    }
+
+    .studio-resize-handle[data-axis="x"] {
+      top: 0;
+      right: -6px;
+      width: 12px;
+      height: 100%;
+      cursor: col-resize;
+    }
+
+    .studio-resize-handle[data-axis="x"]::before {
+      width: 3px;
+      height: 100%;
+      margin: 0 auto;
+    }
+
+    .studio-resize-handle[data-axis="y"] {
+      left: 0;
+      bottom: -6px;
+      width: 100%;
+      height: 12px;
+      cursor: row-resize;
+    }
+
+    .studio-resize-handle[data-axis="y"]::before {
+      height: 3px;
+      width: 100%;
+      margin: auto 0;
+    }
+
+    #studioControlPanel,
+    #arrangerWrap,
+    #blGridWrap,
+    #blIntegrationPanels {
+      overflow: auto;
+    }
+
+    #arrangerWrap,
+    #blGridWrap,
+    #blIntegrationPanels {
+      scrollbar-gutter: stable both-edges;
+    }
+  
     body.studio-embed {
       background: #0c0c12;
       min-height: 100vh;
@@ -1616,9 +1707,9 @@
     </div>
     <!-- (JS injects the participants strip right after the title) -->
 
-    <div class="mt-3 grid gap-4 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]">
+    <div id="beatloopStudioLayout" class="mt-3 grid gap-4">
       <!-- Left controls -->
-      <div class="rounded-xl border border-white/10 bg-white/5 p-3 max-h-[70vh] overflow-y-auto overscroll-contain" style="touch-action: pan-y;">
+      <div id="studioControlPanel" class="rounded-xl border border-white/10 bg-white/5 p-3 max-h-[70vh] overflow-y-auto overscroll-contain studio-resizable" style="touch-action: pan-y;">
         <label class="block text-xs text-white/60 mb-1">Tempo</label>
         <input id="blBpm" type="range" min="60" max="180" value="92" class="w-full">
         <div class="mt-1 text-sm"><span id="blBpmVal">92</span> BPM</div>
@@ -1671,7 +1762,7 @@
       </div>
 
       <!-- Song Mode arranger (hidden by default) -->
-      <div id="arrangerWrap" class="rounded-xl border border-white/10 bg-white/5 p-3 hidden">
+      <div id="arrangerWrap" class="rounded-xl border border-white/10 bg-white/5 p-3 hidden studio-resizable">
         <div class="flex items-center justify-between mb-2">
           <h4 class="font-semibold">Song Mode — Arrange Patterns</h4>
           <span class="text-xs text-white/60">Tap to cycle 1–16 · Shift+Click to clear · Bars = 16</span>
@@ -1681,11 +1772,11 @@
       </div>
 
       <!-- Right: 16-step grid -->
-      <div id="blGridWrap" class="rounded-xl border border-white/10 bg-white/5 p-3 overflow-x-auto" style="touch-action: pan-x;">
+      <div id="blGridWrap" class="rounded-xl border border-white/10 bg-white/5 p-3 overflow-x-auto studio-resizable" style="touch-action: pan-x;">
         <div id="blGrid" class="min-w-[900px] w-full"></div>
       </div>
 
-      <div id="blIntegrationPanels" class="md:col-span-2 grid gap-3 lg:grid-cols-2">
+      <div id="blIntegrationPanels" class="md:col-span-2 grid gap-3 lg:grid-cols-2 studio-resizable">
         <section id="butterFeaturePanel" class="rounded-xl border border-white/10 bg-white/5 p-4">
           <div class="text-sm text-white/60">Loading Beatloop routing toolkit…</div>
         </section>
@@ -5805,6 +5896,10 @@ const AI_MELODY_SCALES = {
   const studio    = document.getElementById('beatloopStudio');
   const closeBtn  = document.getElementById('blClose');
   const gridWrap  = document.getElementById('blGrid');
+  const studioLayoutEl = document.getElementById('beatloopStudioLayout');
+  const studioControlPanelEl = document.getElementById('studioControlPanel');
+  const studioGridWrapEl = document.getElementById('blGridWrap');
+  const studioIntegrationPanelsEl = document.getElementById('blIntegrationPanels');
   const bpmRange  = document.getElementById('blBpm');
   const bpmVal    = document.getElementById('blBpmVal');
   const playPauseBtn = document.getElementById('blPlayPauseBtn');
@@ -5829,6 +5924,289 @@ const AI_MELODY_SCALES = {
   let aiDensityValue = null;
   let aiStatusEl = null;
   let aiMidiContextEl = null;
+  const STUDIO_PANEL_STORAGE_KEY = 'beatloop_studio_panel_sizes_v1';
+  const STUDIO_PANEL_LIMITS = {
+    controlsWidth: { min: 240, max: 560 },
+    gridHeight: { min: 260, max: 820 },
+    arrangerHeight: { min: 200, max: 700 },
+    integrationsHeight: { min: 220, max: 720 },
+  };
+
+  function clampNumber(value, min, max) {
+    if (!Number.isFinite(value)) return value;
+    let result = value;
+    if (Number.isFinite(min)) result = Math.max(min, result);
+    if (Number.isFinite(max)) result = Math.min(max, result);
+    return result;
+  }
+
+  function getStudioPrefScope() {
+    let candidate = null;
+    try {
+      if (window.profileState?.user) {
+        candidate = window.profileState.user.id || window.profileState.user._id || null;
+      }
+    } catch {}
+    if (!candidate) {
+      try {
+        candidate = currentUserId || window.currentUserId || null;
+      } catch {
+        candidate = null;
+      }
+    }
+    return (typeof normalizeUserId === 'function') ? (normalizeUserId(candidate) || 'guest') : 'guest';
+  }
+
+  function readStudioPanelStore() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STUDIO_PANEL_STORAGE_KEY) || '{}');
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch (err) {
+      console.warn('Unable to read studio layout preferences', err);
+      return {};
+    }
+  }
+
+  function getStudioPanelPrefs() {
+    const scope = getStudioPrefScope();
+    const store = readStudioPanelStore();
+    const values = (store && typeof store[scope] === 'object' && store[scope]) ? store[scope] : {};
+    return { scope, store, values };
+  }
+
+  function persistStudioPanelPrefs(partial) {
+    if (!partial || typeof partial !== 'object') return;
+    const { scope, store, values } = getStudioPanelPrefs();
+    const next = { ...values };
+    Object.keys(partial).forEach((key) => {
+      const incoming = partial[key];
+      if (Number.isFinite(incoming)) {
+        const limits = STUDIO_PANEL_LIMITS[key] || {};
+        next[key] = Math.round(clampNumber(incoming, limits.min, limits.max));
+      }
+    });
+    store[scope] = next;
+    try {
+      localStorage.setItem(STUDIO_PANEL_STORAGE_KEY, JSON.stringify(store));
+    } catch (err) {
+      console.warn('Unable to persist studio layout preferences', err);
+    }
+
+    try {
+      const activeState = window.profileState;
+      if (activeState && activeState.user) {
+        activeState.user.studioPanelSizes = { ...next };
+        persistUpdatedUser?.(activeState.user);
+      } else {
+        const stored = getStoredProfileUser?.();
+        if (stored) {
+          stored.studioPanelSizes = { ...next };
+          persistUpdatedUser?.(stored);
+        }
+      }
+    } catch (err) {
+      console.warn('Unable to sync studio layout preferences to profile', err);
+    }
+  }
+
+  function applyStudioPanelPrefs(prefsInput) {
+    const prefs = prefsInput && typeof prefsInput === 'object'
+      ? prefsInput
+      : getStudioPanelPrefs().values;
+
+    if (studioLayoutEl) {
+      const stored = Number(prefs.controlsWidth);
+      if (Number.isFinite(stored)) {
+        const width = clampNumber(stored, STUDIO_PANEL_LIMITS.controlsWidth.min, STUDIO_PANEL_LIMITS.controlsWidth.max);
+        studioLayoutEl.style.setProperty('--studio-left-width', `${width}px`);
+      } else {
+        studioLayoutEl.style.removeProperty('--studio-left-width');
+      }
+    }
+
+    const applyHeight = (el, value, key) => {
+      if (!el) return;
+      if (Number.isFinite(value)) {
+        const limits = STUDIO_PANEL_LIMITS[key] || {};
+        const height = clampNumber(value, limits.min, limits.max);
+        el.style.height = `${height}px`;
+        el.dataset.studioHeight = String(height);
+      } else {
+        el.style.removeProperty('height');
+        delete el.dataset.studioHeight;
+      }
+    };
+
+    applyHeight(studioGridWrapEl, Number(prefs.gridHeight), 'gridHeight');
+    applyHeight(arrangerWrap, Number(prefs.arrangerHeight), 'arrangerHeight');
+    applyHeight(studioIntegrationPanelsEl, Number(prefs.integrationsHeight), 'integrationsHeight');
+  }
+
+  window.applyStudioPanelPrefs = applyStudioPanelPrefs;
+
+  function createStudioResizer({
+    element,
+    axis,
+    key,
+    min,
+    max,
+    measure,
+    apply,
+  }) {
+    if (!element || !key) return;
+    if (element.querySelector(`.studio-resize-handle[data-key="${key}"]`)) return;
+
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'studio-resize-handle';
+    handle.dataset.axis = axis;
+    handle.dataset.key = key;
+    handle.setAttribute('aria-label', axis === 'x' ? 'Resize width' : 'Resize height');
+    element.appendChild(handle);
+
+    const limits = STUDIO_PANEL_LIMITS[key] || {};
+    const minLimit = Number.isFinite(min) ? min : limits.min;
+    const maxLimit = Number.isFinite(max) ? max : limits.max;
+
+    const readValue = () => {
+      if (typeof measure === 'function') {
+        const custom = measure();
+        if (Number.isFinite(custom)) return custom;
+      }
+      const rect = element.getBoundingClientRect();
+      return axis === 'x' ? rect.width : rect.height;
+    };
+
+    const commitValue = (next) => {
+      if (!Number.isFinite(next)) return;
+      persistStudioPanelPrefs({ [key]: clampNumber(next, minLimit, maxLimit) });
+    };
+
+    const applyValue = (value) => {
+      const safe = clampNumber(value, minLimit, maxLimit);
+      if (typeof apply === 'function') {
+        apply(safe);
+      } else if (axis === 'x') {
+        element.style.width = `${safe}px`;
+      } else {
+        element.style.height = `${safe}px`;
+      }
+    };
+
+    const startDrag = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const pointerId = event.pointerId;
+      handle.setPointerCapture(pointerId);
+      document.body.classList.add('studio-resize-active');
+      handle.classList.add('active');
+
+      const startPos = axis === 'x' ? event.clientX : event.clientY;
+      const startValue = readValue();
+      let latest = startValue;
+
+      const onMove = (moveEvent) => {
+        const delta = (axis === 'x' ? moveEvent.clientX - startPos : moveEvent.clientY - startPos);
+        const candidate = clampNumber(startValue + delta, minLimit, maxLimit);
+        latest = candidate;
+        applyValue(candidate);
+      };
+
+      const onUp = () => {
+        handle.releasePointerCapture(pointerId);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
+        document.body.classList.remove('studio-resize-active');
+        handle.classList.remove('active');
+        commitValue(latest);
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp, { once: true });
+      window.addEventListener('pointercancel', onUp, { once: true });
+    };
+
+    handle.addEventListener('pointerdown', startDrag);
+
+    handle.addEventListener('keydown', (event) => {
+      let delta = 0;
+      if (axis === 'x') {
+        if (event.key === 'ArrowLeft') delta = -10;
+        if (event.key === 'ArrowRight') delta = 10;
+      } else {
+        if (event.key === 'ArrowUp') delta = -10;
+        if (event.key === 'ArrowDown') delta = 10;
+      }
+      if (!delta) return;
+      event.preventDefault();
+      const current = readValue();
+      const next = clampNumber(current + delta, minLimit, maxLimit);
+      applyValue(next);
+      commitValue(next);
+    });
+  }
+
+  function setupStudioResizers() {
+    applyStudioPanelPrefs();
+
+    createStudioResizer({
+      element: studioControlPanelEl,
+      axis: 'x',
+      key: 'controlsWidth',
+      min: STUDIO_PANEL_LIMITS.controlsWidth.min,
+      max: STUDIO_PANEL_LIMITS.controlsWidth.max,
+      measure: () => {
+        if (!studioLayoutEl) return undefined;
+        const raw = parseFloat(getComputedStyle(studioLayoutEl).getPropertyValue('--studio-left-width'));
+        return Number.isFinite(raw) ? raw : undefined;
+      },
+      apply: (value) => {
+        if (studioLayoutEl) {
+          studioLayoutEl.style.setProperty('--studio-left-width', `${value}px`);
+        }
+      }
+    });
+
+    createStudioResizer({
+      element: studioGridWrapEl,
+      axis: 'y',
+      key: 'gridHeight',
+      min: STUDIO_PANEL_LIMITS.gridHeight.min,
+      max: STUDIO_PANEL_LIMITS.gridHeight.max,
+      apply: (value) => {
+        if (studioGridWrapEl) {
+          studioGridWrapEl.style.height = `${value}px`;
+        }
+      }
+    });
+
+    createStudioResizer({
+      element: arrangerWrap,
+      axis: 'y',
+      key: 'arrangerHeight',
+      min: STUDIO_PANEL_LIMITS.arrangerHeight.min,
+      max: STUDIO_PANEL_LIMITS.arrangerHeight.max,
+      apply: (value) => {
+        if (arrangerWrap) {
+          arrangerWrap.style.height = `${value}px`;
+        }
+      }
+    });
+
+    createStudioResizer({
+      element: studioIntegrationPanelsEl,
+      axis: 'y',
+      key: 'integrationsHeight',
+      min: STUDIO_PANEL_LIMITS.integrationsHeight.min,
+      max: STUDIO_PANEL_LIMITS.integrationsHeight.max,
+      apply: (value) => {
+        if (studioIntegrationPanelsEl) {
+          studioIntegrationPanelsEl.style.height = `${value}px`;
+        }
+      }
+    });
+  }
   // --- Piano Roll UI refs (lazy) ---
   let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl, prKeysEl;
   let prPlayline = null;
@@ -7058,6 +7436,7 @@ let lastBar = -1;             // arranger playhead column
 
   renderIntegrationPanels();
   renderKitDetails();
+  setupStudioResizers();
 
   // ---------- Helpers ----------
   function hasAnyPR(bank,row){
@@ -8413,6 +8792,7 @@ stopBtn.addEventListener('click', () => {
     pendingTagUrl: null,
     previousOverflow: ''
   };
+  window.profileState = profileState;
 
   let profileActiveTab = 'details';
   let profileNavUnread = 0;
@@ -9434,7 +9814,23 @@ stopBtn.addEventListener('click', () => {
     const email = typeof user.email === 'string' ? user.email : '';
     const tagUrl = typeof user.tagUrl === 'string' ? user.tagUrl : '';
     const tagDurationSec = typeof user.tagDurationSec === 'number' ? user.tagDurationSec : null;
-    return { ...user, avatar, displayName, firstName, lastName, name, email, tagUrl, tagDurationSec };
+    const panelPrefs = {};
+    const rawPrefs = user.studioPanelSizes;
+    if (rawPrefs && typeof rawPrefs === 'object') {
+      Object.keys(rawPrefs).forEach((key) => {
+        const numeric = Number(rawPrefs[key]);
+        if (!Number.isFinite(numeric)) return;
+        const limits = STUDIO_PANEL_LIMITS[key] || {};
+        panelPrefs[key] = Math.round(clampNumber(numeric, limits.min, limits.max));
+      });
+    }
+    const sanitized = { ...user, avatar, displayName, firstName, lastName, name, email, tagUrl, tagDurationSec };
+    if (Object.keys(panelPrefs).length) {
+      sanitized.studioPanelSizes = panelPrefs;
+    } else if ('studioPanelSizes' in sanitized) {
+      delete sanitized.studioPanelSizes;
+    }
+    return sanitized;
   }
 
   function clearPendingAvatarPreview() {
@@ -9590,6 +9986,7 @@ stopBtn.addEventListener('click', () => {
       return;
     }
     profileState.user = user;
+    applyStudioPanelPrefs();
     populateProfile(user);
     setProfileTab('details', { silent: true });
     setProfileMode('view');
@@ -9785,6 +10182,7 @@ stopBtn.addEventListener('click', () => {
         if (refreshed) {
           persistUpdatedUser(refreshed);
           profileState.user = sanitizeProfileUser(refreshed);
+          applyStudioPanelPrefs();
           populateProfile(profileState.user);
           setProfileMode('view');
         }
