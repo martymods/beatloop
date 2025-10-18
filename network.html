@@ -2846,6 +2846,7 @@
           const db = e.target.result
           if (!db.objectStoreNames.contains('tracks')) db.createObjectStore('tracks')
           if (!db.objectStoreNames.contains('covers')) db.createObjectStore('covers')
+          if (!db.objectStoreNames.contains('studio-sounds')) db.createObjectStore('studio-sounds')
         }
         req.onsuccess = () => res(req.result)
         req.onerror = () => rej(req.error)
@@ -6278,6 +6279,188 @@ let communityInstrumentEntries = [];
 let studioSoundsLoaded = false;
 let studioSoundsPromise = null;
 const STUDIO_SOUND_MAX_BYTES = 5 * 1024 * 1024;
+const STUDIO_SOUND_LOCAL_META_KEY = 'studio_sounds_v1';
+const STUDIO_SOUND_LOCAL_STORE = 'studio-sounds';
+let localStudioSoundMeta = null;
+let localStudioSoundUrlMap = new Map();
+let localStudioLoopEntries = [];
+let localStudioInstrumentEntries = [];
+
+function sanitizeLocalStudioSoundMetaEntry(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const type = raw.type === 'instrument' ? 'instrument' : 'loop';
+  const blobKey = typeof raw.blobKey === 'string' ? raw.blobKey.trim() : '';
+  if (!blobKey) return null;
+  const idCandidate = typeof raw.id === 'string' ? raw.id.trim() : '';
+  const id = idCandidate || `local:${blobKey}`;
+  const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+  const sizeNumber = Number(raw.size);
+  const size = Number.isFinite(sizeNumber) && sizeNumber >= 0 ? sizeNumber : null;
+  const createdAt = typeof raw.createdAt === 'string' && raw.createdAt ? raw.createdAt : new Date().toISOString();
+  return { id, type, blobKey, name, size, createdAt };
+}
+
+function readLocalStudioSoundMeta(){
+  if (!Array.isArray(localStudioSoundMeta)) {
+    const stored = getJSON(STUDIO_SOUND_LOCAL_META_KEY, '[]');
+    localStudioSoundMeta = Array.isArray(stored)
+      ? stored.map(sanitizeLocalStudioSoundMetaEntry).filter(Boolean)
+      : [];
+  }
+  return localStudioSoundMeta.slice();
+}
+
+function persistLocalStudioSoundMeta(next){
+  const sanitized = Array.isArray(next)
+    ? next.map(sanitizeLocalStudioSoundMetaEntry).filter(Boolean)
+    : [];
+  localStudioSoundMeta = sanitized;
+  setJSON(STUDIO_SOUND_LOCAL_META_KEY, sanitized);
+}
+
+function getActiveUserDisplayName(){
+  try {
+    const authUser = window.AUTH && typeof window.AUTH.user === 'object' ? window.AUTH.user : null;
+    if (authUser) {
+      if (typeof authUser.displayName === 'string' && authUser.displayName.trim()) {
+        return authUser.displayName.trim();
+      }
+      const parts = [];
+      if (typeof authUser.firstName === 'string') parts.push(authUser.firstName.trim());
+      if (typeof authUser.lastName === 'string') parts.push(authUser.lastName.trim());
+      const full = parts.filter(Boolean).join(' ').trim();
+      if (full) return full;
+      if (typeof authUser.name === 'string' && authUser.name.trim()) return authUser.name.trim();
+    }
+  } catch {}
+  try {
+    const user = window.currentUser || null;
+    if (user) {
+      if (typeof user.displayName === 'string' && user.displayName.trim()) return user.displayName.trim();
+      if (typeof user.name === 'string' && user.name.trim()) return user.name.trim();
+    }
+  } catch {}
+  return 'You';
+}
+
+async function buildLocalStudioSoundEntries(){
+  const meta = readLocalStudioSoundMeta();
+  const nextUrlMap = new Map();
+  const loops = [];
+  const instruments = [];
+  const ownerId = getActiveUserId() || 'local';
+  const ownerDisplay = getActiveUserDisplayName();
+
+  for (const entry of meta) {
+    if (!entry || typeof entry !== 'object') continue;
+    const type = entry.type === 'instrument' ? 'instrument' : 'loop';
+    const id = entry.id || `local:${entry.blobKey}`;
+    if (!id) continue;
+    const blobKey = entry.blobKey;
+    if (!blobKey) continue;
+
+    let objectUrl = localStudioSoundUrlMap.get(id);
+    if (!objectUrl) {
+      try {
+        objectUrl = await getBlobUrl(STUDIO_SOUND_LOCAL_STORE, blobKey);
+      } catch (err) {
+        console.warn('Failed to read local studio sound blob', err);
+        objectUrl = null;
+      }
+    }
+    if (!objectUrl) continue;
+    nextUrlMap.set(id, objectUrl);
+
+    const normalized = {
+      id,
+      url: objectUrl,
+      value: objectUrl,
+      name: entry.name || '',
+      ownerId,
+      ownerDisplay,
+      type,
+      size: entry.size || null,
+      createdAt: entry.createdAt || null,
+      isLocal: true,
+      blobKey
+    };
+
+    if (type === 'instrument') instruments.push(normalized);
+    else loops.push(normalized);
+  }
+
+  for (const [id, url] of localStudioSoundUrlMap.entries()) {
+    if (nextUrlMap.has(id)) continue;
+    try { URL.revokeObjectURL(url); } catch {}
+  }
+
+  localStudioSoundUrlMap = nextUrlMap;
+  localStudioLoopEntries = loops;
+  localStudioInstrumentEntries = instruments;
+  return { loops: loops.slice(), instruments: instruments.slice() };
+}
+
+async function refreshLocalStudioSoundEntries(){
+  return await buildLocalStudioSoundEntries();
+}
+
+async function saveLocalStudioSound(type, file){
+  const meta = readLocalStudioSoundMeta();
+  const normalizedType = type === 'instrument' ? 'instrument' : 'loop';
+  const uniqueId = `local:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const blobKey = `${uniqueId}:blob`;
+  try {
+    await putBlob(STUDIO_SOUND_LOCAL_STORE, blobKey, file);
+  } catch (err) {
+    console.error('Failed to cache studio sound locally', err);
+    throw err;
+  }
+  const entry = {
+    id: uniqueId,
+    type: normalizedType,
+    blobKey,
+    name: typeof file.name === 'string' ? file.name : '',
+    size: typeof file.size === 'number' ? file.size : null,
+    createdAt: new Date().toISOString()
+  };
+  meta.push(entry);
+  persistLocalStudioSoundMeta(meta);
+  await refreshLocalStudioSoundEntries();
+  return entry;
+}
+
+async function renameLocalStudioSound(id, name){
+  const meta = readLocalStudioSoundMeta();
+  const idx = meta.findIndex((entry) => entry && entry.id === id);
+  if (idx === -1) return false;
+  meta[idx] = { ...meta[idx], name };
+  persistLocalStudioSoundMeta(meta);
+  await refreshLocalStudioSoundEntries();
+  return true;
+}
+
+async function deleteLocalStudioSound(id){
+  const meta = readLocalStudioSoundMeta();
+  const idx = meta.findIndex((entry) => entry && entry.id === id);
+  if (idx === -1) return false;
+  const [removed] = meta.splice(idx, 1);
+  persistLocalStudioSoundMeta(meta);
+  const blobKey = removed && removed.blobKey ? removed.blobKey : null;
+  if (blobKey) {
+    try {
+      await deleteBlob(STUDIO_SOUND_LOCAL_STORE, blobKey);
+    } catch (err) {
+      console.warn('Failed to remove cached studio sound blob', err);
+    }
+  }
+  const cachedUrl = localStudioSoundUrlMap.get(removed.id);
+  if (cachedUrl) {
+    try { URL.revokeObjectURL(cachedUrl); } catch {}
+    localStudioSoundUrlMap.delete(removed.id);
+  }
+  await refreshLocalStudioSoundEntries();
+  return true;
+}
 
 const KIT_DETAILS = {
   trap: {
@@ -8353,8 +8536,9 @@ let lastBar = -1;             // arranger playhead column
 
       const ownerId = normalizeUserId(raw.ownerId || raw.userId || raw.owner?.id || raw.owner?._id);
       const isOwner = ownerId && viewerId && ownerId === viewerId;
+      const isLocalSound = Boolean(raw && (raw.isLocal || (typeof raw.id === 'string' && raw.id.startsWith('local:'))));
 
-      if (isOwner) {
+      if (isOwner || isLocalSound) {
         const renameBtn = document.createElement('button');
         renameBtn.type = 'button';
         renameBtn.className = 'rounded bg-white/10 px-1.5 py-0.5 text-[0.65rem] text-white/80 hover:bg-white/15';
@@ -8476,32 +8660,75 @@ let lastBar = -1;             // arranger playhead column
     }
 
     const exec = (async () => {
+      let localLoops = [];
+      let localInstruments = [];
+      try {
+        const local = await refreshLocalStudioSoundEntries();
+        localLoops = Array.isArray(local?.loops) ? local.loops.slice() : localStudioLoopEntries.slice();
+        localInstruments = Array.isArray(local?.instruments) ? local.instruments.slice() : localStudioInstrumentEntries.slice();
+      } catch (err) {
+        console.warn('Failed to refresh local studio sound cache', err);
+        localLoops = localStudioLoopEntries.slice();
+        localInstruments = localStudioInstrumentEntries.slice();
+      }
+
+      const combinedLoops = localLoops.slice();
+      const combinedInstruments = localInstruments.slice();
+
       const apiBase = (typeof window.getApiBase === 'function') ? window.getApiBase() : '';
-      if (!apiBase) throw new Error('API unavailable');
-      const auth = (window.AUTH && typeof window.AUTH.hdr === 'function') ? window.AUTH.hdr() : {};
-      const headers = { Accept: 'application/json', ...auth };
-      const response = await fetch(`${apiBase}/api/studio/sounds`, { headers });
-      if (response.status === 404) {
-        communityLoopEntries = [];
-        communityInstrumentEntries = [];
-        studioSoundsLoaded = true;
-        return { loops: communityLoopEntries, instruments: communityInstrumentEntries };
-      }
-      if (!response.ok) {
-        let detail = '';
+      let remoteError = null;
+
+      if (apiBase) {
+        const auth = (window.AUTH && typeof window.AUTH.hdr === 'function') ? window.AUTH.hdr() : {};
+        const headers = { Accept: 'application/json', ...auth };
+        let response = null;
         try {
-          const data = await response.json();
-          detail = data?.error || data?.message || '';
-        } catch {
-          try { detail = await response.text(); } catch {}
+          response = await fetch(`${apiBase}/api/studio/sounds`, { headers });
+        } catch (err) {
+          remoteError = err;
         }
-        const message = detail ? `HTTP ${response.status}: ${detail}` : `HTTP ${response.status}`;
-        throw new Error(message);
+
+        if (response) {
+          if (response.status === 404) {
+            remoteError = new Error('Studio sound endpoint unavailable (404).');
+          } else if (!response.ok) {
+            let detail = '';
+            try {
+              const data = await response.json();
+              detail = data?.error || data?.message || '';
+            } catch {
+              try { detail = await response.text(); } catch {}
+            }
+            remoteError = new Error(detail ? `HTTP ${response.status}: ${detail}` : `HTTP ${response.status}`);
+          } else {
+            const payload = await response.json().catch(() => ({}));
+            const remoteLoops = Array.isArray(payload.loops)
+              ? payload.loops.map(normalizeCommunitySound).filter(Boolean)
+              : [];
+            const remoteInstruments = Array.isArray(payload.instruments)
+              ? payload.instruments.map(normalizeCommunitySound).filter(Boolean)
+              : [];
+            combinedLoops.push(...remoteLoops);
+            combinedInstruments.push(...remoteInstruments);
+            remoteError = null;
+          }
+        }
+      } else {
+        remoteError = new Error('API unavailable');
       }
-      const payload = await response.json().catch(() => ({}));
-      communityLoopEntries = Array.isArray(payload.loops) ? payload.loops.map(normalizeCommunitySound).filter(Boolean) : [];
-      communityInstrumentEntries = Array.isArray(payload.instruments) ? payload.instruments.map(normalizeCommunitySound).filter(Boolean) : [];
+
+      if (remoteError) {
+        console.warn('Using local studio sounds due to remote API error', remoteError);
+      }
+
+      communityLoopEntries = combinedLoops;
+      communityInstrumentEntries = combinedInstruments;
       studioSoundsLoaded = true;
+
+      if (remoteError && !combinedLoops.length && !combinedInstruments.length) {
+        throw remoteError;
+      }
+
       return { loops: communityLoopEntries, instruments: communityInstrumentEntries };
     })();
 
@@ -8555,14 +8782,30 @@ let lastBar = -1;             // arranger playhead column
       alert('Please upload a sound that is 5 MB or less.');
       return;
     }
+
     const auth = window.AUTH && typeof window.AUTH.hdr === 'function' ? window.AUTH : null;
-    if (!auth || !auth.token || !auth.token.trim()) {
-      alert('Sign in to upload sounds.');
-      return;
-    }
+    const hasAuthToken = Boolean(auth && auth.token && auth.token.trim());
     const apiBase = (typeof window.getApiBase === 'function') ? window.getApiBase() : '';
-    if (!apiBase) {
-      alert('Upload unavailable right now.');
+    const fallbackStatuses = new Set([404, 500, 502, 503, 504]);
+
+    const persistLocalSound = async (successMessage, failureMessage) => {
+      try {
+        await saveLocalStudioSound(type, file);
+        await refreshStudioSounds();
+        if (successMessage) alert(successMessage);
+        return true;
+      } catch (err) {
+        console.error('Failed to store studio sound locally', err);
+        if (failureMessage) alert(failureMessage);
+        return false;
+      }
+    };
+
+    if (!hasAuthToken) {
+      await persistLocalSound(
+        'Upload saved locally. Sign in to share it with the Beatloop community when you\'re back online.',
+        'Sign in to upload sounds.'
+      );
       return;
     }
 
@@ -8570,7 +8813,16 @@ let lastBar = -1;             // arranger playhead column
     form.append('type', type);
     form.append('sound', file, file.name || `${type}.wav`);
 
-    let response;
+    if (!apiBase) {
+      await persistLocalSound(
+        'Upload saved locally. It will be available in this browser until Beatloop reconnects.',
+        'Upload unavailable right now.'
+      );
+      return;
+    }
+
+    let response = null;
+    let fetchError = null;
     try {
       response = await fetch(`${apiBase}/api/studio/sounds`, {
         method: 'POST',
@@ -8578,7 +8830,23 @@ let lastBar = -1;             // arranger playhead column
         body: form
       });
     } catch (err) {
-      alert('Upload failed. Please check your connection.');
+      fetchError = err;
+    }
+
+    const shouldFallbackToLocal = Boolean(
+      fetchError
+      || !response
+      || fallbackStatuses.has(response.status)
+    );
+
+    if (shouldFallbackToLocal) {
+      const failureMessage = fetchError
+        ? 'Upload failed. Please check your connection.'
+        : 'Upload unavailable right now.';
+      await persistLocalSound(
+        'Upload saved locally. We\'ll sync it once the studio is back online.',
+        failureMessage
+      );
       return;
     }
 
@@ -8601,17 +8869,27 @@ let lastBar = -1;             // arranger playhead column
 
   async function handleRenameStudioSound(entry){
     if (!entry || !entry.id) return;
-    const auth = window.AUTH && typeof window.AUTH.hdr === 'function' ? window.AUTH : null;
-    if (!auth || !auth.token || !auth.token.trim()) {
-      alert('Sign in to manage your sounds.');
-      return;
-    }
     const currentName = typeof entry.name === 'string' && entry.name ? entry.name : filenameLabel(entry.value || entry.url || '');
     const next = prompt('Rename sound', currentName || '');
     if (next === null) return;
     const trimmed = next.trim();
     if (!trimmed) {
       alert('Name cannot be empty.');
+      return;
+    }
+    const isLocal = Boolean(entry && (entry.isLocal || (typeof entry.id === 'string' && entry.id.startsWith('local:'))));
+    if (isLocal) {
+      const renamed = await renameLocalStudioSound(entry.id, trimmed);
+      if (!renamed) {
+        alert('Rename unavailable right now.');
+        return;
+      }
+      await refreshStudioSounds();
+      return;
+    }
+    const auth = window.AUTH && typeof window.AUTH.hdr === 'function' ? window.AUTH : null;
+    if (!auth || !auth.token || !auth.token.trim()) {
+      alert('Sign in to manage your sounds.');
       return;
     }
     const apiBase = (typeof window.getApiBase === 'function') ? window.getApiBase() : '';
@@ -8648,12 +8926,26 @@ let lastBar = -1;             // arranger playhead column
 
   async function handleDeleteStudioSound(entry, selectedSet){
     if (!entry || !entry.id) return;
+    const isLocal = Boolean(entry && (entry.isLocal || (typeof entry.id === 'string' && entry.id.startsWith('local:'))));
+    if (!confirm('Remove this sound from Beatloop Studio?')) {
+      return;
+    }
+    if (isLocal) {
+      const removed = await deleteLocalStudioSound(entry.id);
+      if (!removed) {
+        alert('Delete unavailable right now.');
+        return;
+      }
+      if (selectedSet) {
+        if (entry.value) selectedSet.delete(entry.value);
+        if (entry.url) selectedSet.delete(entry.url);
+      }
+      await refreshStudioSounds();
+      return;
+    }
     const auth = window.AUTH && typeof window.AUTH.hdr === 'function' ? window.AUTH : null;
     if (!auth || !auth.token || !auth.token.trim()) {
       alert('Sign in to manage your sounds.');
-      return;
-    }
-    if (!confirm('Remove this sound from Beatloop Studio?')) {
       return;
     }
     const apiBase = (typeof window.getApiBase === 'function') ? window.getApiBase() : '';
