@@ -2260,13 +2260,14 @@
             continue;
           }
 
-          const shouldReturnLegacyResponse = response.status === 404
+          const shouldTreatLegacy404AsUnreachable = response.status === 404
             && isLegacyStudioPath
             && isLegacyApiHost;
 
-          if (shouldReturnLegacyResponse) {
-            updateActiveApiBase(candidate);
-            return response;
+          if (shouldTreatLegacy404AsUnreachable) {
+            unreachableApiBases.add(candidate);
+            lastResponse = response;
+            continue;
           }
 
           updateActiveApiBase(candidate);
