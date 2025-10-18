@@ -3567,8 +3567,11 @@ let sessionsCard = null;
 
     function renderMonetizationOptionsUI() {
       if (!monetizationOptionsEl) return
+      if (!Array.isArray(monetizationState.options)) {
+        monetizationState.options = []
+      }
       monetizationOptionsEl.innerHTML = ''
-      (monetizationState.options || []).forEach((opt, index) => {
+      monetizationState.options.forEach((opt, index) => {
         const option = opt || {}
         const row = document.createElement('div')
         row.className = 'bl-monetization-option'
@@ -3602,6 +3605,11 @@ let sessionsCard = null;
         removeBtn.className = 'bl-monetization-option__remove'
         removeBtn.textContent = 'Remove'
         removeBtn.addEventListener('click', () => {
+          if (!Array.isArray(monetizationState.options)) {
+            monetizationState.options = []
+            renderMonetizationOptionsUI()
+            return
+          }
           monetizationState.options = monetizationState.options.filter(entry => entry !== option)
           renderMonetizationOptionsUI()
         })
