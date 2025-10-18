@@ -604,64 +604,49 @@
     async function loadHotTracks(baseOverride) {
       const base = baseOverride || window.API_BASE
       if (!base) return
+      try {
+        const res = await fetch(`${base}/api/leaderboard`, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'include',
+          cache: 'no-store',
+        })
 
-      const endpoints = [
-        { path: '/api/public/leaderboard', credentials: 'omit' },
-        { path: '/api/leaderboard', credentials: 'include' },
-      ]
-
-      let lastError = null
-
-      for (const { path, credentials } of endpoints) {
-        try {
-          const res = await fetch(`${base}${path}`, {
-            method: 'GET',
-            mode: 'cors',
-            credentials,
-            cache: 'no-store',
-          })
-
-          if (!res.ok) {
-            if (res.status === 401 || res.status === 403) {
-              continue
-            }
-            lastError = new Error(`leaderboard request failed (${res.status})`)
-            continue
-          }
-
-          const payload = await res.json().catch(() => null)
-          const topEntries = Array.isArray(payload?.top) ? payload.top : []
-          const mapped = topEntries
-            .map((entry, idx) => {
-              const track = entry?.track || {}
-              const audioUrl = track.audioUrl || track.url || ''
-              if (!audioUrl) return null
-              const bpmNum = typeof track.bpm === 'number' ? track.bpm : parseInt(track.bpm, 10)
-              const artist = track.artist || (track.user && (track.user.name || track.user.displayName)) || 'Unknown Artist'
-              return {
-                id: track.id || track._id || track.trackId || `leaderboard-${idx}`,
-                title: track.title || 'Untitled',
-                artist,
-                bpm: Number.isFinite(bpmNum) ? Math.round(bpmNum) : null,
-                url: audioUrl,
-                cover: track.coverUrl || track.cover || null,
-                duration: track.duration || track.audioDurationSec || null,
-              }
-            })
-            .filter(Boolean)
-            .slice(0, 6)
-
-          if (mapped.length) {
-            applyTracks(mapped)
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            console.info('Leaderboard requires sign-in to view full list')
             return
           }
-        } catch (err) {
-          lastError = err
+          throw new Error(`leaderboard request failed (${res.status})`)
         }
-      }
 
-      if (lastError) {
-        console.info('Unable to load leaderboard tracks', lastError)
+        const payload = await res.json().catch(() => null)
+        const topEntries = Array.isArray(payload?.top) ? payload.top : []
+        const mapped = topEntries
+          .map((entry, idx) => {
+            const track = entry?.track || {}
+            const audioUrl = track.audioUrl || track.url || ''
+            if (!audioUrl) return null
+            const bpmNum = typeof track.bpm === 'number' ? track.bpm : parseInt(track.bpm, 10)
+            const artist = track.artist || (track.user && (track.user.name || track.user.displayName)) || 'Unknown Artist'
+            return {
+              id: track.id || track._id || track.trackId || `leaderboard-${idx}`,
+              title: track.title || 'Untitled',
+              artist,
+              bpm: Number.isFinite(bpmNum) ? Math.round(bpmNum) : null,
+              url: audioUrl,
+              cover: track.coverUrl || track.cover || null,
+              duration: track.duration || track.audioDurationSec || null,
+            }
+          })
+          .filter(Boolean)
+          .slice(0, 6)
+
+        if (mapped.length) {
+          applyTracks(mapped)
+        }
+      } catch (err) {
+        console.info('Unable to load leaderboard tracks', err)
       }
     }
 
