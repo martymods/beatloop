@@ -51,8 +51,27 @@ const PLAYER_COLOR_PALETTE = [
   '#4ade80',
   '#fbbf24'
 ];
+const PROFILE_COLOR_DEFAULT = '#7c3aed';
 const LEADERBOARD_THRESHOLDS = Object.freeze({ likes: 12, reposts: 4 });
 const LEADERBOARD_WEIGHTS = Object.freeze({ plays: 15, comments: 9, likes: 2, reposts: 3 });
+
+function parseProfileColor(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const hex = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+  if (/^[0-9a-fA-F]{6}$/.test(hex)) return `#${hex.toLowerCase()}`;
+  if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+    return `#${hex.toLowerCase().split('').map((ch) => ch + ch).join('')}`;
+  }
+  return null;
+}
+
+function resolveProfileColor(value, fallback = PROFILE_COLOR_DEFAULT) {
+  const normalized = parseProfileColor(value);
+  return normalized || fallback;
+}
+
 function normalizeMime(value) {
   if (typeof value !== 'string') return '';
   if (!value) return '';
@@ -109,6 +128,7 @@ const UserSchema = new mongoose.Schema({
   firstName: { type: String, default: '' },
   lastName: { type: String, default: '' },
   displayName: { type: String, default: '' },
+  profileColor: { type: String, default: PROFILE_COLOR_DEFAULT },
   tagUrl: String,            // 3-sec sound tag URL
   tagStorageKey: { type: String, default: '' },
   tagDurationSec: Number,
@@ -632,7 +652,8 @@ async function userSummary(reqOrUser, maybeUser) {
     joinedAt: u.createdAt,
     firstName: u.firstName,
     lastName: u.lastName,
-    displayName: u.displayName
+    displayName: u.displayName,
+    profileColor: resolveProfileColor(u.profileColor)
   };
 }
 
@@ -740,7 +761,8 @@ function normalizeUserForConversation(summary, fallback = {}, req) {
     displayName: base.displayName || alt.displayName || '',
     firstName: base.firstName || alt.firstName || '',
     lastName: base.lastName || alt.lastName || '',
-    joinedAt: base.joinedAt || alt.createdAt || alt.joinedAt || null
+    joinedAt: base.joinedAt || alt.createdAt || alt.joinedAt || null,
+    profileColor: resolveProfileColor(base.profileColor || alt.profileColor)
   };
 }
 
@@ -1002,7 +1024,7 @@ function ensureParticipantHistory(sessionDoc, userId) {
 async function rosterFor(sessionDoc, req) {
   const ids = (sessionDoc.participants || []).map(id => new mongoose.Types.ObjectId(id));
   if (!ids.length) return [];
-  const users = await User.find({ _id: { $in: ids } }).select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey createdAt');
+  const users = await User.find({ _id: { $in: ids } }).select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey createdAt profileColor');
   return users.map(u => ({
     id: u._id,
     name: u.name,
@@ -1010,6 +1032,7 @@ async function rosterFor(sessionDoc, req) {
     avatar: presentStoredUploadUrl(req, u.avatarUrl, u.avatarStorageKey),
     tagUrl: presentStoredUploadUrl(req, u.tagUrl, u.tagStorageKey),
     joinedAt: u.createdAt,
+    profileColor: resolveProfileColor(u.profileColor),
     color: (() => {
       const idStr = toIdString(u._id);
       if (idStr && sessionDoc.playerColors?.[idStr]) return sessionDoc.playerColors[idStr];
@@ -1037,7 +1060,7 @@ async function participantHistoryFor(sessionDoc, req) {
     })
     .filter(Boolean);
   if (!objectIds.length) return [];
-  const users = await User.find({ _id: { $in: objectIds } }).select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey createdAt');
+  const users = await User.find({ _id: { $in: objectIds } }).select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey createdAt profileColor');
   const userMap = new Map(users.map(u => [participantKey(u._id), u]));
   const ordered = [];
   const seen = new Set();
@@ -1052,7 +1075,8 @@ async function participantHistoryFor(sessionDoc, req) {
       email: user.email,
       avatar: presentStoredUploadUrl(req, user.avatarUrl, user.avatarStorageKey),
       tagUrl: presentStoredUploadUrl(req, user.tagUrl, user.tagStorageKey),
-      joinedAt: user.createdAt
+      joinedAt: user.createdAt,
+      profileColor: resolveProfileColor(user.profileColor)
     });
   }
   return ordered;
@@ -1122,7 +1146,7 @@ app.get('/api/auth/me', auth, async (req, res) => {
 
 /* ---- profile update: change username (unique) and/or avatarUrl ---- */
 async function handleProfileUpdate(req, res) {
-  const { name, avatarUrl, firstName, lastName, displayName } = req.body || {};
+  const { name, avatarUrl, firstName, lastName, displayName, profileColor } = req.body || {};
   if (name !== undefined) {
     const trimmed = typeof name === 'string' ? name.trim() : '';
     if (trimmed) {
@@ -1140,6 +1164,24 @@ async function handleProfileUpdate(req, res) {
   if (displayName !== undefined) {
     const trimmed = typeof displayName === 'string' ? displayName.trim() : '';
     req.user.displayName = trimmed;
+  }
+  if (profileColor !== undefined) {
+    if (profileColor === null) {
+      req.user.profileColor = PROFILE_COLOR_DEFAULT;
+    } else if (typeof profileColor === 'string') {
+      const normalizedColor = parseProfileColor(profileColor);
+      if (!normalizedColor) {
+        const trimmed = profileColor.trim();
+        if (trimmed) {
+          return res.status(400).json({ error: 'invalid profile color' });
+        }
+        req.user.profileColor = PROFILE_COLOR_DEFAULT;
+      } else {
+        req.user.profileColor = normalizedColor;
+      }
+    } else {
+      return res.status(400).json({ error: 'invalid profile color' });
+    }
   }
   if (avatarUrl !== undefined) {
     req.user.avatarUrl = avatarUrl;
@@ -1163,7 +1205,7 @@ app.get('/api/users/directory', async (req, res) => {
     const users = await User.find()
       .sort({ createdAt: -1 })
       .limit(limit)
-      .select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey totalOnlineSec createdAt displayName firstName lastName tagDurationSec');
+      .select('name email avatarUrl avatarStorageKey tagUrl tagStorageKey totalOnlineSec createdAt displayName firstName lastName tagDurationSec profileColor');
 
     const directory = users.map(u => ({
       id: u._id,
@@ -1176,7 +1218,8 @@ app.get('/api/users/directory', async (req, res) => {
       totalOnlineSec: typeof u.totalOnlineSec === 'number' ? u.totalOnlineSec : 0,
       displayName: u.displayName,
       firstName: u.firstName,
-      lastName: u.lastName
+      lastName: u.lastName,
+      profileColor: resolveProfileColor(u.profileColor)
     }));
 
     res.json({ users: directory });
@@ -1535,7 +1578,7 @@ app.get('/api/messages/conversations', auth, async (req, res) => {
       .filter(Boolean);
 
     const users = await User.find({ _id: { $in: otherObjectIds } })
-      .select('name email avatarUrl avatarStorageKey displayName firstName lastName createdAt')
+      .select('name email avatarUrl avatarStorageKey displayName firstName lastName createdAt profileColor')
       .lean();
 
     const userMap = new Map(users.map(u => [idToString(u._id), u]));
@@ -1574,7 +1617,7 @@ app.get('/api/messages/with/:userId', auth, async (req, res) => {
     }
 
     const otherUser = await User.findById(otherId)
-      .select('name email avatarUrl avatarStorageKey displayName firstName lastName createdAt')
+      .select('name email avatarUrl avatarStorageKey displayName firstName lastName createdAt profileColor')
       .lean();
     if (!otherUser) return res.status(404).json({ error: 'user not found' });
 
@@ -2308,10 +2351,14 @@ app.get('/api/sessions', async (req, res) => {
   const sessions = sessionsRaw.filter(s => Array.isArray(s.participants) ? s.participants.length > 0 : false);
   // include host info + name + counts for the feed
   const hostIds = sessions.map(s => s.hostUserId).filter(Boolean);
-  const hosts = await User.find({ _id: { $in: hostIds } }).select('name avatarUrl avatarStorageKey');
+  const hosts = await User.find({ _id: { $in: hostIds } }).select('name avatarUrl avatarStorageKey profileColor');
   const hostMap = new Map(hosts.map(h => {
     const key = toIdString(h._id) || String(h._id);
-    return [key, { name: h.name, avatar: presentStoredUploadUrl(req, h.avatarUrl, h.avatarStorageKey) }];
+    return [key, {
+      name: h.name,
+      avatar: presentStoredUploadUrl(req, h.avatarUrl, h.avatarStorageKey),
+      profileColor: resolveProfileColor(h.profileColor)
+    }];
   }));
   const out = sessions.map(s => ({
     id: s._id,
@@ -2501,6 +2548,7 @@ io.use(async (socket, next) => {
     socket.data.user = user;
     socket.data.user.avatarUrl = presentStoredUploadUrl(socket.request, user.avatarUrl, user.avatarStorageKey);
     socket.data.user.tagUrl = presentStoredUploadUrl(socket.request, user.tagUrl, user.tagStorageKey);
+    socket.data.user.profileColor = resolveProfileColor(user.profileColor);
     next();
   } catch {
     next(new Error('bad token'));
