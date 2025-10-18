@@ -448,9 +448,9 @@
     // ---------- Minimal Config
     const API_FALLBACKS = [
       // Preferred public API host
-      'https://api.beatloop.co',
-      // Legacy Render host kept as a fallback for older infrastructure
       'https://beatloop-api.onrender.com',
+      // Legacy DNS record kept as a fallback for older infrastructure
+      'https://api.beatloop.co',
       // Add your Render API origin here if you host APIs separately
       // 'https://your-api.onrender.com'
     ]
@@ -477,8 +477,8 @@
       const onBeatloopDomain = /\.beatloop\.co$/i.test(host)
 
       if (onBeatloopDomain) {
-        candidates.add('https://api.beatloop.co')
         candidates.add('https://beatloop-api.onrender.com')
+        candidates.add('https://api.beatloop.co')
       }
 
       if (!onBeatloopDomain && origin && origin.startsWith('http')) {
