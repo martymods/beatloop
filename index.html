@@ -39,13 +39,16 @@
         <span class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/20 text-primary">BL</span>
         <span>beatloop</span>
       </a>
-      <nav class="ml-auto hidden md:flex items-center gap-6 text-sm text-white/70">
-        <a href="#beats" class="hover:text-white">Beats</a>
-        <a href="#freestyle" class="hover:text-white">Freestyle</a>
-        <a href="network.html" class="hover:text-white">Network</a>
-        <a href="#tools" class="hover:text-white">AI Tools</a>
-      </nav>
-      <a href="signup.html" class="ml-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Join Free</a>
+      <div class="ml-auto flex items-center gap-3">
+        <nav class="hidden md:flex items-center gap-6 text-sm text-white/70">
+          <a href="#beats" class="hover:text-white">Beats</a>
+          <a href="#freestyle" class="hover:text-white">Freestyle</a>
+          <a href="network.html" class="hover:text-white">Network</a>
+          <a href="#tools" class="hover:text-white">AI Tools</a>
+        </nav>
+        <a href="login.html" class="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10 active:scale-[.99]">Sign In</a>
+        <a href="signup.html" class="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Join Free</a>
+      </div>
     </div>
   </header>
 
@@ -121,7 +124,7 @@
         <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight">Hot Right Now</h2>
         <p class="text-white/70 mt-1">The most played tracks this week. Tap to preview, click to download.</p>
       </div>
-      <a href="#" class="text-primary hover:underline">View All</a>
+      <a href="login.html" class="text-primary hover:underline">View All</a>
     </div>
 
     <div id="gridBeats" class="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -437,14 +440,15 @@
     }
 
     // ---------- Demo Tracks
-    const TRACKS = [
-      { id: 'reggae-trap',   title: 'Reggae Trap',    artist: 'Slim Pattie',           bpm: 92, url: '/audio/reggae-trap.mp3',    cover: '/img/covers/reggae-trap.jpg' },
-      { id: 'stack',         title: 'STACK',          artist: 'lilwoo',                bpm: 90, url: '/audio/stack.mp3',          cover: '/img/covers/stack.jpg' },
-      { id: 'cleanup-woman', title: 'Da Cleanup Woman',  artist: 't-dub',               bpm: 95, url: '/audio/cleanup-woman.mp3', cover: '/img/covers/cleanup.jpg' },
-      { id: 'we-go-make-it', title: 'We Go Make It',  artist: 'spanel-035',            bpm: 94, url: '/audio/we-go.mp3',         cover: '/img/covers/we-go.jpg' },
-      { id: 'the-one',       title: 'The one',        artist: 'kloverfreshproduction', bpm: 89, url: '/audio/the-one.mp3',       cover: '/img/covers/the-one.jpg' },
-      { id: 'it-is-what',    title: 'It is what it is',  artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',      cover: '/img/covers/it-is.jpg' }
+    const DEFAULT_TRACKS = [
+      { id: 'reggae-trap',   title: 'Reggae Trap',        artist: 'Slim Pattie',            bpm: 92, url: '/audio/reggae-trap.mp3',  cover: '/img/covers/reggae-trap.jpg' },
+      { id: 'stack',         title: 'STACK',              artist: 'lilwoo',                 bpm: 90, url: '/audio/stack.mp3',        cover: '/img/covers/stack.jpg' },
+      { id: 'cleanup-woman', title: 'Da Cleanup Woman',   artist: 't-dub',                  bpm: 95, url: '/audio/cleanup-woman.mp3', cover: '/img/covers/cleanup.jpg' },
+      { id: 'we-go-make-it', title: 'We Go Make It',      artist: 'spanel-035',             bpm: 94, url: '/audio/we-go.mp3',        cover: '/img/covers/we-go.jpg' },
+      { id: 'the-one',       title: 'The one',            artist: 'kloverfreshproduction',  bpm: 89, url: '/audio/the-one.mp3',      cover: '/img/covers/the-one.jpg' },
+      { id: 'it-is-what',    title: 'It is what it is',   artist: 'kloverfreshproduction',  bpm: 90, url: '/audio/it-is.mp3',        cover: '/img/covers/it-is.jpg' }
     ]
+    let TRACKS = DEFAULT_TRACKS.slice()
 
     // ---------- Utilities
     const $ = sel => document.querySelector(sel)
@@ -455,6 +459,7 @@
       const sec = (s%60).toString().padStart(2, '0')
       return `${m}:${sec}`
     }
+    const fallbackCover = (seed) => `https://picsum.photos/seed/${encodeURIComponent(seed || 'beatloop')}/600/600`
 
     // ---------- State
     let current = 0
@@ -470,52 +475,59 @@
 
     // NEW: setTrack accepts autoplay flag and waits for 'ready' before playing
     function setTrack(i, autoplay = false) {
+      if (!Array.isArray(TRACKS) || TRACKS.length === 0) return
       current = (i + TRACKS.length) % TRACKS.length
-      const t = TRACKS[current]
+      const t = TRACKS[current] || {}
+      const title = t.title || 'Untitled'
+      const artist = t.artist || (t.user && (t.user.name || t.user.displayName)) || 'Unknown Artist'
+      const cover = t.cover || fallbackCover(t.id || title || current)
+      const url = t.url || ''
 
-      $('#nowTitle').textContent = t.title
-      $('#nowArtist').textContent = t.artist
-      $('#miniTitle').textContent = t.title
-      $('#miniArtist').textContent = t.artist
+      $('#nowTitle').textContent = title
+      $('#nowArtist').textContent = artist
+      $('#miniTitle').textContent = title
+      $('#miniArtist').textContent = artist
 
       const heroCoverEl = document.getElementById('heroCover')
       const miniCoverEl = document.getElementById('miniCover')
-      if (heroCoverEl) { heroCoverEl.src = t.cover; heroCoverEl.alt = t.title + ' cover' }
-      if (miniCoverEl) { miniCoverEl.src = t.cover; miniCoverEl.alt = t.title + ' cover' }
+      if (heroCoverEl) { heroCoverEl.src = cover; heroCoverEl.alt = `${title} cover` }
+      if (miniCoverEl) { miniCoverEl.src = cover; miniCoverEl.alt = `${title} cover` }
 
       // (Re)load audio sources
-      heroWS.load(t.url)
-      miniWS.load(t.url)
+      if (url) {
+        if (heroWS) heroWS.load(url)
+        if (miniWS) miniWS.load(url)
+      }
 
       // If we should autoplay the new track, wait until it's ready
-if (autoplay) {
-  const playNew = () => heroWS.play()
-  if (typeof heroWS.once === 'function') {
-    heroWS.once('ready', playNew)
-  } else {
-    const h = () => { playNew(); heroWS.un('ready', h) }
-    heroWS.on('ready', h)
-  }
-}
+      if (autoplay && url && heroWS) {
+        const playNew = () => heroWS.play()
+        if (typeof heroWS.once === 'function') {
+          heroWS.once('ready', playNew)
+        } else {
+          const h = () => { playNew(); heroWS.un('ready', h) }
+          heroWS.on('ready', h)
+        }
+      }
 
 
       // Media Session metadata & actions
-if ('mediaSession' in navigator) {
-  try {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: t.title,
-      artist: t.artist,
-      artwork: [
-        { src: t.cover, sizes: '512x512', type: 'image/jpeg' },
-        { src: t.cover, sizes: '256x256', type: 'image/jpeg' }
-      ]
-    })
-    navigator.mediaSession.setActionHandler('play', () => heroWS.play())
-    navigator.mediaSession.setActionHandler('pause', () => heroWS.pause())
-    navigator.mediaSession.setActionHandler('previoustrack', () => { setTrack(current - 1); heroWS.play() })
-    navigator.mediaSession.setActionHandler('nexttrack', () => { setTrack(current + 1); heroWS.play() })
-  } catch {}
-}
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: title,
+            artist: artist,
+            artwork: [
+              { src: cover, sizes: '512x512', type: 'image/jpeg' },
+              { src: cover, sizes: '256x256', type: 'image/jpeg' }
+            ]
+          })
+          navigator.mediaSession.setActionHandler('play', () => heroWS.play())
+          navigator.mediaSession.setActionHandler('pause', () => heroWS.pause())
+          navigator.mediaSession.setActionHandler('previoustrack', () => { setTrack(current - 1); heroWS.play() })
+          navigator.mediaSession.setActionHandler('nexttrack', () => { setTrack(current + 1); heroWS.play() })
+        } catch {}
+      }
 
 
       setButtonsPlaying(false)
@@ -525,23 +537,28 @@ if ('mediaSession' in navigator) {
       const grid = $('#gridBeats')
       grid.innerHTML = ''
       TRACKS.forEach((t, i) => {
+        const cover = (t && t.cover) || fallbackCover((t && (t.id || t.title)) || `track-${i}`)
+        const bpmLabel = t && t.bpm ? `${t.bpm} BPM` : '—'
+        const downloadMarkup = (t && t.url)
+          ? `<a class="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[#0c0c12]" href="${t.url}" download>Download</a>`
+          : `<span class="rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-white/70">Login to download</span>`
         const card = document.createElement('article')
         card.className = 'group rounded-2xl border border-white/10 bg-white/5 p-4 ring-1 ring-white/10 hover:bg-white/10 transition'
         card.innerHTML = `
           <div class="equal overflow-hidden rounded-xl">
             <!-- Use square cover art and contain the full image so names aren’t cut off -->
-            <img src="${t.cover || 'https://picsum.photos/seed/'+t.id+'/600/600'}" alt="${t.title} cover" class="aspect-square object-contain group-hover:scale-[1.02] transition"/>
-            <button data-i="${i}" class="playBtn absolute right-3 top-3 rounded-full bg-primary px-3 py-2 text-sm font-semibold shadow-glow">Play</button>
+            <img src="${cover}" alt="${(t && t.title) || 'Track'} cover" class="aspect-square object-contain group-hover:scale-[1.02] transition"/>
+            <button data-i="${i}" class="playBtn absolute right-3 top-3 rounded-full bg-primary px-3 py-2 text-sm font-semibold shadow-glow" ${t && t.url ? '' : 'disabled'}>${t && t.url ? 'Play' : 'Locked'}</button>
           </div>
           <div class="mt-3 flex items-center justify-between gap-3">
             <div class="min-w-0">
-              <p class="truncate text-sm text-white/60">${t.artist}</p>
-              <h3 class="truncate font-semibold">${t.title}</h3>
+              <p class="truncate text-sm text-white/60">${(t && t.artist) || ''}</p>
+              <h3 class="truncate font-semibold">${(t && t.title) || 'Untitled'}</h3>
             </div>
-            <div class="text-right text-xs text-white/60">${t.bpm} BPM</div>
+            <div class="text-right text-xs text-white/60">${bpmLabel}</div>
           </div>
           <div class="mt-3 flex items-center gap-3">
-            <a class="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[#0c0c12]" href="${t.url}" download>Download</a>
+            ${downloadMarkup}
             <button class="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold hover:bg-white/10">License</button>
           </div>
         `
@@ -550,9 +567,87 @@ if ('mediaSession' in navigator) {
 
       // Clicking a card's Play button switches tracks and autoplays
       $$('.playBtn').forEach(btn => btn.addEventListener('click', (e) => {
+        if (btn.disabled) return
         const i = +e.currentTarget.getAttribute('data-i')
         setTrack(i, true)
       }))
+    }
+
+    function applyTracks(list) {
+      if (!Array.isArray(list) || list.length === 0) return
+      const normalized = list
+        .map((item, idx) => {
+          if (!item || !item.url) return null
+          const bpmNum = typeof item.bpm === 'number' ? item.bpm : parseInt(item.bpm, 10)
+          return {
+            id: item.id || item.trackId || `track-${idx}`,
+            title: item.title || 'Untitled',
+            artist: item.artist || (item.user && (item.user.name || item.user.displayName)) || 'Unknown Artist',
+            bpm: Number.isFinite(bpmNum) ? Math.round(bpmNum) : null,
+            url: item.url,
+            cover: item.cover || item.coverUrl || null,
+            duration: item.duration || null,
+          }
+        })
+        .filter(Boolean)
+        .slice(0, 6)
+
+      if (!normalized.length) return
+
+      TRACKS = normalized
+      current = 0
+      buildCards()
+      if (heroWS) setTrack(0, false)
+      writeStructuredData()
+    }
+
+    async function loadHotTracks(baseOverride) {
+      const base = baseOverride || window.API_BASE
+      if (!base) return
+      try {
+        const res = await fetch(`${base}/api/leaderboard`, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'include',
+          cache: 'no-store',
+        })
+
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            console.info('Leaderboard requires sign-in to view full list')
+            return
+          }
+          throw new Error(`leaderboard request failed (${res.status})`)
+        }
+
+        const payload = await res.json().catch(() => null)
+        const topEntries = Array.isArray(payload?.top) ? payload.top : []
+        const mapped = topEntries
+          .map((entry, idx) => {
+            const track = entry?.track || {}
+            const audioUrl = track.audioUrl || track.url || ''
+            if (!audioUrl) return null
+            const bpmNum = typeof track.bpm === 'number' ? track.bpm : parseInt(track.bpm, 10)
+            const artist = track.artist || (track.user && (track.user.name || track.user.displayName)) || 'Unknown Artist'
+            return {
+              id: track.id || track._id || track.trackId || `leaderboard-${idx}`,
+              title: track.title || 'Untitled',
+              artist,
+              bpm: Number.isFinite(bpmNum) ? Math.round(bpmNum) : null,
+              url: audioUrl,
+              cover: track.coverUrl || track.cover || null,
+              duration: track.duration || track.audioDurationSec || null,
+            }
+          })
+          .filter(Boolean)
+          .slice(0, 6)
+
+        if (mapped.length) {
+          applyTracks(mapped)
+        }
+      } catch (err) {
+        console.info('Unable to load leaderboard tracks', err)
+      }
     }
 
     function setupPlayers() {
@@ -807,9 +902,10 @@ function setupPricing() {
       setupControls()
       setupFreestyleRecorder()
       setupSubscribe()
-      setupPricing()   
+      setupPricing()
       writeStructuredData()
-      await discoverApiBase()
+      const apiBase = await discoverApiBase()
+      await loadHotTracks(apiBase)
     })
   </script>
 </body>
