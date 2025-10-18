@@ -2239,11 +2239,20 @@
               return false;
             }
           })();
+          const isLegacyApiHost = (() => {
+            try {
+              const { hostname } = new URL(candidate);
+              return hostname && hostname.toLowerCase() === 'beatloop-api.onrender.com';
+            } catch {
+              return false;
+            }
+          })();
           const isApiPath = /^\/api\//i.test(parsed.path);
+          const isLegacyStudioPath = isApiPath && /^\/api\/studio\/sounds(?:[/?]|$)/i.test(parsed.path);
 
           const shouldRetry = response.status === 404
-            && isApiPath
-            && isLikelyMarketingHost;
+            && ((isApiPath && isLikelyMarketingHost)
+              || (isLegacyStudioPath && isLegacyApiHost));
 
           if (shouldRetry) {
             unreachableApiBases.add(candidate);
