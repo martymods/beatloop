@@ -332,7 +332,7 @@ const FRONTENDS = new Set(
 
 const LOCALHOST_CORS_ORIGIN_RE = /^https?:\/\/(?:localhost|127(?:\.\d+){3})(?::\d+)?$/i;
 const CORS_ALLOWED_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
-const CORS_ALLOWED_HEADERS = 'Content-Type, Authorization, X-Requested-With, Accept, Range';
+const CORS_ALLOWED_HEADERS = 'Content-Type, Authorization, X-Requested-With, Accept';
 
 function isAllowedCorsOrigin(origin) {
   if (!origin || typeof origin !== 'string') return false;
