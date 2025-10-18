@@ -8826,12 +8826,43 @@ void main()
     vertexFound: !!vertEl,
   });
 
+  const reportOverlayState = (stage, extra = {}) => {
+    try {
+      const computed = window.getComputedStyle(overlay);
+      const rect = overlay.getBoundingClientRect();
+      debugLog(stage, {
+        ...extra,
+        classes: Array.from(overlay.classList),
+        style: {
+          display: computed.display,
+          visibility: computed.visibility,
+          opacity: computed.opacity,
+          pointerEvents: computed.pointerEvents,
+          zIndex: computed.zIndex,
+          position: computed.position,
+        },
+        rect: {
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+        },
+      });
+    } catch (err) {
+      debugLog('Failed to read overlay state', err);
+    }
+  };
+
+  reportOverlayState('Initial overlay state');
+
   const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
   if (!gl) {
     debugLog('WebGL unavailable, removing overlay');
     overlay.remove();
     return;
   }
+
+  debugLog('WebGL context created', gl.getContextAttributes?.());
 
   const compileShader = (type, source) => {
     const shader = gl.createShader(type);
@@ -8898,6 +8929,7 @@ void main()
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== height) canvas.height = height;
     debugLog('Resized canvas', { width, height });
+    reportOverlayState('Post-resize state');
   };
 
   resize();
@@ -8907,6 +8939,8 @@ void main()
   let elapsed = 0;
   let boostMultiplier = 1;
   let boostUntil = 0;
+
+  let loggedFirstFrame = false;
 
   const render = (timestamp) => {
     if (lastFrame === null) {
@@ -8924,6 +8958,11 @@ void main()
 
     elapsed += delta * speed;
 
+    if (!loggedFirstFrame) {
+      loggedFirstFrame = true;
+      debugLog('First render frame', { timestamp, delta, speed, elapsed });
+    }
+
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.uniform1f(iTime, elapsed);
@@ -8936,37 +8975,50 @@ void main()
 
   requestAnimationFrame(render);
 
-  const deactivateImmediately = () => {
+  const deactivateImmediately = (reason = 'unknown') => {
     overlay.classList.remove('is-active');
     overlay.classList.remove('is-exiting');
     document.body?.classList.remove('timeline-shader-active');
-    debugLog('Overlay deactivated immediately');
+    reportOverlayState('Overlay deactivated immediately', { reason });
   };
 
   const controller = {
-    activate() {
-      if (overlay.classList.contains('is-active')) return;
+    activate(options = {}) {
+      const reason = options.reason || 'unspecified';
+      if (overlay.classList.contains('is-active')) {
+        reportOverlayState('Activate skipped - already active', { reason });
+        return;
+      }
+      debugLog('Activating overlay', { reason });
       overlay.classList.remove('is-exiting');
       overlay.classList.add('is-active');
       document.body?.classList.add('timeline-shader-active');
-      debugLog('Overlay activated');
+      reportOverlayState('Overlay activated', { reason });
     },
     deactivate(options = {}) {
       const immediate = options.immediate === true;
+      const reason = options.reason || 'unspecified';
       const isActive = overlay.classList.contains('is-active');
       const isExiting = overlay.classList.contains('is-exiting');
-      if (!isActive && !isExiting) return;
-      if (immediate) {
-        deactivateImmediately();
+      if (!isActive && !isExiting) {
+        reportOverlayState('Deactivate skipped - already inactive', { immediate, reason });
         return;
       }
-      if (isExiting) return;
+      if (immediate) {
+        debugLog('Immediate deactivation requested', { reason });
+        deactivateImmediately(reason);
+        return;
+      }
+      if (isExiting) {
+        reportOverlayState('Deactivate skipped - already exiting', { reason });
+        return;
+      }
       overlay.classList.add('is-exiting');
       overlay.classList.remove('is-active');
-      debugLog('Overlay exiting');
+      reportOverlayState('Overlay exiting', { reason });
       const cleanup = () => {
-        deactivateImmediately();
-        debugLog('Overlay exit transition complete');
+        deactivateImmediately(reason);
+        debugLog('Overlay exit transition complete', { reason });
       };
       overlay.addEventListener('transitionend', (event) => {
         if (event.target === overlay) {
@@ -8978,7 +9030,7 @@ void main()
     boostSpin(multiplier = 2.8, duration = 1400) {
       boostMultiplier = Math.max(1, Number(multiplier) || 1);
       boostUntil = performance.now() + Math.max(0, Number(duration) || 0);
-      debugLog('Boost spin', { multiplier: boostMultiplier, duration });
+      debugLog('Boost spin', { multiplier: boostMultiplier, duration, boostUntil });
     },
     isActive() {
       return overlay.classList.contains('is-active');
@@ -9013,21 +9065,26 @@ void main()
   const clearIdle = () => {
     if (idleTimeout) {
       window.clearTimeout(idleTimeout);
+      debugLog('Cleared idle timeout', { idleTimeout });
       idleTimeout = null;
-      debugLog('Cleared idle timeout');
     }
   };
 
   const scheduleIdle = () => {
     clearIdle();
-    if (!playbackActive) return;
+    if (!playbackActive) {
+      debugLog('Idle scheduling skipped - playback inactive');
+      return;
+    }
     idleTimeout = window.setTimeout(() => {
       if (playbackActive) {
         debugLog('Idle delay elapsed, activating shader');
-        shader.activate();
+        shader.activate({ reason: 'idle-timeout' });
+      } else {
+        debugLog('Idle delay elapsed but playback inactive; skipping activate');
       }
     }, IDLE_DELAY);
-    debugLog('Scheduled idle activation', { delay: IDLE_DELAY, playbackActive });
+    debugLog('Scheduled idle activation', { delay: IDLE_DELAY, playbackActive, idleTimeout });
   };
 
   const handleActivity = () => {
@@ -9035,7 +9092,7 @@ void main()
     scheduleIdle();
     if (shader.isActive()) {
       debugLog('User activity detected while active; deactivating immediately');
-      shader.deactivate({ immediate: true });
+      shader.deactivate({ immediate: true, reason: 'user-activity' });
     }
   };
 
@@ -9045,7 +9102,7 @@ void main()
     if (shader.isActive()) {
       debugLog('Scroll detected while active; boosting and easing out');
       shader.boostSpin(3.2, 1500);
-      shader.deactivate({ immediate: false });
+      shader.deactivate({ immediate: false, reason: 'scroll' });
     }
   };
 
@@ -9069,7 +9126,7 @@ void main()
     } else {
       debugLog('Playback stopped; clearing idle and deactivating');
       clearIdle();
-      shader.deactivate({ immediate: true });
+      shader.deactivate({ immediate: true, reason: 'playback-stop' });
     }
   };
 
@@ -9079,7 +9136,7 @@ void main()
       originalSetPlayPauseState.call(this, playing);
     }
     applyPlayState(playing);
-    debugLog('Patched play state invoked', { playing });
+    debugLog('Patched play state invoked', { playing, playbackActive });
   };
 
   const attachTransport = () => {
@@ -9109,7 +9166,7 @@ void main()
     if (document.hidden) {
       debugLog('Document hidden; clearing idle and deactivating');
       clearIdle();
-      shader.deactivate({ immediate: true });
+      shader.deactivate({ immediate: true, reason: 'visibility-hidden' });
     } else if (playbackActive) {
       debugLog('Document visible; rescheduling idle');
       scheduleIdle();
