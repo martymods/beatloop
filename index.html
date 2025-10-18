@@ -25,36 +25,6 @@
     .glass { background: rgba(18, 18, 24, .55); backdrop-filter: blur(10px); }
     .equal { align-self: stretch; display: grid }
     .equal > * { grid-area: 1/1 }
-    .bl-modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 60; }
-    .bl-modal.hidden { display: none; }
-    .bl-modal__backdrop { position: absolute; inset: 0; background: rgba(12, 12, 18, 0.82); backdrop-filter: blur(18px); }
-    .bl-modal__panel { position: relative; width: min(480px, 92vw); max-height: 90vh; overflow-y: auto; background: rgba(16, 16, 24, 0.96); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.45); color: #fff; }
-    .bl-modal__header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
-    .bl-modal__title { font-size: 1.1rem; font-weight: 600; }
-    .bl-modal__close { border: none; background: transparent; color: rgba(255,255,255,0.6); cursor: pointer; border-radius: 999px; padding: 6px; transition: background .15s ease, color .15s ease; }
-    .bl-modal__close:hover { background: rgba(255,255,255,0.08); color: #fff; }
-    .bl-price-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-    .bl-price-option { position: relative; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; overflow: hidden; background: rgba(255,255,255,0.02); transition: border-color .15s ease, background .15s ease; }
-    .bl-price-option input { position: absolute; opacity: 0; pointer-events: none; }
-    .bl-price-option label { display: flex; align-items: center; gap: 16px; padding: 16px 20px; cursor: pointer; }
-    .bl-price-box { width: 22px; height: 22px; border: 2px solid rgba(124, 58, 237, 0.7); border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: all .15s ease; }
-    .bl-price-box::after { content: ''; width: 0; height: 0; border: 0 solid transparent; }
-    .bl-price-text { display: flex; flex-direction: column; gap: 4px; }
-    .bl-price-text strong { font-weight: 600; font-size: 0.95rem; }
-    .bl-price-text span { font-size: 0.75rem; color: rgba(255,255,255,0.6); }
-    .bl-price-amount { margin-left: auto; font-weight: 600; font-size: 0.95rem; color: rgba(255,255,255,0.9); }
-    .bl-price-option input:checked + label { background: rgba(124,58,237,0.18); border-color: rgba(124,58,237,0.6); box-shadow: inset 0 0 0 1px rgba(124,58,237,0.35); }
-    .bl-price-option input:checked + label .bl-price-box { background: #7c3aed; border-color: #7c3aed; }
-    .bl-price-option input:checked + label .bl-price-box::after { width: 6px; height: 12px; border: solid #0c0c12; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-    .bl-modal__footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 20px; }
-    .bl-modal__total { font-size: 0.95rem; font-weight: 500; color: rgba(255,255,255,0.8); }
-    .bl-modal__cta { flex-shrink: 0; padding: 10px 18px; background: linear-gradient(120deg,#7c3aed,#22d3ee); color: #0c0c12; font-weight: 600; border-radius: 999px; border: none; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
-    .bl-modal__cta:disabled { opacity: 0.5; cursor: not-allowed; }
-    .bl-modal__cta:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(34,211,238,0.35); }
-    .bl-modal__error { color: #fca5a5; font-size: 0.8rem; min-height: 1.2em; }
-    .bl-modal__summary { font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-bottom: 12px; }
-    .bl-modal__empty { font-size: 0.85rem; color: rgba(255,255,255,0.6); display: none; }
-    .bl-modal__empty.active { display: block; }
   </style>
 
   <!-- WaveSurfer waveform -->
@@ -421,29 +391,6 @@
   <!-- Structured Data (Organization + MusicRecording) -->
   <script type="application/ld+json" id="jsonLd"></script>
 
-  <div id="checkoutModal" class="bl-modal hidden" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
-    <div class="bl-modal__backdrop" data-checkout-dismiss></div>
-    <div class="bl-modal__panel">
-      <div class="bl-modal__header">
-        <div>
-          <p id="checkoutArtist" class="text-xs uppercase tracking-wide text-white/60"></p>
-          <h3 id="checkoutTitle" class="bl-modal__title">License this track</h3>
-        </div>
-        <button id="checkoutClose" class="bl-modal__close" aria-label="Close checkout">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
-      <p id="checkoutSummary" class="bl-modal__summary">Select the licensing bundle you want to unlock. Once you complete checkout the download link unlocks instantly.</p>
-      <ul id="checkoutOptions" class="bl-price-list"></ul>
-      <div id="checkoutEmpty" class="bl-modal__empty">This creator hasn't added paid options yet.</div>
-      <div id="checkoutError" class="bl-modal__error"></div>
-      <div class="bl-modal__footer">
-        <span id="checkoutTotal" class="bl-modal__total">Total: $0.00</span>
-        <button id="checkoutSubmit" class="bl-modal__cta">Continue</button>
-      </div>
-    </div>
-  </div>
-
   <script>
     // ---------- Minimal Config
     const API_FALLBACKS = [
@@ -503,61 +450,6 @@
     ]
     let TRACKS = DEFAULT_TRACKS.slice()
 
-    function normalizeMonetization(raw) {
-      const base = (raw && typeof raw === 'object') ? raw : {}
-      const allowFreeDownload = base.allowFreeDownload !== false
-      const preview = Number(base.previewSeconds)
-      const previewSeconds = Number.isFinite(preview) && preview > 0 ? preview : null
-      const tagFreq = Number(base.tagFrequencySec)
-      const tagFrequencySec = Number.isFinite(tagFreq) && tagFreq > 0 ? tagFreq : 0
-      const options = Array.isArray(base.options)
-        ? base.options
-            .map((opt, idx) => {
-              if (!opt || typeof opt !== 'object') return null
-              const keyRaw = typeof opt.key === 'string' && opt.key.trim() ? opt.key.trim() : `option-${idx + 1}`
-              const labelRaw = typeof opt.label === 'string' && opt.label.trim() ? opt.label.trim() : keyRaw
-              const amount = Number(opt.amountUsd ?? opt.amount)
-              const allowCustom = opt.allowCustomAmount === true
-              const minAmount = Number(opt.minAmountUsd)
-              const maxAmount = Number(opt.maxAmountUsd)
-              const normalizedAmount = allowCustom
-                ? (Number.isFinite(minAmount) && minAmount > 0 ? minAmount : null)
-                : (Number.isFinite(amount) && amount > 0 ? amount : null)
-              if (!allowCustom && !normalizedAmount) return null
-              return {
-                key: keyRaw,
-                label: labelRaw,
-                description: typeof opt.description === 'string' ? opt.description.trim() : '',
-                amountUsd: normalizedAmount,
-                allowCustomAmount: allowCustom,
-                minAmountUsd: Number.isFinite(minAmount) && minAmount > 0 ? minAmount : null,
-                maxAmountUsd: Number.isFinite(maxAmount) && maxAmount > 0 ? maxAmount : null
-              }
-            })
-            .filter(Boolean)
-        : []
-      return {
-        allowFreeDownload: allowFreeDownload || options.length === 0,
-        previewSeconds,
-        tagFrequencySec,
-        options
-      }
-    }
-
-    TRACKS = TRACKS.map(track => {
-      const monetization = normalizeMonetization(track.monetization)
-      return {
-        ...track,
-        monetization,
-        allowFreeDownload: monetization.allowFreeDownload,
-        previewSeconds: monetization.previewSeconds,
-        tagFrequencySec: monetization.tagFrequencySec,
-        priceOptions: monetization.options,
-        user: track.user || null,
-        tagUrl: track.tagUrl || null
-      }
-    })
-
     // ---------- Utilities
     const $ = sel => document.querySelector(sel)
     const $$ = sel => Array.from(document.querySelectorAll(sel))
@@ -572,24 +464,6 @@
     // ---------- State
     let current = 0
     let heroWS, miniWS
-    let currentTrackMeta = null
-    let previewLimitReached = false
-    let tagIntervalId = null
-    const checkout = {
-      modal: document.getElementById('checkoutModal'),
-      options: document.getElementById('checkoutOptions'),
-      total: document.getElementById('checkoutTotal'),
-      error: document.getElementById('checkoutError'),
-      empty: document.getElementById('checkoutEmpty'),
-      submit: document.getElementById('checkoutSubmit'),
-      artist: document.getElementById('checkoutArtist'),
-      title: document.getElementById('checkoutTitle'),
-      summary: document.getElementById('checkoutSummary'),
-      close: document.getElementById('checkoutClose'),
-      backdrop: document.querySelector('[data-checkout-dismiss]')
-    }
-    let checkoutState = { track: null, selected: new Set() }
-    let checkoutPreviousOverflow = ''
 
     function setButtonsPlaying(playing) {
       const playPath = playing
@@ -599,231 +473,11 @@
       $('#miniPlayIcon').innerHTML = playPath
     }
 
-    function formatCurrency(amount) {
-      const value = Number(amount)
-      if (!Number.isFinite(value) || value <= 0) return '$0.00'
-      return '$' + value.toFixed(2)
-    }
-
-    function stopTagLoop() {
-      if (tagIntervalId) {
-        clearInterval(tagIntervalId)
-        tagIntervalId = null
-      }
-    }
-
-    function startTagLoop(track) {
-      stopTagLoop()
-      if (!track || !track.tagUrl) return
-      const freqSec = Number(track.tagFrequencySec)
-      if (!Number.isFinite(freqSec) || freqSec <= 0) return
-      const freqMs = Math.max(freqSec * 1000, 1500)
-      const playTag = () => {
-        if (!heroWS || !heroWS.isPlaying()) return
-        try {
-          const clip = new Audio(track.tagUrl)
-          clip.volume = 0.65
-          clip.play().catch(() => {})
-        } catch (err) {
-          console.warn('Tag preview failed', err)
-        }
-      }
-      playTag()
-      tagIntervalId = setInterval(playTag, freqMs)
-    }
-
-    function renderCheckoutOptions() {
-      if (!checkout.modal) return
-      const track = checkoutState.track
-      const options = Array.isArray(track?.priceOptions) ? track.priceOptions : []
-      checkout.options.innerHTML = ''
-      checkoutState.selected = new Set()
-      if (!options.length) {
-        checkout.empty.classList.add('active')
-        checkout.submit.disabled = true
-        updateCheckoutTotal()
-        return
-      }
-      checkout.empty.classList.remove('active')
-      options.forEach((opt, idx) => {
-        const li = document.createElement('li')
-        li.className = 'bl-price-option'
-        const id = `checkout-option-${idx}`
-        const input = document.createElement('input')
-        input.type = 'checkbox'
-        input.id = id
-        input.dataset.key = opt.key
-        const label = document.createElement('label')
-        label.setAttribute('for', id)
-        const box = document.createElement('span')
-        box.className = 'bl-price-box'
-        const textWrap = document.createElement('span')
-        textWrap.className = 'bl-price-text'
-        const title = document.createElement('strong')
-        title.textContent = opt.label || 'License'
-        const subtitle = document.createElement('span')
-        subtitle.textContent = opt.description || 'Includes full-quality download after checkout.'
-        textWrap.appendChild(title)
-        textWrap.appendChild(subtitle)
-        const amount = document.createElement('span')
-        amount.className = 'bl-price-amount'
-        if (opt.allowCustomAmount) {
-          const minDisplay = Number.isFinite(opt.minAmountUsd) && opt.minAmountUsd > 0 ? opt.minAmountUsd : 1
-          amount.textContent = `Custom from ${formatCurrency(minDisplay)}`
-        } else if (Number.isFinite(opt.amountUsd)) {
-          amount.textContent = formatCurrency(opt.amountUsd)
-        } else {
-          amount.textContent = 'Custom'
-        }
-        label.appendChild(box)
-        label.appendChild(textWrap)
-        label.appendChild(amount)
-        input.addEventListener('change', (event) => {
-          const key = event.currentTarget.dataset.key
-          if (!key) return
-          if (event.currentTarget.checked) {
-            checkoutState.selected.add(key)
-          } else {
-            checkoutState.selected.delete(key)
-          }
-          updateCheckoutTotal()
-        })
-        li.appendChild(input)
-        li.appendChild(label)
-        checkout.options.appendChild(li)
-      })
-      updateCheckoutTotal()
-    }
-
-    function updateCheckoutTotal() {
-      if (!checkout.modal) return
-      const track = checkoutState.track
-      const options = Array.isArray(track?.priceOptions) ? track.priceOptions : []
-      let total = 0
-      checkoutState.selected.forEach(key => {
-        const opt = options.find(o => o.key === key)
-        if (!opt) return
-        const amount = opt.allowCustomAmount
-          ? (Number.isFinite(opt.minAmountUsd) && opt.minAmountUsd > 0 ? opt.minAmountUsd : 1)
-          : (Number.isFinite(opt.amountUsd) ? opt.amountUsd : 0)
-        if (Number.isFinite(amount) && amount > 0) total += amount
-      })
-      checkout.total.textContent = 'Total: ' + formatCurrency(total)
-      checkout.submit.disabled = checkoutState.selected.size === 0
-    }
-
-    function closeCheckout() {
-      if (!checkout.modal) return
-      checkout.modal.classList.add('hidden')
-      checkoutState = { track: null, selected: new Set() }
-      checkout.error.textContent = ''
-      if (checkout.submit) {
-        checkout.submit.textContent = 'Continue'
-        checkout.submit.disabled = true
-      }
-      document.body.style.overflow = checkoutPreviousOverflow || ''
-      checkoutPreviousOverflow = ''
-    }
-
-    async function submitCheckout() {
-      if (!checkoutState.track || !checkout.modal) return
-      const selected = Array.from(checkoutState.selected)
-      if (!selected.length) {
-        checkout.error.textContent = 'Select at least one license to continue.'
-        return
-      }
-      checkout.submit.disabled = true
-      const originalLabel = checkout.submit.textContent
-      checkout.submit.textContent = 'Redirecting…'
-      checkout.error.textContent = ''
-      try {
-        const options = selected.map(key => {
-          const opt = checkoutState.track.priceOptions.find(o => o.key === key)
-          if (!opt) return null
-          const payload = { key }
-          if (opt.allowCustomAmount) {
-            const min = Number.isFinite(opt.minAmountUsd) && opt.minAmountUsd > 0 ? opt.minAmountUsd : 1
-            payload.amountUsd = min
-          }
-          return payload
-        }).filter(Boolean)
-        if (!options.length) {
-          throw new Error('Unable to resolve the selected licenses.')
-        }
-        const base = window.API_BASE || await discoverApiBase()
-        if (!base) {
-          throw new Error('API unreachable. Please try again in a moment.')
-        }
-        const resp = await fetch(`${base}/api/tracks/${encodeURIComponent(checkoutState.track.id)}/checkout`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ options })
-        })
-        if (!resp.ok) {
-          let detail = 'Checkout failed.'
-          try {
-            const data = await resp.json()
-            if (data?.error) detail = data.error
-          } catch {}
-          throw new Error(detail)
-        }
-        const data = await resp.json()
-        if (data?.url) {
-          window.location.href = data.url
-          return
-        }
-        throw new Error('Checkout session missing redirect URL.')
-      } catch (err) {
-        checkout.error.textContent = err?.message || 'Checkout failed. Please try again.'
-        checkout.submit.disabled = false
-        checkout.submit.textContent = originalLabel
-      }
-    }
-
-    function openCheckout(track) {
-      if (!checkout.modal || !track) return
-      checkoutState = { track, selected: new Set() }
-      checkout.artist.textContent = track.artist || 'Beatloop creator'
-      checkout.title.textContent = `License “${track.title || 'Untitled'}”`
-      checkout.submit.textContent = 'Continue'
-      checkout.submit.disabled = true
-      checkout.error.textContent = ''
-      renderCheckoutOptions()
-      checkoutPreviousOverflow = document.body.style.overflow || ''
-      checkout.modal.classList.remove('hidden')
-      document.body.style.overflow = 'hidden'
-      const firstInput = checkout.options?.querySelector('input')
-      if (firstInput) {
-        requestAnimationFrame(() => { try { firstInput.focus() } catch {} })
-      }
-    }
-
-    function attachCheckoutEvents() {
-      if (!checkout.modal) return
-      checkout.submit?.addEventListener('click', (event) => {
-        event.preventDefault()
-        submitCheckout()
-      })
-      checkout.close?.addEventListener('click', (event) => {
-        event.preventDefault()
-        closeCheckout()
-      })
-      checkout.backdrop?.addEventListener('click', closeCheckout)
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && checkout.modal && !checkout.modal.classList.contains('hidden')) {
-          closeCheckout()
-        }
-      })
-    }
-
     // NEW: setTrack accepts autoplay flag and waits for 'ready' before playing
     function setTrack(i, autoplay = false) {
       if (!Array.isArray(TRACKS) || TRACKS.length === 0) return
       current = (i + TRACKS.length) % TRACKS.length
       const t = TRACKS[current] || {}
-      currentTrackMeta = t
-      previewLimitReached = false
-      stopTagLoop()
       const title = t.title || 'Untitled'
       const artist = t.artist || (t.user && (t.user.name || t.user.displayName)) || 'Unknown Artist'
       const cover = t.cover || fallbackCover(t.id || title || current)
@@ -885,48 +539,15 @@
       TRACKS.forEach((t, i) => {
         const cover = (t && t.cover) || fallbackCover((t && (t.id || t.title)) || `track-${i}`)
         const bpmLabel = t && t.bpm ? `${t.bpm} BPM` : '—'
-        const priceOptions = Array.isArray(t.priceOptions) ? t.priceOptions : []
-        const hasPriceOptions = priceOptions.length > 0
-        const isPaid = hasPriceOptions && t.allowFreeDownload === false
-        const minPrice = hasPriceOptions
-          ? (() => {
-              const candidates = priceOptions
-                .map(opt => {
-                  if (!opt || typeof opt !== 'object') return null
-                  if (opt.allowCustomAmount) {
-                    const min = Number(opt.minAmountUsd)
-                    return Number.isFinite(min) && min > 0 ? min : null
-                  }
-                  const amount = Number(opt.amountUsd)
-                  return Number.isFinite(amount) && amount > 0 ? amount : null
-                })
-                .filter(val => Number.isFinite(val) && val > 0)
-                .sort((a, b) => a - b)
-              return candidates.length ? candidates[0] : null
-            })()
-          : null
-
-        const actionButtons = []
-        if (t && t.url && (t.allowFreeDownload !== false || !hasPriceOptions)) {
-          actionButtons.push(`<a class="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[#0c0c12]" href="${t.url}" download>Download</a>`)
-        }
-        if (hasPriceOptions) {
-          const licenseLabel = isPaid ? 'License' : 'Support'
-          const label = minPrice
-            ? `💳 ${licenseLabel} (${formatCurrency(minPrice)})`
-            : `💳 ${licenseLabel}`
-          actionButtons.push(`<button type="button" class="purchaseBtn rounded-xl bg-primary/20 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/30" data-checkout="${i}">${label}</button>`)
-        }
-        if (!actionButtons.length) {
-          actionButtons.push('<span class="rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-white/70">Login to download</span>')
-        }
-        const downloadMarkup = actionButtons.join(' ')
+        const downloadMarkup = (t && t.url)
+          ? `<a class="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[#0c0c12]" href="${t.url}" download>Download</a>`
+          : `<span class="rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-white/70">Login to download</span>`
         const card = document.createElement('article')
         card.className = 'group rounded-2xl border border-white/10 bg-white/5 p-4 ring-1 ring-white/10 hover:bg-white/10 transition'
         card.innerHTML = `
           <div class="equal overflow-hidden rounded-xl">
             <!-- Use square cover art and contain the full image so names aren’t cut off -->
-            <img src="${cover}" alt="${(t && t.title) || 'Track'} cover" class="aspect-square object-contain group-hover:scale-[1.02] transition ${hasPriceOptions ? 'cursor-pointer purchaseCover' : ''}" ${hasPriceOptions ? `data-checkout="${i}"` : ''}/>
+            <img src="${cover}" alt="${(t && t.title) || 'Track'} cover" class="aspect-square object-contain group-hover:scale-[1.02] transition"/>
             <button data-i="${i}" class="playBtn absolute right-3 top-3 rounded-full bg-primary px-3 py-2 text-sm font-semibold shadow-glow" ${t && t.url ? '' : 'disabled'}>${t && t.url ? 'Play' : 'Locked'}</button>
           </div>
           <div class="mt-3 flex items-center justify-between gap-3">
@@ -938,19 +559,10 @@
           </div>
           <div class="mt-3 flex items-center gap-3">
             ${downloadMarkup}
+            <button class="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold hover:bg-white/10">License</button>
           </div>
         `
         grid.appendChild(card)
-
-        if (hasPriceOptions) {
-          const coverBtn = card.querySelector('.purchaseCover')
-          if (coverBtn) {
-            coverBtn.addEventListener('click', (event) => {
-              event.preventDefault()
-              openCheckout(TRACKS[i])
-            })
-          }
-        }
       })
 
       // Clicking a card's Play button switches tracks and autoplays
@@ -958,11 +570,6 @@
         if (btn.disabled) return
         const i = +e.currentTarget.getAttribute('data-i')
         setTrack(i, true)
-      }))
-      $$('.purchaseBtn').forEach(btn => btn.addEventListener('click', (e) => {
-        e.preventDefault()
-        const i = Number(e.currentTarget.getAttribute('data-checkout'))
-        if (Number.isFinite(i)) openCheckout(TRACKS[i])
       }))
     }
 
@@ -972,23 +579,14 @@
         .map((item, idx) => {
           if (!item || !item.url) return null
           const bpmNum = typeof item.bpm === 'number' ? item.bpm : parseInt(item.bpm, 10)
-          const monetization = normalizeMonetization(item.monetization)
-          const user = item.user || null
           return {
             id: item.id || item.trackId || `track-${idx}`,
             title: item.title || 'Untitled',
-            artist: item.artist || (user && (user.name || user.displayName)) || 'Unknown Artist',
+            artist: item.artist || (item.user && (item.user.name || item.user.displayName)) || 'Unknown Artist',
             bpm: Number.isFinite(bpmNum) ? Math.round(bpmNum) : null,
             url: item.url,
             cover: item.cover || item.coverUrl || null,
             duration: item.duration || null,
-            monetization,
-            allowFreeDownload: monetization.allowFreeDownload,
-            previewSeconds: monetization.previewSeconds,
-            tagFrequencySec: monetization.tagFrequencySec,
-            priceOptions: monetization.options,
-            user,
-            tagUrl: user?.tagUrl || item.tagUrl || null
           }
         })
         .filter(Boolean)
@@ -1082,43 +680,15 @@ try { if (typeof miniWS.setVolume === 'function') miniWS.setVolume(0) } catch {}
       // Keep the mini player silent so you don't get double audio
       try { if (typeof miniWS.setVolume === 'function') miniWS.setVolume(0) } catch {}
 
-      heroWS.on('audioprocess', () => {
-        const time = heroWS.getCurrentTime()
-        $('#nowTime').textContent = fmt(time)
-        if (!previewLimitReached && currentTrackMeta?.previewSeconds && time >= currentTrackMeta.previewSeconds) {
-          previewLimitReached = true
-          heroWS.pause()
-          heroWS.setTime(0)
-          if (typeof miniWS?.setTime === 'function') miniWS.setTime(0)
-          stopTagLoop()
-        }
-      })
-      heroWS.on('ready', () => {
-        const duration = currentTrackMeta?.previewSeconds || heroWS.getDuration()
-        $('#nowDur').textContent = fmt(duration)
-      })
-      heroWS.on('play', () => {
-        previewLimitReached = false
-        setButtonsPlaying(true)
-        if (currentTrackMeta?.tagUrl && currentTrackMeta?.tagFrequencySec) {
-          startTagLoop(currentTrackMeta)
-        }
-      })
-      heroWS.on('pause', () => {
-        setButtonsPlaying(false)
-        stopTagLoop()
-      })
+      heroWS.on('audioprocess', () => { $('#nowTime').textContent = fmt(heroWS.getCurrentTime()) })
+      heroWS.on('ready', () => { $('#nowDur').textContent = fmt(heroWS.getDuration()) })
+      heroWS.on('play', () => setButtonsPlaying(true))
+      heroWS.on('pause', () => setButtonsPlaying(false))
+      // Loop same track when it ends (as before)
       heroWS.on('finish', () => {
-        stopTagLoop()
-        if (currentTrackMeta?.previewSeconds) {
-          heroWS.setTime(0)
-          setButtonsPlaying(false)
-          if (typeof miniWS?.setTime === 'function') miniWS.setTime(0)
-        } else {
-          heroWS.setTime(0)
-          heroWS.play()
-          if (typeof miniWS?.setTime === 'function') miniWS.setTime(0)
-        }
+        heroWS.setTime(0)
+        heroWS.play()
+        if (typeof miniWS.setTime === 'function') miniWS.setTime(0)
       })
 
       miniWS.on('play', () => setButtonsPlaying(true))
@@ -1333,7 +903,6 @@ function setupPricing() {
       setupFreestyleRecorder()
       setupSubscribe()
       setupPricing()
-      attachCheckoutEvents()
       writeStructuredData()
       const apiBase = await discoverApiBase()
       await loadHotTracks(apiBase)
