@@ -8653,6 +8653,10 @@ let lastBar = -1;             // arranger playhead column
     };
   }
 
+  const STUDIO_SOUNDS_REMOTE_RETRY_DELAY = 5 * 60 * 1000; // 5 minutes
+  let studioSoundsRemoteRetryAt = 0;
+  let studioSoundsLastRemoteError = null;
+
   async function loadStudioSounds({ force = false } = {}){
     if (studioSoundsPromise) {
       if (!force) return studioSoundsPromise;
@@ -8675,11 +8679,17 @@ let lastBar = -1;             // arranger playhead column
 
       const combinedLoops = localLoops.slice();
       const combinedInstruments = localInstruments.slice();
-
       const apiBase = (typeof window.getApiBase === 'function') ? window.getApiBase() : '';
+      const now = Date.now();
+      const shouldSkipRemoteFetch = Boolean(
+        !force
+        && studioSoundsRemoteRetryAt
+        && now < studioSoundsRemoteRetryAt
+      );
+
       let remoteError = null;
 
-      if (apiBase) {
+      if (!shouldSkipRemoteFetch && apiBase) {
         const auth = (window.AUTH && typeof window.AUTH.hdr === 'function') ? window.AUTH.hdr() : {};
         const headers = { Accept: 'application/json', ...auth };
         let response = null;
@@ -8714,12 +8724,19 @@ let lastBar = -1;             // arranger playhead column
             remoteError = null;
           }
         }
-      } else {
+      } else if (!shouldSkipRemoteFetch) {
         remoteError = new Error('API unavailable');
+      } else {
+        remoteError = studioSoundsLastRemoteError || new Error('API unavailable');
       }
 
       if (remoteError) {
         console.warn('Using local studio sounds due to remote API error', remoteError);
+        studioSoundsLastRemoteError = remoteError;
+        studioSoundsRemoteRetryAt = Date.now() + STUDIO_SOUNDS_REMOTE_RETRY_DELAY;
+      } else {
+        studioSoundsLastRemoteError = null;
+        studioSoundsRemoteRetryAt = 0;
       }
 
       communityLoopEntries = combinedLoops;
