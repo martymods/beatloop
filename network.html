@@ -1666,16 +1666,6 @@
           </button>
           <span id="recordingStatus" class="text-white/60 hidden">Recording…</span>
         </div>
-        <div id="composerAttachment" class="mt-4 hidden rounded-xl border border-white/10 bg-white/5 p-3">
-          <div class="flex items-center gap-3">
-            <img id="composerAttachmentCover" src="" alt="Track cover preview" class="h-16 w-16 rounded-lg object-cover ring-1 ring-white/10" />
-            <div class="min-w-0 flex-1">
-              <p id="composerAttachmentTitle" class="truncate font-semibold text-white">No track selected</p>
-              <p id="composerAttachmentDetail" class="text-xs text-white/60">Attach a track to enable posting.</p>
-            </div>
-            <button id="composerAttachmentRemove" type="button" class="text-xs uppercase tracking-wide text-white/60 hover:text-white">Remove</button>
-          </div>
-        </div>
         <section id="monetizationCard" class="bl-monetization-card">
           <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
@@ -1687,7 +1677,7 @@
               <span>Allow free download</span>
             </label>
           </div>
-          <div id="monetizationDetails" class="mt-4 bl-monetization-grid hidden">
+          <div class="mt-4 bl-monetization-grid">
             <div class="grid gap-3 md:grid-cols-2">
               <label>
                 <span>Preview length (seconds)</span>
@@ -3515,16 +3505,10 @@ let sessionsCard = null;
     const uploadTrackInput = document.getElementById('uploadTrack')
     const uploadCoverInput = document.getElementById('uploadCover')
     const monetizationFreeToggle = document.getElementById('monetizationFreeToggle')
-    const monetizationDetailsEl = document.getElementById('monetizationDetails')
     const monetizationPreviewInput = document.getElementById('monetizationPreview')
     const monetizationTagInput = document.getElementById('monetizationTag')
     const monetizationOptionsEl = document.getElementById('monetizationOptions')
     const monetizationAddOptionBtn = document.getElementById('monetizationAddOption')
-    const composerAttachmentEl = document.getElementById('composerAttachment')
-    const composerAttachmentCover = document.getElementById('composerAttachmentCover')
-    const composerAttachmentTitle = document.getElementById('composerAttachmentTitle')
-    const composerAttachmentDetail = document.getElementById('composerAttachmentDetail')
-    const composerAttachmentRemove = document.getElementById('composerAttachmentRemove')
     const trackCoverUpdateInput = document.createElement('input')
     trackCoverUpdateInput.type = 'file'
     trackCoverUpdateInput.accept = 'image/*'
@@ -3551,15 +3535,6 @@ let sessionsCard = null;
       previewSeconds: 60,
       tagFrequencySec: 0,
       options: monetizationDefaults()
-    }
-
-    function updateMonetizationVisibility() {
-      const shouldHide = monetizationState.allowFreeDownload !== false
-      if (shouldHide) {
-        monetizationDetailsEl?.classList.add('hidden')
-      } else {
-        monetizationDetailsEl?.classList.remove('hidden')
-      }
     }
     const recordBtn = document.getElementById('recordTrack')
     const recordingStatus = document.getElementById('recordingStatus')
@@ -3672,7 +3647,6 @@ let sessionsCard = null;
         allowCustomAmount: false
       })
       renderMonetizationOptionsUI()
-      updateMonetizationVisibility()
     }
 
     function resetMonetizationState() {
@@ -3686,7 +3660,6 @@ let sessionsCard = null;
       if (monetizationPreviewInput) monetizationPreviewInput.value = '60'
       if (monetizationTagInput) monetizationTagInput.value = '0'
       renderMonetizationOptionsUI()
-      updateMonetizationVisibility()
     }
 
     function getMonetizationPayload() {
@@ -3716,7 +3689,6 @@ let sessionsCard = null;
     }
 
     renderMonetizationOptionsUI()
-    updateMonetizationVisibility()
 
     monetizationAddOptionBtn?.addEventListener('click', () => {
       addMonetizationOption()
@@ -3724,7 +3696,6 @@ let sessionsCard = null;
 
     monetizationFreeToggle?.addEventListener('change', (event) => {
       monetizationState.allowFreeDownload = !!event.target.checked
-      updateMonetizationVisibility()
     })
 
     monetizationPreviewInput?.addEventListener('change', (event) => {
@@ -4222,83 +4193,9 @@ let sessionsCard = null;
     }
 
     // ---------- Pending selections
-    let pendingMeta = null          // lightweight meta for staged upload/recording
+    let pendingMeta = null          // lightweight meta for last uploaded/recorded track
     let pendingCoverUpdate = null   // { track, coverImg }
     let pendingCoverKey = null      // IDB key for optional cover
-    let pendingCoverPreviewUrl = null
-
-    function revokeObjectUrlSafe(url) {
-      if (!url) return
-      try { URL.revokeObjectURL(url) } catch {}
-    }
-
-    async function refreshPendingCoverPreview() {
-      if (!pendingCoverKey) {
-        revokeObjectUrlSafe(pendingCoverPreviewUrl)
-        pendingCoverPreviewUrl = null
-        if (pendingMeta) pendingMeta.coverKey = null
-        updateComposerAttachmentPreview()
-        return
-      }
-      if (pendingMeta) pendingMeta.coverKey = pendingCoverKey
-      try {
-        const previewUrl = await getBlobUrl('covers', pendingCoverKey)
-        if (previewUrl) {
-          revokeObjectUrlSafe(pendingCoverPreviewUrl)
-          pendingCoverPreviewUrl = previewUrl
-        }
-      } catch (err) {
-        console.warn('Unable to load cover preview', err)
-      }
-      updateComposerAttachmentPreview()
-    }
-
-    function clearPendingAttachment({ clearCover = true } = {}) {
-      if (pendingMeta && pendingMeta.previewUrl) {
-        revokeObjectUrlSafe(pendingMeta.previewUrl)
-      }
-      pendingMeta = null
-      if (clearCover) {
-        revokeObjectUrlSafe(pendingCoverPreviewUrl)
-        pendingCoverPreviewUrl = null
-        pendingCoverKey = null
-      }
-      updateComposerAttachmentPreview()
-    }
-
-    function updateComposerAttachmentPreview() {
-      if (!composerAttachmentEl || !composerAttachmentTitle || !composerAttachmentDetail || !composerAttachmentCover) return
-      if (!pendingMeta) {
-        composerAttachmentEl.classList.add('hidden')
-        composerAttachmentTitle.textContent = 'No track selected'
-        composerAttachmentDetail.textContent = 'Attach a track to enable posting.'
-        composerAttachmentCover.src = DEFAULT_TRACK_COVER
-        if (composerPostBtn) composerPostBtn.disabled = true
-        return
-      }
-
-      composerAttachmentEl.classList.remove('hidden')
-      const titleRaw = pendingMeta.title || pendingMeta.fileName || 'Untitled'
-      const title = String(titleRaw).trim() || 'Untitled'
-      composerAttachmentTitle.textContent = title
-      const detail = pendingMeta.origin === 'recording'
-        ? 'Recorded track ready to post.'
-        : 'Ready to post. Add a caption and press Post.'
-      composerAttachmentDetail.textContent = detail
-      const coverUrl = pendingCoverPreviewUrl || pendingMeta.cover || DEFAULT_TRACK_COVER
-      composerAttachmentCover.src = coverUrl || DEFAULT_TRACK_COVER
-      if (composerPostBtn && composerPostBtn.getAttribute('aria-busy') === 'true') {
-        composerPostBtn.disabled = true
-      } else if (composerPostBtn) {
-        composerPostBtn.disabled = false
-      }
-    }
-
-    composerAttachmentRemove?.addEventListener('click', () => {
-      clearPendingAttachment()
-    })
-
-    updateComposerAttachmentPreview()
 
     // ---------- Render comments & pins
       function renderComments(trackId, listContainer, pinsContainer, duration, comments) {
@@ -5094,29 +4991,11 @@ function createPost(track, { prepend = false } = {}) {
                   try { detail = await response.text() } catch {}
                 }
                 const message = detail ? String(detail).trim() : `HTTP ${response.status}`
-                let treatAsSuccess = response.status === 404
-                if (!treatAsSuccess && response.status >= 500) {
-                  try {
-                    const verify = await fetch(`${apiBase}/api/tracks/${encodeURIComponent(normalized.id)}`, { headers: AUTH.hdr() })
-                    if (verify.status === 404) {
-                      treatAsSuccess = true
-                      console.warn('Track delete API returned an error but the resource is already gone', {
-                        status: response.status,
-                        message
-                      })
-                    }
-                  } catch (verifyErr) {
-                    console.warn('Track delete verification failed', verifyErr)
-                  }
-                }
-                if (!treatAsSuccess) {
-                  throw new Error(message)
-                }
+                throw new Error(message)
               }
             }
             if (pendingMeta && pendingMeta.id === normalized.id) {
               pendingMeta = null
-              updateComposerAttachmentPreview()
             }
             if (pendingCoverUpdate && pendingCoverUpdate.track.id === normalized.id) {
               pendingCoverUpdate = null
@@ -6015,31 +5894,118 @@ async function updateLeaderboard() {
 }
 
 
-// ---------- Upload track (stage for posting)
+    // ---------- Upload track -> IDB blob + meta in localStorage
 uploadTrackInput.addEventListener('change', async (e) => {
-  const file = e.target.files && e.target.files[0]
-  e.target.value = ''
+  const file = e.target.files[0]
   if (!file) return
+  const getApiBase = () => (typeof window.getApiBase === 'function'
+    ? window.getApiBase()
+    : (window.API_BASE || API_BASE_DEFAULT))
+  const token = localStorage.getItem('jwt') || ''
+  const idLocal = 'custom-' + Date.now()
 
-  clearPendingAttachment({ clearCover: false })
-
-  const title = file.name ? file.name.replace(/\.[^/.]+$/, '') : 'Untitled'
-  const previewUrl = URL.createObjectURL(file)
-  pendingMeta = {
-    id: 'pending-' + Date.now(),
-    title,
+  // Build a tiny meta now so we can still post locally if API fails
+  const metaLocal = {
+    id: idLocal,
+    title: file.name.replace(/\.[^/.]+$/, ''),
     artist: (currentUser?.name || currentUser?.email || 'me'),
-    bpm: 0,
-    localFile: file,
-    previewUrl,
-    coverKey: pendingCoverKey || null,
-    origin: 'upload'
+    bpm: 0, db: true, coverKey: pendingCoverKey || null, createdAt: Date.now(),
+    monetization: getMonetizationPayload()
   }
-  pendingMeta.fileName = file.name || 'track'
-  pendingMeta.monetization = getMonetizationPayload()
-  if (pendingCoverKey) pendingMeta.coverKey = pendingCoverKey
-  updateComposerAttachmentPreview()
-  if (pendingCoverKey) await refreshPendingCoverPreview()
+
+  try {
+    // 1) Try API save
+    const fd = new FormData()
+    fd.append('audio', file)
+    if (pendingCoverKey) {
+      // resolve cover blob from IDB and attach
+      const coverUrl = await getBlobUrl('covers', pendingCoverKey)
+      if (coverUrl) {
+        const coverBlob = await fetch(coverUrl).then(r=>r.blob())
+        fd.append('cover', coverBlob, 'cover.png')
+      }
+    }
+    fd.append('title', metaLocal.title)
+    fd.append('bpm', String(metaLocal.bpm))
+    fd.append('monetization', JSON.stringify(metaLocal.monetization))
+
+    const r = await fetch(getApiBase() + '/api/tracks', {
+      method: 'POST',
+      headers: token ? { Authorization: 'Bearer ' + token } : {},
+      body: fd
+    })
+
+    if (r.ok) {
+      // server returns {id,title,artist,bpm,coverUrl,audioUrl}
+      const saved = await r.json()
+      // Show the post immediately with server URLs
+      saved.caption = saved.caption || (composerTextEl ? composerTextEl.value.trim() : '')
+      createPost(saved, { prepend: true })
+      scheduleLeaderboardRefresh()
+      const titleForNotification = String(saved.title || metaLocal.title || 'Untitled').trim() || 'Untitled'
+      recordNotification('upload', `Uploaded “${titleForNotification}”`, 'Your track is live on Beatloop.', {
+        trackId: saved.id || metaLocal.id,
+        trackTitle: titleForNotification,
+        timestamp: Date.now(),
+        storage: 'cloud'
+      })
+      pendingMeta = null
+      pendingCoverKey = null
+      return
+    }
+    // Non-OK API response → surface to the user instead of silently falling back
+    let detail = ''
+    try {
+      const raw = await r.text()
+      if (raw) {
+        try {
+          const data = JSON.parse(raw)
+          detail = (data && (data.error || data.message)) || raw
+        } catch {
+          detail = raw
+        }
+        if (detail) detail = String(detail).trim()
+      }
+    } catch {}
+    const message = detail
+      ? ('Track upload failed: ' + detail)
+      : ('Track upload failed (HTTP ' + r.status + ')')
+    const error = new Error(message)
+    error.isApiFailure = true
+    error.status = r.status
+    throw error
+  } catch (err) {
+    // 2) Local fallback (IDB)
+    const isApiFailure = err && typeof err === 'object' && err.isApiFailure
+    if (isApiFailure) {
+      alert(err.message || 'Track upload failed.')
+      pendingMeta = null
+      return
+    }
+    try {
+      await putBlob('tracks', idLocal, file)
+      customMeta.push(metaLocal)
+      if (customMeta.length > 30) customMeta.shift()
+      setJSON('custom_tracks', customMeta)
+
+      const coverUrl = metaLocal.coverKey ? (await getBlobUrl('covers', metaLocal.coverKey)) : DEFAULT_TRACK_COVER
+      const url = URL.createObjectURL(file)
+      createPost({ ...metaLocal, url, cover: coverUrl }, { prepend: true })
+      scheduleLeaderboardRefresh()
+      const titleForNotification = String(metaLocal.title || 'Untitled').trim() || 'Untitled'
+      recordNotification('upload', `Added “${titleForNotification}”`, 'Saved locally to your library.', {
+        trackId: metaLocal.id,
+        trackTitle: titleForNotification,
+        timestamp: Date.now(),
+        storage: 'local'
+      })
+      pendingMeta = metaLocal
+    } catch (saveErr) {
+      alert('Save failed: ' + (saveErr?.message || saveErr))
+    }
+  } finally {
+    e.target.value = ''
+  }
 })
 
 
@@ -6051,7 +6017,6 @@ uploadTrackInput.addEventListener('change', async (e) => {
       try {
         await putBlob('covers', key, file)
         pendingCoverKey = key || null
-        await refreshPendingCoverPreview()
       } catch (err) {
         alert('Cover save failed: ' + err.message)
       } finally {
@@ -6153,22 +6118,28 @@ uploadTrackInput.addEventListener('change', async (e) => {
             const blob = new Blob(recordedChunks, { type: 'audio/webm' })
             const id = 'rec-' + Date.now()
             try {
-              clearPendingAttachment({ clearCover: false })
+              await putBlob('tracks', id, blob)
               const createdAt = Date.now()
-              const previewUrl = URL.createObjectURL(blob)
-              pendingMeta = {
+              const meta = {
                 id,
                 title: 'Recording ' + new Date().toLocaleTimeString(),
                 artist: (currentUser?.name || currentUser?.email || 'me'),
-                bpm: 0,
-                localFile: blob,
-                previewUrl,
-                coverKey: pendingCoverKey || null,
-                origin: 'recording',
-                createdAt
+                bpm: 0, db: true, coverKey: pendingCoverKey || null, createdAt
               }
-              updateComposerAttachmentPreview()
-              if (pendingCoverKey) await refreshPendingCoverPreview()
+              customMeta.push(meta); if (customMeta.length > 30) customMeta.shift()
+              setJSON('custom_tracks', customMeta)
+              const coverUrl = meta.coverKey ? (await getBlobUrl('covers', meta.coverKey)) : DEFAULT_TRACK_COVER
+              const url = URL.createObjectURL(blob)
+              createPost({ ...meta, url, cover: coverUrl, createdAt }, { prepend: true })
+              scheduleLeaderboardRefresh()
+              const recordingTitle = String(meta.title || 'Recording').trim() || 'Recording'
+              recordNotification('recording', `Recorded “${recordingTitle}”`, 'Your live recording is ready.', {
+                trackId: meta.id,
+                trackTitle: recordingTitle,
+                timestamp: createdAt,
+                storage: 'recording'
+              })
+              pendingMeta = meta
             } catch (err) {
               alert('Recording save failed: ' + err.message)
             } finally {
@@ -6187,200 +6158,20 @@ uploadTrackInput.addEventListener('change', async (e) => {
     })
 
     // ---------- Composer post (attaches the last uploaded/recorded track)
-    async function uploadTrackToApi(meta, caption, monetizationPayload) {
-      const apiBase = (typeof window.getApiBase === 'function'
-        ? window.getApiBase()
-        : (window.API_BASE || API_BASE_DEFAULT))
-      const token = localStorage.getItem('jwt') || ''
-      const fd = new FormData()
-      fd.append('audio', meta.localFile, meta.fileName || meta.title || 'track')
-      const coverKey = meta.coverKey || pendingCoverKey
-      if (coverKey) {
-        try {
-          const coverUrl = await getBlobUrl('covers', coverKey)
-          if (coverUrl) {
-            const coverBlob = await fetch(coverUrl).then(r => r.blob())
-            fd.append('cover', coverBlob, 'cover.png')
-            revokeObjectUrlSafe(coverUrl)
-          }
-        } catch (err) {
-          console.warn('Unable to attach cover', err)
-        }
-      }
-      fd.append('title', (meta.title || '').trim() || 'Untitled')
-      fd.append('bpm', String(meta.bpm || 0))
-      fd.append('monetization', JSON.stringify(monetizationPayload || getMonetizationPayload()))
-      if (caption) fd.append('caption', caption)
-
-      const response = await fetch(`${apiBase}/api/tracks`, {
-        method: 'POST',
-        headers: token ? { Authorization: 'Bearer ' + token } : {},
-        body: fd
-      })
-      if (!response.ok) {
-        let detail = ''
-        try {
-          const data = await response.json()
-          detail = data?.error || data?.message || ''
-        } catch {
-          try { detail = await response.text() } catch {}
-        }
-        const message = detail ? String(detail).trim() : `HTTP ${response.status}`
-        const error = new Error('Track upload failed: ' + message)
-        error.isApiFailure = true
-        error.status = response.status
-        throw error
-      }
-      const payload = await response.json().catch(() => ({}))
-      if (caption) payload.caption = caption
-      return payload
-    }
-
-    async function publishPendingUpload(meta, caption) {
-      if (!meta || !meta.localFile) {
-        alert('This track is missing its audio file. Please re-upload before posting.')
-        return
-      }
-      const monetizationPayload = getMonetizationPayload()
-      try {
-        const saved = await uploadTrackToApi(meta, caption, monetizationPayload)
-        const titleForNotification = String(saved.title || meta.title || 'Untitled').trim() || 'Untitled'
-        createPost(saved, { prepend: true })
-        scheduleLeaderboardRefresh()
-        recordNotification('upload', `Uploaded “${titleForNotification}”`, 'Your track is live on Beatloop.', {
-          trackId: saved.id || meta.id,
-          trackTitle: titleForNotification,
-          timestamp: Date.now(),
-          storage: 'cloud'
-        })
-        if (composerTextEl) composerTextEl.value = ''
-        clearPendingAttachment()
-      } catch (err) {
-        const isApiFailure = err && typeof err === 'object' && err.isApiFailure
-        if (isApiFailure) {
-          alert(err.message || 'Track upload failed.')
-          return
-        }
-        try {
-          const localId = meta.id && meta.id.startsWith('pending-')
-            ? meta.id.replace('pending-', 'custom-')
-            : 'custom-' + Date.now()
-          await putBlob('tracks', localId, meta.localFile)
-          const createdAt = meta.createdAt || Date.now()
-          const metaLocal = {
-            id: localId,
-            title: meta.title,
-            artist: meta.artist,
-            bpm: 0,
-            db: true,
-            coverKey: pendingCoverKey || meta.coverKey || null,
-            createdAt,
-            monetization: monetizationPayload,
-            caption
-          }
-          customMeta.push(metaLocal)
-          if (customMeta.length > 30) customMeta.shift()
-          setJSON('custom_tracks', customMeta)
-          const playable = await materialize(metaLocal)
-          if (caption) playable.caption = caption
-          createPost(playable, { prepend: true })
-          scheduleLeaderboardRefresh()
-          const titleForNotification = String(metaLocal.title || 'Untitled').trim() || 'Untitled'
-          recordNotification('upload', `Added “${titleForNotification}”`, 'Saved locally to your library.', {
-            trackId: metaLocal.id,
-            trackTitle: titleForNotification,
-            timestamp: createdAt,
-            storage: 'local'
-          })
-          if (composerTextEl) composerTextEl.value = ''
-          clearPendingAttachment()
-        } catch (saveErr) {
-          alert('Save failed: ' + (saveErr?.message || saveErr))
-        }
-      }
-    }
-
-    async function publishRecording(meta, caption) {
-      if (!meta || !meta.localFile) {
-        alert('Recording data is missing. Please record again.')
-        return
-      }
-      try {
-        const localId = meta.id || ('rec-' + Date.now())
-        await putBlob('tracks', localId, meta.localFile)
-        const createdAt = meta.createdAt || Date.now()
-        const metaLocal = {
-          id: localId,
-          title: meta.title,
-          artist: meta.artist,
-          bpm: 0,
-          db: true,
-          coverKey: pendingCoverKey || meta.coverKey || null,
-          createdAt,
-          caption
-        }
-        customMeta.push(metaLocal)
-        if (customMeta.length > 30) customMeta.shift()
-        setJSON('custom_tracks', customMeta)
-        const playable = await materialize(metaLocal)
-        if (caption) playable.caption = caption
-        createPost(playable, { prepend: true })
-        scheduleLeaderboardRefresh()
-        const recordingTitle = String(metaLocal.title || 'Recording').trim() || 'Recording'
-        recordNotification('recording', `Recorded “${recordingTitle}”`, 'Your live recording is ready.', {
-          trackId: metaLocal.id,
-          trackTitle: recordingTitle,
-          timestamp: createdAt,
-          storage: 'recording'
-        })
-        if (composerTextEl) composerTextEl.value = ''
-        clearPendingAttachment()
-      } catch (err) {
-        alert('Recording save failed: ' + (err?.message || err))
-      }
-    }
-
-    async function publishExistingMeta(meta, caption) {
-      const playable = await materialize(meta)
-      if (!playable) {
-        alert('Unable to prepare this track for posting.')
-        return
-      }
-      if (caption) playable.caption = caption
-      playable.createdAt = Date.now()
-      createPost(playable, { prepend: true })
-      scheduleLeaderboardRefresh()
-      if (composerTextEl) composerTextEl.value = ''
-      clearPendingAttachment()
-    }
-
     if (composerPostBtn) {
       composerPostBtn.addEventListener('click', async () => {
-        const rawText = composerTextEl ? composerTextEl.value.trim() : ''
-        if (rawText.length > 500) {
-          alert('Posts are limited to 500 characters.')
-          return
-        }
+        const textVal = composerTextEl ? composerTextEl.value.trim() : ''
         if (!pendingMeta) {
           alert('Please upload or record a track before posting.')
           return
         }
-        const caption = rawText
-        composerPostBtn.disabled = true
-        composerPostBtn.setAttribute('aria-busy', 'true')
-        try {
-          if (pendingMeta.origin === 'upload' && pendingMeta.localFile) {
-            await publishPendingUpload(pendingMeta, caption)
-          } else if (pendingMeta.origin === 'recording' && pendingMeta.localFile) {
-            await publishRecording(pendingMeta, caption)
-          } else {
-            await publishExistingMeta(pendingMeta, caption)
-          }
-        } finally {
-          composerPostBtn.disabled = false
-          composerPostBtn.removeAttribute('aria-busy')
-          updateComposerAttachmentPreview()
-        }
+        const playable = await materialize(pendingMeta)
+        if (textVal) playable.caption = textVal
+        playable.createdAt = Date.now()
+        createPost(playable, { prepend: true })
+        scheduleLeaderboardRefresh()
+        if (composerTextEl) composerTextEl.value = ''
+        pendingMeta = null
       })
     }
 
