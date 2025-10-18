@@ -2250,14 +2250,23 @@
           const isApiPath = /^\/api\//i.test(parsed.path);
           const isLegacyStudioPath = isApiPath && /^\/api\/studio\/sounds(?:[/?]|$)/i.test(parsed.path);
 
-          const shouldRetry = response.status === 404
-            && ((isApiPath && isLikelyMarketingHost)
-              || (isLegacyStudioPath && isLegacyApiHost));
+          const shouldRetryMarketingHost = response.status === 404
+            && isApiPath
+            && isLikelyMarketingHost;
 
-          if (shouldRetry) {
+          if (shouldRetryMarketingHost) {
             unreachableApiBases.add(candidate);
             lastResponse = response;
             continue;
+          }
+
+          const shouldReturnLegacyResponse = response.status === 404
+            && isLegacyStudioPath
+            && isLegacyApiHost;
+
+          if (shouldReturnLegacyResponse) {
+            updateActiveApiBase(candidate);
+            return response;
           }
 
           updateActiveApiBase(candidate);
