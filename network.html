@@ -448,6 +448,572 @@
     }
   </style>
 
+  <style>
+    #profileDmCard.bl-dm {
+      display: grid;
+      grid-template-columns: minmax(0, 38%) minmax(0, 62%);
+      gap: 0;
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(135deg, rgba(22, 22, 30, 0.92), rgba(17, 17, 23, 0.95));
+      overflow: hidden;
+      min-height: 360px;
+      position: relative;
+    }
+
+    #profileDmCard.bl-dm::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      box-shadow: 0 18px 45px rgba(10, 10, 18, 0.45) inset;
+      opacity: 0.65;
+    }
+
+    #profileDmCard .bl-dm__left,
+    #profileDmCard .bl-dm__right {
+      position: relative;
+      z-index: 1;
+    }
+
+    #profileDmCard .bl-dm__left {
+      background: rgba(12, 12, 18, 0.88);
+      border-right: 1px solid rgba(124, 58, 237, 0.25);
+      display: flex;
+      flex-direction: column;
+    }
+
+    #profileDmCard .bl-dm__search {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 1.2rem;
+    }
+
+    #profileDmCard .bl-dm__search input {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      padding: 0.55rem 1rem;
+      color: #f9fafb;
+      font-size: 0.9rem;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    #profileDmCard .bl-dm__search input::placeholder {
+      color: rgba(249, 250, 251, 0.45);
+    }
+
+    #profileDmCard .bl-dm__search input:focus {
+      outline: none;
+      border-color: rgba(124, 58, 237, 0.75);
+      background: rgba(124, 58, 237, 0.12);
+    }
+
+    #profileDmCard .bl-dm__search-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 1px solid rgba(124, 58, 237, 0.35);
+      background: linear-gradient(145deg, rgba(124, 58, 237, 0.7), rgba(14, 165, 233, 0.65));
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    #profileDmCard .bl-dm__search-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(124, 58, 237, 0.35);
+    }
+
+    #profileDmCard .bl-dm__search-btn::before {
+      content: '\1F50D';
+    }
+
+    #profileDmCard .bl-dm__people {
+      list-style: none;
+      margin: 0;
+      padding: 0 0.75rem 1rem 0.75rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    #profileDmCard .bl-dm__people::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #profileDmCard .bl-dm__people::-webkit-scrollbar-thumb {
+      background: rgba(124, 58, 237, 0.35);
+      border-radius: 999px;
+    }
+
+    #profileDmCard .bl-dm__person {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.85rem;
+      align-items: center;
+      padding: 0.85rem 0.95rem;
+      margin: 0.15rem 0;
+      border-radius: 0.9rem;
+      cursor: pointer;
+      transition: background 0.18s ease, transform 0.18s ease;
+      position: relative;
+    }
+
+    #profileDmCard .bl-dm__person:hover {
+      background: rgba(124, 58, 237, 0.18);
+      transform: translateX(2px);
+    }
+
+    #profileDmCard .bl-dm__person.active {
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.85), rgba(14, 165, 233, 0.65));
+      box-shadow: 0 10px 22px rgba(124, 58, 237, 0.35);
+      transform: translateX(0);
+    }
+
+    #profileDmCard .bl-dm__person.active .bl-dm__person-name,
+    #profileDmCard .bl-dm__person.active .bl-dm__person-preview,
+    #profileDmCard .bl-dm__person.active .bl-dm__person-time {
+      color: #fff;
+    }
+
+    #profileDmCard .bl-dm__avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      object-fit: cover;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+    }
+
+    #profileDmCard .bl-dm__person-body {
+      display: grid;
+      gap: 0.1rem;
+    }
+
+    #profileDmCard .bl-dm__person-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    #profileDmCard .bl-dm__person-time {
+      position: absolute;
+      top: 0.75rem;
+      right: 1.1rem;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.45);
+    }
+
+    #profileDmCard .bl-dm__person-preview {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.55);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: calc(100% - 0.5rem);
+    }
+
+    #profileDmCard .bl-dm__empty {
+      padding: 0 1.2rem 1rem;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.45);
+    }
+
+    #profileDmCard .bl-dm__right {
+      display: flex;
+      flex-direction: column;
+      background: rgba(17, 17, 24, 0.92);
+    }
+
+    #profileDmCard .bl-dm__header {
+      padding: 1.2rem 1.5rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    #profileDmCard .bl-dm__to {
+      text-transform: uppercase;
+      font-size: 0.68rem;
+      letter-spacing: 0.2em;
+      color: rgba(255, 255, 255, 0.45);
+    }
+
+    #profileDmCard .bl-dm__name {
+      margin-top: 0.3rem;
+      font-weight: 600;
+      font-size: 1.05rem;
+      color: #f9fafb;
+    }
+
+    #profileDmCard .bl-dm__meta {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.5);
+      text-align: right;
+    }
+
+    #profileDmCard .bl-dm__chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.2rem 1.5rem 5.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      position: relative;
+    }
+
+    #profileDmCard .bl-dm__chat::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #profileDmCard .bl-dm__chat::-webkit-scrollbar-thumb {
+      background: rgba(124, 58, 237, 0.35);
+      border-radius: 999px;
+    }
+
+    #profileDmCard .bl-dm__placeholder {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.45);
+    }
+
+    #profileDmCard .bl-dm__attachments {
+      position: absolute;
+      left: 1.5rem;
+      right: 1.5rem;
+      bottom: 4.6rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    #profileDmCard .bl-dm__attachment {
+      position: relative;
+      border-radius: 0.75rem;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.45rem 0.55rem 0.45rem 0.85rem;
+      font-size: 0.78rem;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      box-shadow: 0 12px 18px rgba(10, 10, 18, 0.35);
+    }
+
+    #profileDmCard .bl-dm__attachment img {
+      width: 32px;
+      height: 32px;
+      object-fit: cover;
+      border-radius: 0.6rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    #profileDmCard .bl-dm__attachment-icon {
+      font-size: 1.1rem;
+    }
+
+    #profileDmCard .bl-dm__attachment-remove {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      border: none;
+      background: rgba(255, 255, 255, 0.18);
+      color: #0f0f15;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.18s ease, transform 0.18s ease;
+    }
+
+    #profileDmCard .bl-dm__attachment-remove:hover {
+      background: rgba(255, 255, 255, 0.85);
+      transform: translateY(-1px);
+    }
+
+    #profileDmCard .bl-dm__composer {
+      position: relative;
+      margin: 0 1.5rem 1.5rem;
+      border-radius: 0.85rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(12, 12, 20, 0.85);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.85rem;
+    }
+
+    #profileDmCard .bl-dm__composer input[type="text"] {
+      background: transparent;
+      border: none;
+      color: #f9fafb;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    #profileDmCard .bl-dm__composer input[type="text"]::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    #profileDmCard .bl-dm__composer input[type="text"]:disabled {
+      color: rgba(255, 255, 255, 0.35);
+    }
+
+    #profileDmCard .bl-dm__composer-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 1px solid rgba(124, 58, 237, 0.35);
+      background: rgba(124, 58, 237, 0.25);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    #profileDmCard .bl-dm__composer-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      background: rgba(124, 58, 237, 0.45);
+      box-shadow: 0 10px 22px rgba(124, 58, 237, 0.35);
+    }
+
+    #profileDmCard .bl-dm__composer-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    #profileDmCard .bl-dm__composer-btn--attach::before {
+      content: '\1F4CE';
+      font-size: 1.05rem;
+    }
+
+    #profileDmCard .bl-dm__composer-btn--send::before {
+      content: '\27A4';
+      font-size: 1rem;
+    }
+
+    #profileDmCard .bubble {
+      font-size: 0.95rem;
+      position: relative;
+      display: inline-block;
+      clear: both;
+      margin-bottom: 0.5rem;
+      padding: 0.8rem 0.95rem 0.95rem;
+      border-radius: 0.85rem;
+      max-width: 72%;
+      box-shadow: 0 12px 28px rgba(12, 12, 20, 0.45);
+      word-break: break-word;
+    }
+
+    #profileDmCard .bubble:before {
+      content: '';
+      position: absolute;
+      top: 0.9rem;
+      width: 8px;
+      height: 8px;
+      transform: rotate(45deg);
+    }
+
+    #profileDmCard .bubble.you {
+      float: left;
+      background: linear-gradient(145deg, rgba(124, 58, 237, 0.9), rgba(59, 130, 246, 0.85));
+      color: #fff;
+      animation: slideFromLeft 0.25s ease forwards;
+    }
+
+    #profileDmCard .bubble.you:before {
+      left: -4px;
+      background: linear-gradient(145deg, rgba(124, 58, 237, 0.9), rgba(59, 130, 246, 0.85));
+    }
+
+    #profileDmCard .bubble.me {
+      float: right;
+      background: rgba(255, 255, 255, 0.12);
+      color: #f9fafb;
+      animation: slideFromRight 0.25s ease forwards;
+    }
+
+    #profileDmCard .bubble.me:before {
+      right: -4px;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    #profileDmCard .bubble.is-deleted {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.55);
+      font-style: italic;
+    }
+
+    #profileDmCard .bubble .bl-dm__timestamp {
+      display: block;
+      font-size: 0.7rem;
+      margin-top: 0.55rem;
+      color: rgba(255, 255, 255, 0.6);
+      text-align: right;
+    }
+
+    #profileDmCard .bubble.you .bl-dm__timestamp {
+      color: rgba(255, 255, 255, 0.75);
+    }
+
+    #profileDmCard .bl-dm__bubble-body {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    #profileDmCard .bl-dm__bubbleAttachments {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    #profileDmCard .bl-dm__bubbleAttachments img {
+      max-width: 220px;
+      border-radius: 0.7rem;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 10px 24px rgba(10, 10, 18, 0.5);
+    }
+
+    #profileDmCard .bl-dm__bubbleAttachments audio {
+      width: 220px;
+      max-width: 100%;
+    }
+
+    #profileDmCard .bl-dm__bubbleActions {
+      position: absolute;
+      top: -28px;
+      right: 0;
+      display: flex;
+      gap: 0.35rem;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    #profileDmCard .bubble.me:hover .bl-dm__bubbleActions {
+      opacity: 1;
+    }
+
+    #profileDmCard .bl-dm__bubbleActions button {
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      border: none;
+      font-size: 0.7rem;
+      background: rgba(124, 58, 237, 0.2);
+      color: #f9fafb;
+      cursor: pointer;
+      transition: background 0.18s ease, transform 0.18s ease;
+    }
+
+    #profileDmCard .bl-dm__bubbleActions button:hover {
+      background: rgba(124, 58, 237, 0.45);
+      transform: translateY(-1px);
+    }
+
+    #profileDmCard .conversation-start {
+      width: 100%;
+      text-align: center;
+      margin: 1rem 0;
+      position: relative;
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 0.75rem;
+    }
+
+    #profileDmCard .conversation-start span {
+      position: relative;
+      padding: 0.2rem 0.75rem;
+      background: rgba(17, 17, 23, 0.85);
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    #profileDmCard .conversation-start::before,
+    #profileDmCard .conversation-start::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 28%;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    #profileDmCard .conversation-start::before {
+      left: 1.2rem;
+    }
+
+    #profileDmCard .conversation-start::after {
+      right: 1.2rem;
+    }
+
+    #profileDmCard.bl-dm.bl-dm--loading::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 15, 23, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 2;
+      animation: fadePulse 1.2s ease-in-out infinite;
+    }
+
+    #profileDmCard.bl-dm.bl-dm--loading::before {
+      opacity: 0.35;
+    }
+
+    #profileDmCard .bl-dm__composer-btn.is-loading::before {
+      content: '\23F3';
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes fadePulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 0.7; }
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes slideFromLeft {
+      0% { transform: translateX(-18px); opacity: 0; }
+      100% { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes slideFromRight {
+      0% { transform: translateX(18px); opacity: 0; }
+      100% { transform: translateX(0); opacity: 1; }
+    }
+
+    @media (max-width: 920px) {
+      #profileDmCard.bl-dm {
+        grid-template-columns: 1fr;
+        min-height: 420px;
+      }
+
+      #profileDmCard .bl-dm__left {
+        border-right: none;
+        border-bottom: 1px solid rgba(124, 58, 237, 0.25);
+      }
+
+      #profileDmCard .bl-dm__chat {
+        padding-bottom: 6rem;
+      }
+
+      #profileDmCard .bl-dm__attachments {
+        bottom: 5.1rem;
+      }
+    }
+  </style>
+
 <style>
   /* Beatloop Studio helpers */
   .step{
@@ -7368,6 +7934,35 @@ stopBtn.addEventListener('click', () => {
                 <p id="profileViewUsername" class="mt-1 text-lg font-semibold text-white">—</p>
                 <p class="mt-2 text-xs text-white/50">Log in using your user name.</p>
               </div>
+              <div id="profileDmCard" class="bl-dm hidden">
+                <div class="bl-dm__left">
+                  <div class="bl-dm__search">
+                    <input id="blDmSearch" type="text" placeholder="Search creators or conversations" autocomplete="off" />
+                    <button id="blDmRefresh" type="button" class="bl-dm__search-btn" title="Refresh conversations"></button>
+                  </div>
+                  <div id="blDmEmptyState" class="bl-dm__empty">No direct messages yet. Start a chat by searching above.</div>
+                  <ul id="blDmPeople" class="bl-dm__people"></ul>
+                </div>
+                <div class="bl-dm__right">
+                  <div class="bl-dm__header">
+                    <div>
+                      <p class="bl-dm__to">Direct message</p>
+                      <p id="blDmActiveName" class="bl-dm__name">Select a creator</p>
+                    </div>
+                    <div id="blDmActiveMeta" class="bl-dm__meta"></div>
+                  </div>
+                  <div id="blDmChat" class="bl-dm__chat">
+                    <div class="bl-dm__placeholder">Choose a conversation or start a new one to see messages.</div>
+                  </div>
+                  <div id="blDmAttachmentPreview" class="bl-dm__attachments hidden"></div>
+                  <div class="bl-dm__composer">
+                    <button id="blDmAttach" type="button" class="bl-dm__composer-btn bl-dm__composer-btn--attach" title="Attach image or audio"></button>
+                    <input id="blDmInput" type="text" placeholder="Type a message" autocomplete="off" />
+                    <button id="blDmSend" type="button" class="bl-dm__composer-btn bl-dm__composer-btn--send" title="Send message"></button>
+                    <input id="blDmFileInput" type="file" accept="image/*,audio/*" multiple class="hidden" />
+                  </div>
+                </div>
+              </div>
               <div class="rounded-xl border border-white/10 bg-white/5 p-4">
                 <p class="text-xs uppercase tracking-wide text-white/50">Email address</p>
                 <p id="profileViewEmail" class="mt-1 text-lg font-semibold text-white break-all">—</p>
@@ -7543,6 +8138,779 @@ stopBtn.addEventListener('click', () => {
     previousOverflow: ''
   };
 
+  const DM_MAX_ATTACHMENTS = 3;
+  const DM_MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024;
+  const dmTimeFormatter = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' });
+  const dmDateFormatter = new Intl.DateTimeFormat([], { month: 'short', day: 'numeric' });
+  const dmFullDateFormatter = new Intl.DateTimeFormat([], { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const dmElements = {
+    wrapper: document.getElementById('profileDmCard'),
+    search: document.getElementById('blDmSearch'),
+    refresh: document.getElementById('blDmRefresh'),
+    list: document.getElementById('blDmPeople'),
+    empty: document.getElementById('blDmEmptyState'),
+    chat: document.getElementById('blDmChat'),
+    attachmentPreview: document.getElementById('blDmAttachmentPreview'),
+    input: document.getElementById('blDmInput'),
+    send: document.getElementById('blDmSend'),
+    attach: document.getElementById('blDmAttach'),
+    fileInput: document.getElementById('blDmFileInput'),
+    activeName: document.getElementById('blDmActiveName'),
+    activeMeta: document.getElementById('blDmActiveMeta')
+  };
+
+  const dmState = {
+    initialized: false,
+    loading: false,
+    sending: false,
+    conversations: [],
+    messagesByUser: new Map(),
+    directory: [],
+    pendingAttachments: [],
+    activeUserId: null,
+    activeUser: null,
+    query: '',
+    selfId: null
+  };
+
+  function sanitizeDmUser(user) {
+    if (!user) return null;
+    const id = normalizeUserId(user.id || user._id);
+    if (!id) return null;
+    const email = typeof user.email === 'string' ? user.email : '';
+    const displayName = typeof user.displayName === 'string' ? user.displayName : '';
+    const name = typeof user.name === 'string' ? user.name : '';
+    const firstName = typeof user.firstName === 'string' ? user.firstName : '';
+    const lastName = typeof user.lastName === 'string' ? user.lastName : '';
+    return {
+      id,
+      email,
+      displayName,
+      name,
+      firstName,
+      lastName,
+      avatar: sanitizeAvatar(user.avatar || user.avatarUrl),
+      joinedAt: user.joinedAt || user.createdAt || null
+    };
+  }
+
+  function dmDisplayName(user) {
+    if (!user) return 'Creator';
+    if (user.displayName && user.displayName.trim()) return user.displayName.trim();
+    const composed = [user.firstName, user.lastName]
+      .filter(Boolean)
+      .map(part => part.trim())
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (composed) return composed;
+    if (user.name && user.name.trim()) return user.name.trim();
+    if (user.email) return user.email.split('@')[0];
+    return 'Creator';
+  }
+
+  function matchesDmQuery(user, query) {
+    if (!query) return true;
+    const haystack = [
+      user.displayName,
+      user.name,
+      user.firstName,
+      user.lastName,
+      user.email
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(query);
+  }
+
+  function formatConversationTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    const now = new Date();
+    const sameDay = date.toDateString() === now.toDateString();
+    if (sameDay) return dmTimeFormatter.format(date);
+    const diff = Math.abs(now.getTime() - date.getTime());
+    if (diff < 6 * 24 * 60 * 60 * 1000) {
+      return date.toLocaleDateString(undefined, { weekday: 'short' });
+    }
+    return dmDateFormatter.format(date);
+  }
+
+  function formatConversationStart(value) {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    return dmFullDateFormatter.format(date);
+  }
+
+  function formatMessageTimestamp(value) {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    return dmTimeFormatter.format(date);
+  }
+
+  function formatMessagePreview(message) {
+    if (!message) return '';
+    if (message.deletedAt) return 'Message deleted';
+    if (message.body) {
+      return message.body.length > 80 ? `${message.body.slice(0, 77)}…` : message.body;
+    }
+    const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
+    if (count === 1) {
+      return message.attachments[0].type === 'image' ? 'Image attachment' : 'Audio attachment';
+    }
+    if (count > 1) return `${count} attachments`;
+    return '';
+  }
+
+  function normalizeMessageFromResponse(raw) {
+    if (!raw) return null;
+    const senderId = normalizeUserId(raw.senderId || raw.sender);
+    const recipientId = normalizeUserId(raw.recipientId || raw.recipient);
+    const attachments = Array.isArray(raw.attachments)
+      ? raw.attachments
+          .map(att => ({
+            url: typeof att.url === 'string' ? att.url : '',
+            type: att.type === 'image' ? 'image' : 'audio',
+            mimeType: typeof att.mimeType === 'string' ? att.mimeType : '',
+            originalName: typeof att.originalName === 'string' ? att.originalName : '',
+            size: Number.isFinite(att.size) ? att.size : 0
+          }))
+          .filter(att => !!att.url)
+      : [];
+    const createdAt = raw.createdAt || raw.timestamp || null;
+    const message = {
+      id: raw.id || raw._id || null,
+      senderId,
+      recipientId,
+      body: typeof raw.body === 'string' ? raw.body : '',
+      attachments,
+      createdAt,
+      updatedAt: raw.updatedAt || createdAt || null,
+      editedAt: raw.editedAt || null,
+      deletedAt: raw.deletedAt || null,
+      preview: typeof raw.preview === 'string' ? raw.preview : null
+    };
+    const viewerId = dmState.selfId;
+    if (typeof raw.isSender === 'boolean') {
+      message.isSender = raw.isSender;
+    } else if (viewerId && senderId) {
+      message.isSender = viewerId === senderId;
+    } else {
+      message.isSender = false;
+    }
+    message.preview = message.preview || formatMessagePreview(message);
+    return message;
+  }
+
+  function loadDmDirectory() {
+    try {
+      const raw = getJSON('users', '{}');
+      if (raw && typeof raw === 'object') {
+        dmState.directory = Object.values(raw)
+          .map(entry => sanitizeDmUser(entry))
+          .filter(Boolean)
+          .slice(0, 80);
+      } else {
+        dmState.directory = [];
+      }
+    } catch (err) {
+      console.warn('Unable to load local user directory for direct messages', err);
+      dmState.directory = [];
+    }
+  }
+
+  function sortConversations() {
+    dmState.conversations.sort((a, b) => {
+      const at = a?.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+      const bt = b?.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+      return bt - at;
+    });
+  }
+
+  function setComposerEnabled(enabled) {
+    if (dmElements.input) dmElements.input.disabled = !enabled;
+    if (dmElements.send) dmElements.send.disabled = !enabled;
+    if (dmElements.attach) dmElements.attach.disabled = !enabled;
+  }
+
+  function renderActiveHeader() {
+    if (!dmElements.activeName) return;
+    const user = dmState.activeUser;
+    if (!user) {
+      dmElements.activeName.textContent = 'Select a creator';
+      if (dmElements.activeMeta) dmElements.activeMeta.textContent = '';
+      setComposerEnabled(false);
+      return;
+    }
+    dmElements.activeName.textContent = dmDisplayName(user);
+    const meta = [];
+    if (user.email) meta.push(user.email);
+    if (user.joinedAt) {
+      try {
+        meta.push('Joined ' + dmDateFormatter.format(new Date(user.joinedAt)));
+      } catch (_) {}
+    }
+    if (dmElements.activeMeta) dmElements.activeMeta.textContent = meta.join(' • ');
+    setComposerEnabled(true);
+  }
+
+  function renderConversationList() {
+    if (!dmElements.list) return;
+    dmElements.list.innerHTML = '';
+    const query = dmState.query.trim().toLowerCase();
+    const items = [];
+    const seen = new Set();
+
+    sortConversations();
+
+    dmState.conversations.forEach(entry => {
+      const user = sanitizeDmUser(entry.user);
+      if (!user) return;
+      if (query && !matchesDmQuery(user, query)) return;
+      const message = entry.lastMessage ? normalizeMessageFromResponse(entry.lastMessage) : null;
+      items.push({ type: 'conversation', user, message });
+      seen.add(user.id);
+    });
+
+    dmState.directory
+      .filter(user => user && !seen.has(user.id) && matchesDmQuery(user, query))
+      .slice(0, 12)
+      .forEach(user => items.push({ type: 'suggestion', user, message: null }));
+
+    if (!items.length) {
+      if (dmElements.empty) dmElements.empty.classList.remove('hidden');
+      return;
+    }
+
+    if (dmElements.empty) dmElements.empty.classList.add('hidden');
+
+    items.forEach(item => {
+      const li = document.createElement('li');
+      li.className = 'bl-dm__person';
+      li.dataset.userId = item.user.id;
+      li.dataset.kind = item.type;
+      if (item.user.id === dmState.activeUserId) li.classList.add('active');
+
+      const avatar = document.createElement('img');
+      avatar.className = 'bl-dm__avatar';
+      avatar.src = item.user.avatar;
+      avatar.alt = '';
+
+      const body = document.createElement('div');
+      body.className = 'bl-dm__person-body';
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'bl-dm__person-name';
+      nameEl.textContent = dmDisplayName(item.user);
+
+      const previewEl = document.createElement('span');
+      previewEl.className = 'bl-dm__person-preview';
+      previewEl.textContent = item.type === 'conversation'
+        ? formatMessagePreview(item.message)
+        : 'Start a new conversation';
+
+      body.appendChild(nameEl);
+      body.appendChild(previewEl);
+
+      const timeEl = document.createElement('span');
+      timeEl.className = 'bl-dm__person-time';
+      timeEl.textContent = item.type === 'conversation'
+        ? formatConversationTime(item.message?.createdAt)
+        : '';
+
+      li.appendChild(avatar);
+      li.appendChild(body);
+      li.appendChild(timeEl);
+      dmElements.list.appendChild(li);
+    });
+  }
+
+  function renderMessages(userId) {
+    if (!dmElements.chat) return;
+    dmElements.chat.innerHTML = '';
+    const messages = userId ? (dmState.messagesByUser.get(userId) || []) : [];
+    if (!messages.length) {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'bl-dm__placeholder';
+      placeholder.textContent = dmState.activeUser
+        ? `No messages yet. Say hi to ${dmDisplayName(dmState.activeUser)}.`
+        : 'Pick a conversation to get started.';
+      dmElements.chat.appendChild(placeholder);
+      return;
+    }
+
+    let lastDate = '';
+    messages.forEach(message => {
+      const createdAt = message.createdAt ? new Date(message.createdAt) : null;
+      const dayKey = createdAt ? createdAt.toDateString() : '';
+      if (dayKey && dayKey !== lastDate) {
+        lastDate = dayKey;
+        const divider = document.createElement('div');
+        divider.className = 'conversation-start';
+        const span = document.createElement('span');
+        span.textContent = formatConversationStart(createdAt);
+        divider.appendChild(span);
+        dmElements.chat.appendChild(divider);
+      }
+
+      const bubble = document.createElement('div');
+      bubble.className = `bubble ${message.isSender ? 'me' : 'you'}`;
+      if (message.deletedAt) bubble.classList.add('is-deleted');
+      if (message.id) bubble.dataset.id = message.id;
+
+      const body = document.createElement('div');
+      body.className = 'bl-dm__bubble-body';
+
+      if (message.deletedAt) {
+        const text = document.createElement('div');
+        text.textContent = 'Message deleted';
+        body.appendChild(text);
+      } else if (message.body) {
+        const text = document.createElement('div');
+        text.textContent = message.body;
+        body.appendChild(text);
+      }
+
+      if (!message.deletedAt && message.attachments.length > 0) {
+        const attachmentsWrap = document.createElement('div');
+        attachmentsWrap.className = 'bl-dm__bubbleAttachments';
+        message.attachments.forEach(att => {
+          if (!att.url) return;
+          if (att.type === 'image') {
+            const img = document.createElement('img');
+            img.src = att.url;
+            img.alt = att.originalName || 'Attachment';
+            img.loading = 'lazy';
+            attachmentsWrap.appendChild(img);
+          } else {
+            const audio = document.createElement('audio');
+            audio.src = att.url;
+            audio.controls = true;
+            attachmentsWrap.appendChild(audio);
+          }
+        });
+        body.appendChild(attachmentsWrap);
+      }
+
+      bubble.appendChild(body);
+
+      if (message.isSender && !message.deletedAt) {
+        const actions = document.createElement('div');
+        actions.className = 'bl-dm__bubbleActions';
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.dataset.dmAction = 'edit';
+        editBtn.textContent = 'Edit';
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.dataset.dmAction = 'delete';
+        deleteBtn.textContent = 'Delete';
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+        bubble.appendChild(actions);
+      }
+
+      const timestamp = document.createElement('span');
+      timestamp.className = 'bl-dm__timestamp';
+      timestamp.textContent = formatMessageTimestamp(createdAt);
+      bubble.appendChild(timestamp);
+
+      dmElements.chat.appendChild(bubble);
+    });
+
+    requestAnimationFrame(() => {
+      dmElements.chat.scrollTop = dmElements.chat.scrollHeight;
+    });
+  }
+
+  function upsertMessage(userId, message) {
+    if (!userId || !message) return;
+    const list = dmState.messagesByUser.get(userId) || [];
+    const index = list.findIndex(item => item.id === message.id);
+    if (index >= 0) {
+      list[index] = message;
+    } else {
+      list.push(message);
+    }
+    list.sort((a, b) => {
+      const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return at - bt;
+    });
+    dmState.messagesByUser.set(userId, list);
+  }
+
+  function updateConversationEntry(user, message) {
+    if (!user) return;
+    const sanitized = sanitizeDmUser(user);
+    if (!sanitized) return;
+    const entryMessage = message ? { ...message, preview: formatMessagePreview(message) } : null;
+    const index = dmState.conversations.findIndex(entry => normalizeUserId(entry.user?.id) === sanitized.id);
+    if (index >= 0) {
+      const existing = dmState.conversations[index];
+      dmState.conversations[index] = {
+        user: sanitized,
+        lastMessage: entryMessage || existing.lastMessage || null
+      };
+    } else {
+      dmState.conversations.push({ user: sanitized, lastMessage: entryMessage });
+    }
+  }
+
+  function clearPendingAttachments() {
+    dmState.pendingAttachments.forEach(att => {
+      if (att?.url) URL.revokeObjectURL(att.url);
+    });
+    dmState.pendingAttachments = [];
+    renderPendingAttachments();
+  }
+
+  function renderPendingAttachments() {
+    const container = dmElements.attachmentPreview;
+    if (!container) return;
+    container.innerHTML = '';
+    if (!dmState.pendingAttachments.length) {
+      container.classList.add('hidden');
+      return;
+    }
+    container.classList.remove('hidden');
+    dmState.pendingAttachments.forEach((attachment, index) => {
+      const item = document.createElement('div');
+      item.className = 'bl-dm__attachment';
+      if (attachment.type === 'image') {
+        const img = document.createElement('img');
+        img.src = attachment.url;
+        img.alt = attachment.file?.name || 'Attachment';
+        item.appendChild(img);
+      } else {
+        const icon = document.createElement('span');
+        icon.className = 'bl-dm__attachment-icon';
+        icon.textContent = '🎵';
+        item.appendChild(icon);
+        const label = document.createElement('span');
+        label.textContent = attachment.file?.name || 'Audio';
+        item.appendChild(label);
+      }
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'bl-dm__attachment-remove';
+      remove.dataset.index = String(index);
+      remove.textContent = '×';
+      item.appendChild(remove);
+      container.appendChild(item);
+    });
+  }
+
+  function removePendingAttachment(index) {
+    if (index < 0 || index >= dmState.pendingAttachments.length) return;
+    const [removed] = dmState.pendingAttachments.splice(index, 1);
+    if (removed?.url) URL.revokeObjectURL(removed.url);
+    renderPendingAttachments();
+  }
+
+  function handleAttachmentsSelected(event) {
+    const files = Array.from(event.target?.files || []);
+    if (dmElements.fileInput) dmElements.fileInput.value = '';
+    if (!files.length) return;
+    for (const file of files) {
+      if (!file) continue;
+      if (!file.type || (!file.type.startsWith('image/') && !file.type.startsWith('audio/'))) {
+        alert('Attachments must be images or audio files.');
+        continue;
+      }
+      if (file.size > DM_MAX_ATTACHMENT_SIZE) {
+        alert(`${file.name} is too large. Attachments must be 15MB or smaller.`);
+        continue;
+      }
+      if (dmState.pendingAttachments.length >= DM_MAX_ATTACHMENTS) {
+        alert(`You can attach up to ${DM_MAX_ATTACHMENTS} files per message.`);
+        break;
+      }
+      const url = URL.createObjectURL(file);
+      dmState.pendingAttachments.push({
+        file,
+        url,
+        type: file.type.startsWith('image/') ? 'image' : 'audio'
+      });
+    }
+    renderPendingAttachments();
+  }
+
+  async function sendActiveMessage() {
+    if (!dmState.activeUserId || dmState.sending) return;
+    const text = (dmElements.input?.value || '').trim();
+    if (!text && dmState.pendingAttachments.length === 0) return;
+    if (!hasAuthToken(AUTH.token)) {
+      alert('Please sign in to send messages.');
+      return;
+    }
+    const base = getActiveApiBase();
+    const formData = new FormData();
+    formData.append('body', text);
+    dmState.pendingAttachments.forEach(att => formData.append('attachments', att.file));
+
+    dmState.sending = true;
+    if (dmElements.send) dmElements.send.classList.add('is-loading');
+
+    try {
+      const res = await fetch(`${base}/api/messages/with/${dmState.activeUserId}`, {
+        method: 'POST',
+        headers: { ...AUTH.hdr() },
+        body: formData
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to send message');
+      }
+      const payload = await res.json();
+      const message = normalizeMessageFromResponse(payload.message);
+      if (message) {
+        upsertMessage(dmState.activeUserId, message);
+        updateConversationEntry(dmState.activeUser, message);
+        sortConversations();
+        renderConversationList();
+        renderMessages(dmState.activeUserId);
+      }
+      if (dmElements.input) dmElements.input.value = '';
+      clearPendingAttachments();
+    } catch (err) {
+      console.warn('Failed to send message', err);
+      alert(err.message || 'Unable to send your message right now.');
+    } finally {
+      dmState.sending = false;
+      if (dmElements.send) dmElements.send.classList.remove('is-loading');
+    }
+  }
+
+  async function selectConversation(userId, options = {}) {
+    const normalized = normalizeUserId(userId);
+    if (!normalized) return;
+    dmState.activeUserId = normalized;
+    const existing = dmState.conversations.find(entry => normalizeUserId(entry.user?.id) === normalized);
+    const directoryUser = options.directoryUser ? sanitizeDmUser(options.directoryUser) : null;
+    dmState.activeUser = directoryUser || (existing ? sanitizeDmUser(existing.user) : dmState.activeUser);
+    renderActiveHeader();
+    renderConversationList();
+
+    if (!dmState.messagesByUser.has(normalized) || options.forceReload || options.ensureMessages) {
+      if (!hasAuthToken(AUTH.token)) return;
+      const base = getActiveApiBase();
+      try {
+        const res = await fetch(`${base}/api/messages/with/${normalized}`, { headers: { ...AUTH.hdr() } });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to load conversation');
+        }
+        const payload = await res.json();
+        const user = sanitizeDmUser(payload.user) || dmState.activeUser;
+        const messages = Array.isArray(payload.messages)
+          ? payload.messages.map(normalizeMessageFromResponse).filter(Boolean)
+          : [];
+        dmState.messagesByUser.set(normalized, messages);
+        dmState.activeUser = user;
+        updateConversationEntry(user, messages[messages.length - 1] || null);
+        sortConversations();
+        renderConversationList();
+      } catch (err) {
+        console.warn('Failed to load direct messages', err);
+        alert(err.message || 'Unable to load this conversation right now.');
+      }
+    }
+
+    renderActiveHeader();
+    renderMessages(normalized);
+  }
+
+  async function refreshDirectMessages({ force = false } = {}) {
+    if (!dmElements.wrapper) return;
+    if (!hasAuthToken(AUTH.token)) {
+      dmElements.wrapper.classList.add('hidden');
+      return;
+    }
+    dmElements.wrapper.classList.remove('hidden');
+    dmState.selfId = normalizeUserId(profileState.user?.id || profileState.user?._id || window.currentUserId || null);
+    if (dmState.loading) return;
+    dmState.loading = true;
+    dmElements.wrapper.classList.add('bl-dm--loading');
+    loadDmDirectory();
+    const base = getActiveApiBase();
+
+    try {
+      const res = await fetch(`${base}/api/messages/conversations`, { headers: { ...AUTH.hdr() } });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to load conversations');
+      }
+      const payload = await res.json();
+      const list = Array.isArray(payload.conversations) ? payload.conversations : [];
+      dmState.conversations = list
+        .map(entry => ({
+          user: sanitizeDmUser(entry.user),
+          lastMessage: normalizeMessageFromResponse(entry.lastMessage)
+        }))
+        .filter(item => item.user);
+      sortConversations();
+      renderConversationList();
+
+      if (dmState.activeUserId) {
+        if (force) {
+          await selectConversation(dmState.activeUserId, { forceReload: true });
+        } else {
+          renderMessages(dmState.activeUserId);
+        }
+      } else if (dmState.conversations.length > 0) {
+        await selectConversation(dmState.conversations[0].user.id, { ensureMessages: true });
+      } else {
+        dmState.activeUser = null;
+        renderActiveHeader();
+        renderMessages(null);
+      }
+    } catch (err) {
+      console.warn('Failed to refresh conversations', err);
+      if (!dmState.conversations.length && dmElements.empty) {
+        dmElements.empty.classList.remove('hidden');
+      }
+    } finally {
+      dmState.loading = false;
+      dmElements.wrapper.classList.remove('bl-dm--loading');
+    }
+  }
+
+  function handleListClick(event) {
+    const item = event.target.closest('.bl-dm__person');
+    if (!item || !item.dataset.userId) return;
+    const userId = item.dataset.userId;
+    const kind = item.dataset.kind;
+    const directoryUser = kind === 'suggestion'
+      ? dmState.directory.find(user => user.id === userId)
+      : null;
+    selectConversation(userId, { directoryUser, ensureMessages: kind !== 'conversation' });
+  }
+
+  function handleSearchInput(event) {
+    dmState.query = (event.target?.value || '').toLowerCase();
+    renderConversationList();
+  }
+
+  function handleChatClick(event) {
+    const btn = event.target.closest('[data-dm-action]');
+    if (!btn) return;
+    const bubble = btn.closest('.bubble');
+    const messageId = bubble?.dataset.id;
+    if (!messageId) return;
+    if (btn.dataset.dmAction === 'edit') {
+      editMessage(messageId);
+    } else if (btn.dataset.dmAction === 'delete') {
+      deleteMessage(messageId);
+    }
+  }
+
+  async function editMessage(messageId) {
+    const userId = dmState.activeUserId;
+    if (!userId || !messageId) return;
+    const list = dmState.messagesByUser.get(userId) || [];
+    const existing = list.find(message => message.id === messageId);
+    if (!existing) return;
+    const next = prompt('Edit message', existing.body || '');
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed && (!existing.attachments || existing.attachments.length === 0)) {
+      alert('Message cannot be empty.');
+      return;
+    }
+    try {
+      const base = getActiveApiBase();
+      const res = await fetch(`${base}/api/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...AUTH.hdr() },
+        body: JSON.stringify({ body: trimmed })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update message');
+      }
+      const payload = await res.json();
+      const updated = normalizeMessageFromResponse(payload.message);
+      if (updated) {
+        upsertMessage(userId, updated);
+        updateConversationEntry(dmState.activeUser, updated);
+        sortConversations();
+        renderConversationList();
+        renderMessages(userId);
+      }
+    } catch (err) {
+      console.warn('Failed to edit message', err);
+      alert(err.message || 'Unable to edit this message right now.');
+    }
+  }
+
+  async function deleteMessage(messageId) {
+    const userId = dmState.activeUserId;
+    if (!userId || !messageId) return;
+    if (!confirm('Delete this message?')) return;
+    try {
+      const base = getActiveApiBase();
+      const res = await fetch(`${base}/api/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: { ...AUTH.hdr() }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete message');
+      }
+      const payload = await res.json();
+      const updated = normalizeMessageFromResponse(payload.message);
+      if (updated) {
+        upsertMessage(userId, updated);
+        updateConversationEntry(dmState.activeUser, updated);
+        sortConversations();
+        renderConversationList();
+        renderMessages(userId);
+      }
+    } catch (err) {
+      console.warn('Failed to delete message', err);
+      alert(err.message || 'Unable to delete this message right now.');
+    }
+  }
+
+  function initDirectMessages() {
+    if (!dmElements.wrapper || dmState.initialized) return;
+    dmState.initialized = true;
+    dmElements.wrapper.classList.remove('hidden');
+    loadDmDirectory();
+    renderPendingAttachments();
+    renderActiveHeader();
+
+    if (dmElements.search) dmElements.search.addEventListener('input', handleSearchInput);
+    if (dmElements.refresh) dmElements.refresh.addEventListener('click', () => refreshDirectMessages({ force: true }));
+    if (dmElements.list) dmElements.list.addEventListener('click', handleListClick);
+    if (dmElements.chat) dmElements.chat.addEventListener('click', handleChatClick);
+    if (dmElements.attach) dmElements.attach.addEventListener('click', () => dmElements.fileInput?.click?.());
+    if (dmElements.fileInput) dmElements.fileInput.addEventListener('change', handleAttachmentsSelected);
+    if (dmElements.attachmentPreview) {
+      dmElements.attachmentPreview.addEventListener('click', (event) => {
+        const btn = event.target.closest('.bl-dm__attachment-remove');
+        if (!btn) return;
+        const index = Number.parseInt(btn.dataset.index, 10);
+        if (Number.isInteger(index)) removePendingAttachment(index);
+      });
+    }
+    if (dmElements.send) dmElements.send.addEventListener('click', sendActiveMessage);
+    if (dmElements.input) {
+      dmElements.input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          sendActiveMessage();
+        }
+      });
+    }
+  }
+
   function getStoredProfileUser() {
     try {
       return JSON.parse(localStorage.getItem('user') || 'null');
@@ -7664,6 +9032,7 @@ stopBtn.addEventListener('click', () => {
     profileOverlayEl.classList.add('hidden');
     document.body.style.overflow = profileState.previousOverflow || '';
     profileState.previousOverflow = '';
+    clearPendingAttachments();
     resetPendingMedia();
     if (profileState.user) populateProfile(profileState.user);
   }
@@ -7678,6 +9047,8 @@ stopBtn.addEventListener('click', () => {
     profileState.user = user;
     populateProfile(user);
     setProfileMode('view');
+    initDirectMessages();
+    refreshDirectMessages({ force: true });
     if (profileOverlayEl) {
       profileState.previousOverflow = document.body.style.overflow || '';
       document.body.style.overflow = 'hidden';
