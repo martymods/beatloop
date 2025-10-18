@@ -8471,6 +8471,12 @@ let lastBar = -1;             // arranger playhead column
       const auth = (window.AUTH && typeof window.AUTH.hdr === 'function') ? window.AUTH.hdr() : {};
       const headers = { Accept: 'application/json', ...auth };
       const response = await fetch(`${apiBase}/api/studio/sounds`, { headers });
+      if (response.status === 404) {
+        communityLoopEntries = [];
+        communityInstrumentEntries = [];
+        studioSoundsLoaded = true;
+        return { loops: communityLoopEntries, instruments: communityInstrumentEntries };
+      }
       if (!response.ok) {
         let detail = '';
         try {
