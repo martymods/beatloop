@@ -63,6 +63,14 @@ if (S3_PUBLIC_BASE && S3_PUBLIC_BASE_HOST) {
   }
 }
 
+const s3PublicUrlAvailable = Boolean(S3_PUBLIC_BASE && S3_PUBLIC_BASE_RESOLVES);
+
+if (s3Enabled && !s3PublicUrlAvailable) {
+  console.warn(
+    '⚠️  S3 uploads enabled but S3_PUBLIC_BASE_URL is missing or unreachable. Falling back to local storage.'
+  );
+}
+
 let s3Client = null;
 if (s3Enabled) {
   try {
@@ -89,7 +97,7 @@ function normalizedKey(rawKey) {
 }
 
 export function durableStorageEnabled() {
-  return Boolean(s3Enabled && s3Client);
+  return Boolean(s3Enabled && s3Client && s3PublicUrlAvailable);
 }
 
 export function getUploadsRoot() {
@@ -113,7 +121,7 @@ export async function writeStreamToUploads({ key, stream, contentType }) {
   const normalized = normalizedKey(key);
   const { buffer, size } = await streamToBuffer(stream);
 
-  if (s3Enabled && s3Client) {
+  if (s3Enabled && s3Client && s3PublicUrlAvailable) {
     await s3Client.putObject({
       key: normalized,
       body: buffer,
@@ -134,7 +142,7 @@ export async function writeBufferToUploads({ key, buffer, contentType }) {
     buffer = Buffer.from(buffer);
   }
 
-  if (s3Enabled && s3Client) {
+  if (s3Enabled && s3Client && s3PublicUrlAvailable) {
     await s3Client.putObject({
       key: normalized,
       body: buffer,
