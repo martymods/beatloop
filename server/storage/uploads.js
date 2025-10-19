@@ -6,6 +6,10 @@ import dns from 'dns/promises';
 const uploadsRoot = path.join(process.cwd(), 'uploads');
 fs.mkdirSync(uploadsRoot, { recursive: true });
 
+const runningInProduction = Boolean(process.env.RENDER || process.env.NODE_ENV === 'production');
+const DURABLE_STORAGE_REQUIRED_MESSAGE =
+  'Durable uploads storage is required in production. Configure S3_BUCKET, S3_REGION, S3_PUBLIC_BASE_URL and AWS credentials.';
+
 const {
   S3_BUCKET = '',
   S3_REGION = '',
@@ -91,13 +95,19 @@ if (s3Enabled) {
   }
 }
 
+const durableStorageActive = Boolean(s3Enabled && s3Client && s3PublicUrlAvailable);
+
+if (runningInProduction && !durableStorageActive) {
+  throw new Error(DURABLE_STORAGE_REQUIRED_MESSAGE);
+}
+
 function normalizedKey(rawKey) {
   if (!rawKey) return '';
   return String(rawKey).replace(/^\/+/, '');
 }
 
 export function durableStorageEnabled() {
-  return Boolean(s3Enabled && s3Client && s3PublicUrlAvailable);
+  return durableStorageActive;
 }
 
 export function getUploadsRoot() {
@@ -121,6 +131,10 @@ export async function writeStreamToUploads({ key, stream, contentType }) {
   const normalized = normalizedKey(key);
   const { buffer, size } = await streamToBuffer(stream);
 
+  if (runningInProduction && !durableStorageActive) {
+    throw new Error(DURABLE_STORAGE_REQUIRED_MESSAGE);
+  }
+
   if (s3Enabled && s3Client && s3PublicUrlAvailable) {
     await s3Client.putObject({
       key: normalized,
@@ -140,6 +154,10 @@ export async function writeBufferToUploads({ key, buffer, contentType }) {
   const normalized = normalizedKey(key);
   if (!Buffer.isBuffer(buffer)) {
     buffer = Buffer.from(buffer);
+  }
+
+  if (runningInProduction && !durableStorageActive) {
+    throw new Error(DURABLE_STORAGE_REQUIRED_MESSAGE);
   }
 
   if (s3Enabled && s3Client && s3PublicUrlAvailable) {

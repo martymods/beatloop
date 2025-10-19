@@ -33,3 +33,17 @@ npx serve .
 ```
 
 Then open `http://localhost:3000/network.html?embed=studio` to preview the iframe-ready experience locally.
+
+## Production deployment
+
+Beatloop requires an S3-compatible bucket for avatar, track and message uploads when running in production (including Render).
+Configure the following environment variables so the server can initialize durable storage:
+
+- `S3_BUCKET` – name of the bucket that will hold uploaded assets.
+- `S3_REGION` – AWS/compatible region where the bucket lives.
+- `S3_PUBLIC_BASE_URL` – the HTTPS base URL (or CDN) that serves the bucket contents.
+- `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (or `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`) – credentials with write access to the bucket.
+- Optional: `AWS_SESSION_TOKEN` for temporary credentials.
+- Optional: `S3_ENDPOINT` and `S3_FORCE_PATH_STYLE` for non-AWS providers.
+
+Without these variables, the API will terminate on startup in production and upload routes will respond with `503` errors.

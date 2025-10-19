@@ -34,6 +34,19 @@ const {
   RENDER_EXTERNAL_URL
 } = process.env;
 
+const RUNNING_IN_PRODUCTION = Boolean(process.env.RENDER || process.env.NODE_ENV === 'production');
+const DURABLE_UPLOADS_REQUIRED_MESSAGE =
+  'Durable uploads storage is required in production. Configure S3_BUCKET, S3_REGION, S3_PUBLIC_BASE_URL and AWS credentials.';
+const durableUploadsAvailable = durableStorageEnabled();
+
+if (RUNNING_IN_PRODUCTION && !durableUploadsAvailable) {
+  throw new Error(DURABLE_UPLOADS_REQUIRED_MESSAGE);
+}
+
+if (!durableUploadsAvailable) {
+  console.warn('⚠️  Durable storage not configured; falling back to local uploads directory.');
+}
+
 if (!MONGODB_URI) {
   console.warn('⚠️  MONGODB_URI not set. Add it in .env / Render Environment.');
 }
@@ -360,6 +373,18 @@ const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avata
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
 fs.mkdirSync(messageAttachmentDir, { recursive: true });
+
+const DURABLE_UPLOADS_UNAVAILABLE_RESPONSE = {
+  error: 'uploads are temporarily unavailable: durable storage is not configured'
+};
+
+function ensureDurableUploadsEnabled(res) {
+  if (RUNNING_IN_PRODUCTION && !durableUploadsAvailable) {
+    res.status(503).json(DURABLE_UPLOADS_UNAVAILABLE_RESPONSE);
+    return false;
+  }
+  return true;
+}
 
 const UPLOAD_CACHE_CONTROL = 'public, max-age=604800, immutable';
 
@@ -1705,6 +1730,10 @@ app.get('/api/studio/sounds', async (req, res) => {
 });
 
 app.post('/api/studio/sounds', auth, (req, res) => {
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
   studioSoundUpload.single('sound')(req, res, async (err) => {
     if (err) {
       const message = err.code === 'LIMIT_FILE_SIZE'
@@ -1925,6 +1954,10 @@ app.get('/api/messages/with/:userId', auth, async (req, res) => {
 });
 
 app.post('/api/messages/with/:userId', auth, (req, res) => {
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
   messageAttachmentUpload.array('attachments', MESSAGE_ATTACHMENT_MAX_COUNT)(req, res, async (err) => {
     if (err) {
       const message = err.message || 'upload failed';
@@ -2048,6 +2081,10 @@ app.delete('/api/messages/:messageId', auth, async (req, res) => {
 });
 
 app.post('/api/users/tag', auth, (req, res) => {
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
   tagUpload.single('tag')(req, res, async (err) => {
     if (err) {
       const message = err.message || 'upload failed';
@@ -2092,6 +2129,10 @@ app.post('/api/users/tag', auth, (req, res) => {
 });
 
 app.post('/api/users/avatar', auth, (req, res) => {
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
   avatarUpload.single('avatar')(req, res, async (err) => {
     if (err) {
       const message = err.message || 'upload failed';
@@ -2125,6 +2166,10 @@ app.post('/api/users/avatar', auth, (req, res) => {
 });
 
 app.post('/api/tracks', auth, (req, res) => {
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
   trackUpload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }])(req, res, async (err) => {
     if (err) {
       const message = err.message || 'upload failed';
@@ -2220,6 +2265,10 @@ app.post('/api/tracks', auth, (req, res) => {
 });
 
 app.post('/api/tracks/:id/cover', auth, (req, res) => {
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
   trackUpload.single('cover')(req, res, async (err) => {
     if (err) {
       const message = err.message || 'upload failed';
