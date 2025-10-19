@@ -1952,6 +1952,19 @@
             <option>13</option><option>14</option><option>15</option><option>16</option>
           </select>
         </label>
+        <label class="hidden md:flex items-center gap-2 text-sm text-white/70">
+          Steps
+          <select id="blSteps" class="rounded-md bg-white/10 px-2 py-1">
+            <option value="4">4</option>
+            <option value="8">8</option>
+            <option value="12">12</option>
+            <option value="16" selected>16</option>
+            <option value="20">20</option>
+            <option value="24">24</option>
+            <option value="28">28</option>
+            <option value="32">32</option>
+          </select>
+        </label>
         <button id="blClone" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Clone Pattern</button>
         <button id="blSongToggle" class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">Song Mode</button>
         <button id="blExportSong" class="hidden rounded-lg bg-white text-[#0c0c12] px-3 py-1.5 text-sm font-semibold">Export Song</button>
@@ -6641,11 +6654,11 @@ const AI_MELODY_SCALES = {
   pent:   [-12, -9, -7, -5, -2, 0, 3, 5, 7]
 };
   const ROOT_SCOPE = typeof window !== 'undefined' ? window : globalThis;
-  const STEPS = (() => {
+  const DEFAULT_STEPS = (() => {
     const direct = (typeof window !== 'undefined' && typeof window.STEPS === 'number') ? window.STEPS : undefined;
     const globalGuess = (typeof globalThis !== 'undefined' && typeof globalThis.STEPS === 'number') ? globalThis.STEPS : undefined;
     const candidate = Number.isFinite(direct) ? direct : (Number.isFinite(globalGuess) ? globalGuess : undefined);
-    return Number.isFinite(candidate) && candidate > 0 ? candidate : 16;
+    return Number.isFinite(candidate) && candidate > 0 ? Math.round(candidate) : 16;
   })();
   const MAX_BANKS = (() => {
     const direct = (typeof window !== 'undefined' && typeof window.MAX_BANKS === 'number') ? window.MAX_BANKS : undefined;
@@ -6653,31 +6666,106 @@ const AI_MELODY_SCALES = {
     const candidate = Number.isFinite(direct) ? direct : (Number.isFinite(globalGuess) ? globalGuess : undefined);
     return Number.isFinite(candidate) && candidate > 0 ? candidate : 16;
   })();
-  ROOT_SCOPE.STEPS = STEPS;
-  ROOT_SCOPE.MAX_BANKS = MAX_BANKS;
+  const MIN_PATTERN_STEPS = 4;
+  const MAX_PATTERN_STEPS = 32;
+  const STEP_INCREMENT = 4;
 
-  function getStepCount(){
-    if (typeof STEPS === 'number' && Number.isFinite(STEPS) && STEPS > 0) return STEPS;
-    if (typeof ROOT_SCOPE?.STEPS === 'number' && Number.isFinite(ROOT_SCOPE.STEPS) && ROOT_SCOPE.STEPS > 0) return ROOT_SCOPE.STEPS;
-    return 16;
-  }
+  ROOT_SCOPE.STEPS = DEFAULT_STEPS;
+  ROOT_SCOPE.MAX_BANKS = MAX_BANKS;
 
   function getMaxBankCount(){
     if (typeof MAX_BANKS === 'number' && Number.isFinite(MAX_BANKS) && MAX_BANKS > 0) return MAX_BANKS;
     if (typeof ROOT_SCOPE?.MAX_BANKS === 'number' && Number.isFinite(ROOT_SCOPE.MAX_BANKS) && ROOT_SCOPE.MAX_BANKS > 0) return ROOT_SCOPE.MAX_BANKS;
     return 16;
   }
+
+  function normalizeStepCount(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return DEFAULT_STEPS;
+    const clamped = Math.min(MAX_PATTERN_STEPS, Math.max(MIN_PATTERN_STEPS, numeric));
+    const snapped = Math.round(clamped / STEP_INCREMENT) * STEP_INCREMENT;
+    return Math.min(MAX_PATTERN_STEPS, Math.max(MIN_PATTERN_STEPS, snapped));
+  }
+
+  let patternStepCounts = Array.from({ length: getMaxBankCount() }, (_, idx) => normalizeStepCount(DEFAULT_STEPS));
+
+  function ensurePatternStepCountsSize() {
+    const banks = getMaxBankCount();
+    if (patternStepCounts.length !== banks) {
+      const next = Array.from({ length: banks }, (_, idx) => normalizeStepCount(patternStepCounts[idx] ?? DEFAULT_STEPS));
+      patternStepCounts = next;
+    }
+  }
+
+  function getStepCount(bank = currentBank){
+    ensurePatternStepCountsSize();
+    let idx = Number.isFinite(bank) ? bank : currentBank;
+    if (!Number.isFinite(idx)) return normalizeStepCount(DEFAULT_STEPS);
+    idx = Math.max(0, Math.min(patternStepCounts.length - 1, idx));
+    return normalizeStepCount(patternStepCounts[idx]);
+  }
+
+  function resizePatternForBank(bank){
+    const rows = Array.isArray(rowLabels) ? rowLabels.length : 0;
+    ensurePatternForBank(bank, rows);
+  }
+
+  function resizePianoRollForBank(bank){
+    if (!Array.isArray(pianoRoll[bank])) return;
+    const cols = getStepCount(bank) * SUBDIV;
+    pianoRoll[bank].forEach((entry, rowIdx) => {
+      if (!entry) return;
+      if (!Array.isArray(entry.notes)) {
+        entry.notes = Array.from({ length: PITCH_ROWS }, () => Array(cols).fill(null));
+        return;
+      }
+      for (let p = 0; p < PITCH_ROWS; p++) {
+        const line = Array.isArray(entry.notes[p]) ? entry.notes[p] : [];
+        if (line.length > cols) {
+          line.length = cols;
+        } else if (line.length < cols) {
+          line.push(...Array(cols - line.length).fill(null));
+        }
+        entry.notes[p] = line;
+      }
+    });
+  }
+
+  function setStepCountForBank(bank, steps){
+    ensurePatternStepCountsSize();
+    if (!Number.isFinite(bank)) return getStepCount();
+    const idx = Math.max(0, Math.min(patternStepCounts.length - 1, bank));
+    const normalized = normalizeStepCount(steps);
+    patternStepCounts[idx] = normalized;
+    resizePatternForBank(idx);
+    resizePianoRollForBank(idx);
+    if (idx === currentBank) {
+      if (typeof currentStep === 'number' && Number.isFinite(currentStep)) {
+        currentStep = ((currentStep % normalized) + normalized) % normalized;
+      } else {
+        currentStep = 0;
+      }
+    }
+    return normalized;
+  }
+
+  ROOT_SCOPE.getStepCount = getStepCount;
+  ROOT_SCOPE.setStepCountForBank = setStepCountForBank;
+
   // ---- Piano Roll state (per bank, per row)
   let SUBDIV = 4;              // 4 = 64th notes; try 8 or 16 for finer
   const PITCH_ROWS = 16;       // 0 (low) .. 15 (high)
-  // pianoRoll[bank][row] = { notes: PITCH_ROWS x (STEPS*SUBDIV), loopSlice:{start,end} }
+  // pianoRoll[bank][row] = { notes: PITCH_ROWS x (steps*SUBDIV), loopSlice:{start,end} }
   let pianoRoll = Array.from({ length: getMaxBankCount() }, () => []);
 
   function ensurePR(bank, row){
+    if (!Array.isArray(pianoRoll[bank])) pianoRoll[bank] = [];
     if (!pianoRoll[bank][row]) {
-      const cols = getStepCount() * SUBDIV;
+      const cols = getStepCount(bank) * SUBDIV;
       const grid = Array.from({ length: PITCH_ROWS }, () => Array(cols).fill(null));
       pianoRoll[bank][row] = { notes: grid, loopSlice: { start: 0, end: 1 } };
+    } else {
+      resizePianoRollForBank(bank);
     }
     return pianoRoll[bank][row];
   }
@@ -7074,8 +7162,9 @@ const AI_MELODY_SCALES = {
   function drawPianoRoll(){
     _ensurePRRefs();
     if (prRow == null || !prGridEl) return;
-    const cols = STEPS * SUBDIV;
     const bank = (typeof currentBank!=='undefined'?currentBank:0);
+    const steps = getStepCount(bank);
+    const cols = steps * SUBDIV;
     const entry = ensurePR(bank, prRow);
     const roll = entry.notes;
     prGridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(16px, 1fr))`;
@@ -7124,6 +7213,8 @@ const AI_MELODY_SCALES = {
     const bank = (typeof currentBank!=='undefined' ? currentBank : 0);
     const entry = ensurePR(bank, prRow);
     const roll = entry.notes;
+    const steps = getStepCount(bank);
+    const totalCols = steps * SUBDIV;
     const wasOn = !!roll[p][i];
 
     // Apply (store vol/pan if turning on)
@@ -7132,7 +7223,7 @@ const AI_MELODY_SCALES = {
 
     // Update just this PR cell visually (if PR grid mounted)
     try {
-      const idxCell = (PITCH_ROWS-1 - p) * (STEPS*SUBDIV) + i;
+      const idxCell = (PITCH_ROWS-1 - p) * totalCols + i;
       const cell = (typeof prGridEl!=='undefined' && prGridEl && prGridEl.children) ? prGridEl.children[idxCell] : null;
       if (cell) cell.classList.toggle('on', !!roll[p][i]);
     } catch(e){}
@@ -7147,7 +7238,7 @@ const AI_MELODY_SCALES = {
     let hadAnyBefore = wasOn;
     if (!hadAnyBefore) {
       outer: for (let pp=0; pp<PITCH_ROWS; pp++){
-        for (let ii=0; ii<STEPS*SUBDIV; ii++){
+        for (let ii=0; ii<totalCols; ii++){
           if (pp===p && ii===i) continue;
           if (roll[pp][ii]) { hadAnyBefore = true; break outer; }
         }
@@ -7155,7 +7246,7 @@ const AI_MELODY_SCALES = {
     }
     let hasAnyNow = false;
     outer2: for (let pp=0; pp<PITCH_ROWS; pp++){
-      for (let ii=0; ii<STEPS*SUBDIV; ii++){
+      for (let ii=0; ii<totalCols; ii++){
         if (roll[pp][ii]) { hasAnyNow = true; break outer2; }
       }
     }
@@ -7690,14 +7781,29 @@ const AI_MELODY_SCALES = {
   function ensureRowPattern(bank, rowIdx) {
     ensurePatternForBank(bank, rowLabels.length);
     const pattern = patterns[bank];
-    if (!Array.isArray(pattern[rowIdx])) pattern[rowIdx] = Array(STEPS).fill(false);
+    const steps = getStepCount(bank);
+    if (!Array.isArray(pattern[rowIdx])) {
+      pattern[rowIdx] = Array(steps).fill(false);
+    } else if (pattern[rowIdx].length !== steps) {
+      pattern[rowIdx].length = steps;
+      if (pattern[rowIdx].length < steps) {
+        pattern[rowIdx].push(...Array(steps - pattern[rowIdx].length).fill(false));
+      }
+    }
     return pattern[rowIdx];
   }
 
   function cloneBankWithPR(source, target) {
     ensurePatternForBank(source, rowLabels.length);
+    const sourceSteps = getStepCount(source);
+    const targetSteps = setStepCountForBank(target, sourceSteps);
     ensurePatternForBank(target, rowLabels.length);
-    patterns[target] = (patterns[source] || []).map(row => Array.isArray(row) ? row.slice() : Array(STEPS).fill(false));
+    patterns[target] = (patterns[source] || []).map(row => {
+      if (!Array.isArray(row)) return Array(targetSteps).fill(false);
+      const cloneRow = row.slice(0, targetSteps);
+      if (cloneRow.length < targetSteps) cloneRow.push(...Array(targetSteps - cloneRow.length).fill(false));
+      return cloneRow;
+    });
     const srcPR = pianoRoll[source] || [];
     pianoRoll[target] = srcPR.map(entry => {
       if (!entry) return undefined;
@@ -7705,9 +7811,16 @@ const AI_MELODY_SCALES = {
         loopSlice: { ...(entry.loopSlice || { start: 0, end: 1 }) },
         notes: []
       };
+      const cols = targetSteps * SUBDIV;
       for (let p = 0; p < PITCH_ROWS; p++) {
         const row = entry.notes?.[p];
-        clone.notes[p] = row ? row.slice() : Array(STEPS * SUBDIV).fill(null);
+        if (!Array.isArray(row)) {
+          clone.notes[p] = Array(cols).fill(null);
+        } else {
+          const slice = row.slice(0, cols);
+          if (slice.length < cols) slice.push(...Array(cols - slice.length).fill(null));
+          clone.notes[p] = slice;
+        }
       }
       return clone;
     });
@@ -7715,11 +7828,12 @@ const AI_MELODY_SCALES = {
 
   function applyDrumPattern(rowIdx, role, density, bank = currentBank) {
     const row = ensureRowPattern(bank, rowIdx);
+    const steps = getStepCount(bank);
     row.fill(false);
     const chance = (p) => Math.random() < p;
     const hit = (step, weight = 1) => {
       if (weight >= 1 || chance(weight)) {
-        const index = ((step % STEPS) + STEPS) % STEPS;
+        const index = ((step % steps) + steps) % steps;
         row[index] = true;
       }
     };
@@ -7736,7 +7850,7 @@ const AI_MELODY_SCALES = {
       [6, 10, 14].forEach(step => hit(step, dens * 0.4));
       if (dens > 0.75) hit(2, 0.4);
     } else if (role === 'hat') {
-      for (let i = 0; i < STEPS; i++) {
+      for (let i = 0; i < steps; i++) {
         const base = (i % 2 === 0) ? 0.7 : 0.35;
         hit(i, base * dens + 0.1);
       }
@@ -7751,8 +7865,9 @@ const AI_MELODY_SCALES = {
 
   function aiHumanizeRow(rowIdx, amount, bank = currentBank) {
     const row = ensureRowPattern(bank, rowIdx);
+    const steps = getStepCount(bank);
     const depth = Math.min(1, Math.max(0.05, amount));
-    for (let i = 0; i < STEPS; i++) {
+    for (let i = 0; i < steps; i++) {
       if (row[i] && Math.random() < depth * 0.05) {
         row[i] = false;
       } else if (!row[i] && Math.random() < depth * 0.12) {
@@ -7760,7 +7875,7 @@ const AI_MELODY_SCALES = {
       }
       if (row[i] && Math.random() < depth * 0.08) {
         const offset = Math.random() < 0.5 ? -1 : 1;
-        const next = ((i + offset) % STEPS + STEPS) % STEPS;
+        const next = ((i + offset) % steps + steps) % steps;
         if (!row[next]) {
           row[next] = true;
           row[i] = false;
@@ -7774,7 +7889,8 @@ const AI_MELODY_SCALES = {
     ensurePatternForBank(currentBank, rowLabels.length);
     const entry = ensurePR(currentBank, rowIdx);
     const dens = Math.min(1, Math.max(0.1, density));
-    const cols = STEPS * SUBDIV;
+    const steps = getStepCount(currentBank);
+    const cols = steps * SUBDIV;
 
     for (let p = 0; p < PITCH_ROWS; p++) {
       entry.notes[p] = entry.notes[p] || Array(cols).fill(null);
@@ -7804,7 +7920,7 @@ const AI_MELODY_SCALES = {
         seededFromMidi = true;
       });
       if (seededFromMidi) {
-        patterns[currentBank][rowIdx] = Array(STEPS).fill(false);
+        patterns[currentBank][rowIdx] = Array(steps).fill(false);
         if (prOverlay && prOverlay.style.display !== 'none' && prRow === rowIdx) {
           drawPianoRoll();
         }
@@ -8082,7 +8198,8 @@ const AI_MELODY_SCALES = {
 
   function highlightPRRow(p, on){
     if (!prGridEl) return;
-    const cols = STEPS * SUBDIV;
+    const steps = getStepCount(typeof currentBank !== 'undefined' ? currentBank : 0);
+    const cols = steps * SUBDIV;
     const startIdx = (PITCH_ROWS - 1 - p) * cols;
     for (let i=0; i<cols; i++){
       const cell = prGridEl.children?.[startIdx + i];
@@ -8171,11 +8288,20 @@ const AI_MELODY_SCALES = {
     }
   }
   const patternSel= document.getElementById('blPattern');
+  const stepCountSel = document.getElementById('blSteps');
   const cloneBtn = document.getElementById('blClone');
   const songToggle= document.getElementById('blSongToggle');
   const exportSongBtn = document.getElementById('blExportSong');
   const arrangerWrap  = document.getElementById('arrangerWrap');
   const arrGrid       = document.getElementById('arrGrid');
+
+  function syncStepSelector(){
+    if (!stepCountSel) return;
+    try {
+      const steps = getStepCount(currentBank);
+      stepCountSel.value = String(steps);
+    } catch {}
+  }
 
   if (window.IS_STUDIO_EMBED && studio) {
     studio.classList.remove('hidden');
@@ -8209,11 +8335,25 @@ const AI_MELODY_SCALES = {
   openBtn?.addEventListener('click', launchStudio);
   closeBtn?.addEventListener('click', hideStudio);
 
+  stepCountSel?.addEventListener('change', () => {
+    const requested = parseInt(stepCountSel.value || '0', 10);
+    const normalized = setStepCountForBank(currentBank, Number.isFinite(requested) ? requested : DEFAULT_STEPS);
+    if (String(normalized) !== stepCountSel.value) {
+      stepCountSel.value = String(normalized);
+    }
+    ensurePatternForBank(currentBank, rowLabels.length);
+    resizePianoRollForBank(currentBank);
+    drawGrid(rowLabels);
+    if (normalized > 0) {
+      paintPlayhead(Math.min(currentStep, normalized - 1));
+    }
+  });
+
   // ---------- State ----------
   let currentKit = 'trap';
   let kitRowCount = 0;
 
-  // 16 pattern banks: each is rows x STEPS
+  // Pattern banks: each stores rows × per-bank step count
   let patterns = Array.from({length: MAX_BANKS}, () => []);
   Object.defineProperty(window, 'patterns', {
     configurable: true,
@@ -8221,7 +8361,10 @@ const AI_MELODY_SCALES = {
     set(value) { patterns = value; }
   });
   let currentBank = 0;                       // 0..15 (UI shows 1..16)
-  let arrangement = Array(STEPS).fill(-1);   // 16 bars, -1 empty or 0..15 pattern index
+  const DEFAULT_ARRANGEMENT_BARS = DEFAULT_STEPS;
+  let arrangement = Array(DEFAULT_ARRANGEMENT_BARS).fill(-1);   // bars default to global step count, -1 empty or 0..15 pattern index
+
+  syncStepSelector();
 
   // per-row nodes
   let volumes = [], panners = [], pitches = [];
@@ -8259,8 +8402,9 @@ let lastBar = -1;             // arranger playhead column
   function hasAnyPR(bank,row){
     const pr = (pianoRoll[bank] && pianoRoll[bank][row]) ? pianoRoll[bank][row].notes : null;
     if (!pr) return false;
+    const cols = getStepCount(bank) * SUBDIV;
     for (let p=0;p<PITCH_ROWS;p++){
-      for (let i=0;i<STEPS*SUBDIV;i++){
+      for (let i=0;i<cols;i++){
         if (pr[p][i]) return true;
       }
     }
@@ -8268,10 +8412,11 @@ let lastBar = -1;             // arranger playhead column
   }
   function renderPRPreview(row, container){
     const pr = pianoRoll[currentBank][row];
-    const cols = STEPS*SUBDIV;
+    const steps = getStepCount(currentBank);
+    const cols = steps*SUBDIV;
     const wrap = document.createElement('div');
     wrap.className = 'pr-preview';
-    wrap.style.gridColumn = 'span ' + STEPS;
+    wrap.style.gridColumn = 'span ' + steps;
     wrap.innerHTML = '<span class="tag">PR</span>';
     wrap.title = 'This row is driven by Piano Roll';
     wrap.addEventListener('click', ()=>openPianoRoll(row, rowLabels[row]||'Row'));
@@ -8320,8 +8465,13 @@ let lastBar = -1;             // arranger playhead column
 }
 
   function ensurePatternForBank(bank, rows){
+    const steps = getStepCount(bank);
     const old = patterns[bank] || [];
-    patterns[bank] = Array.from({length: rows}, (_,r)=> old[r]?.slice(0,STEPS) || Array(STEPS).fill(false));
+    patterns[bank] = Array.from({length: rows}, (_,r)=> {
+      const base = Array.isArray(old[r]) ? old[r].slice(0, steps) : [];
+      if (base.length < steps) base.push(...Array(steps - base.length).fill(false));
+      return base;
+    });
   }
   window.ensurePatternForBank = ensurePatternForBank;
   function resizeAllBanks(rows){ for (let b=0;b<MAX_BANKS;b++) ensurePatternForBank(b, rows); }
@@ -8345,13 +8495,15 @@ let lastBar = -1;             // arranger playhead column
     gridWrap.innerHTML = '';
     const rows = labels.length;
     syncRowState(rows);
+    ensurePatternForBank(currentBank, rows);
     rowHeaderRefs = Array(rows).fill(null);
 
     const table = document.createElement('div');
     table.className = 'grid gap-2';
     table.style.position='relative';
     table.style.gridTemplateRows = `repeat(${rows}, 40px)`;
-    table.style.gridTemplateColumns = `200px repeat(${STEPS}, minmax(24px, 1fr))`;
+    const steps = getStepCount(currentBank);
+    table.style.gridTemplateColumns = `200px repeat(${steps}, minmax(24px, 1fr))`;
 
     const pat = activePattern();
 
@@ -8402,7 +8554,7 @@ let lastBar = -1;             // arranger playhead column
       if (hasAnyPR(currentBank, r)) {
         renderPRPreview(r, table);
       } else {
-        for (let c=0; c<STEPS; c++){
+        for (let c=0; c<steps; c++){
           const cell = document.createElement('button');
           cell.className = 'step h-10 rounded-md bg-white/10 hover:bg-white/15';
           if (Math.floor(c/4)%2===1) cell.classList.add('alt');
@@ -8416,7 +8568,8 @@ let lastBar = -1;             // arranger playhead column
             const cc = +e.currentTarget.dataset.c;
 
             const p = patterns[currentBank] || (patterns[currentBank] = []);
-            if (!Array.isArray(p[rr])) p[rr] = Array(STEPS).fill(false);
+            if (!Array.isArray(p[rr])) p[rr] = Array(steps).fill(false);
+            else if (p[rr].length < steps) p[rr].push(...Array(steps - p[rr].length).fill(false));
             if (typeof p[rr][cc] !== 'boolean') p[rr][cc] = false;
 
             p[rr][cc] = !p[rr][cc];
@@ -8429,6 +8582,7 @@ let lastBar = -1;             // arranger playhead column
 
     }
     gridWrap.appendChild(table);
+    syncStepSelector();
     refreshAIPanelRows();
     refreshButterToolkit();
   }
@@ -9455,7 +9609,8 @@ let lastBar = -1;             // arranger playhead column
       }
     });
 
-    const cols = STEPS * SUBDIV;
+    const steps = getStepCount(currentBank);
+    const cols = steps * SUBDIV;
     const pattern = events.map(ev => {
       const basePitchIndex = baseIndex + (ev.pitch - 60);
       const pitchIndex = Math.max(0, Math.min(PITCH_ROWS - 1, basePitchIndex + shift));
@@ -9512,11 +9667,13 @@ let lastBar = -1;             // arranger playhead column
   function drawArranger(){
     if(!arrGrid) return;
     arrGrid.innerHTML='';
+    const barCount = arrangement.length;
     const label=document.createElement('div');
     label.className='arr-label';
-    label.innerHTML='Song (bars) <span class="text-xs text-white/60">1–16</span>';
+    label.innerHTML=`Song (bars) <span class="text-xs text-white/60">1–${barCount}</span>`;
     arrGrid.appendChild(label);
-    for(let i=0;i<STEPS;i++){
+    const cellCount = barCount;
+    for(let i=0;i<cellCount;i++){
       const cell=document.createElement('button');
       cell.className='arr-cell'; if(Math.floor(i/4)%2===1) cell.classList.add('alt');
       const v=arrangement[i];
@@ -9557,15 +9714,18 @@ if (mode === 'song' && currentStep === 0) {
 }
 
 
-      paintPlayhead(currentStep);
+      const stepsForBank = Math.max(1, getStepCount(currentBank));
+      const stepIndex = Math.min(currentStep, stepsForBank - 1);
+
+      paintPlayhead(stepIndex);
       const rows = rowLabels.length;
       const pat = activePattern();
 
       for (let r=0; r<rows; r++){
           if (mode === 'song' && songMute) break; // empty bar: nothing triggers this step
 
-        if (!pat?.[r]?.[currentStep]) continue;
-        if (typeof window.stepOwnerMatches === 'function' && !window.stepOwnerMatches(r, currentStep)) continue;
+        if (!pat?.[r]?.[stepIndex]) continue;
+        if (typeof window.stepOwnerMatches === 'function' && !window.stepOwnerMatches(r, stepIndex)) continue;
         if (r < kitRowCount){
           const note = noteFromC3(pitches[r] || 0);
           kitSamplers[r]?.triggerAttack(note, time, 1);
@@ -9586,11 +9746,11 @@ if (mode === 'song' && currentStep === 0) {
         try{
           const stepDur  = Tone.Time('16n').toSeconds();
           const microDur = stepDur / SUBDIV;
-          const stepBase = currentStep * SUBDIV;
+          const stepBase = stepIndex * SUBDIV;
           for (let r = 0; r < (rowLabels?.length||0); r++){
             const hasSongMute = (typeof songMute !== 'undefined') ? songMute : false;
             if (typeof mode !== 'undefined' && mode === 'song' && hasSongMute) break;
-            if (typeof window.stepOwnerMatches === 'function' && !window.stepOwnerMatches(r, currentStep)) continue;
+            if (typeof window.stepOwnerMatches === 'function' && !window.stepOwnerMatches(r, stepIndex)) continue;
             const prEntry = (pianoRoll[(typeof currentBank!=='undefined'?currentBank:0)]||[])[r];
             if (!prEntry) continue;
             const rowPR = prEntry.notes;
@@ -9629,7 +9789,7 @@ if (mode === 'song' && currentStep === 0) {
                   if (!isOn || prevOn) continue; // skip if not a start
                   // Determine run length
                   let runLen = 1;
-                  const maxIndex = STEPS*SUBDIV;
+                  const maxIndex = stepsForBank*SUBDIV;
                   while ((microIndex + runLen) < maxIndex && !!notesRow?.[microIndex + runLen]) runLen++;
                   try {
                     // convert run length into seconds
@@ -9652,7 +9812,7 @@ if (mode === 'song' && currentStep === 0) {
           }
         } catch {}
       })();
-currentStep = (currentStep + 1) % STEPS;
+      currentStep = (stepIndex + 1) % stepsForBank;
     }, '16n');
   }
 
@@ -9681,13 +9841,14 @@ currentStep = (currentStep + 1) % STEPS;
   cloneBtn?.addEventListener('click', () => {
     const rows = rowLabels.length || 0;
     ensurePatternForBank(currentBank, rows);
-    // helper to decide if a bank is empty (no 16-step hits AND no PR notes)
+    // helper to decide if a bank is empty (no step hits AND no PR notes)
     function bankIsEmpty(b) {
       ensurePatternForBank(b, rows);
       const pat = patterns[b] || [];
+      const steps = getStepCount(b);
       let any=false;
       for (let r=0; r<pat.length && !any; r++){
-        for (let c=0; c<STEPS; c++){ if (pat[r]?.[c]) { any=true; break; } }
+        for (let c=0; c<steps; c++){ if (pat[r]?.[c]) { any=true; break; } }
       }
       if (any) return false;
       const pr = pianoRoll[b] || [];
@@ -9708,20 +9869,7 @@ currentStep = (currentStep + 1) % STEPS;
     }
     if (target < 0) { alert('No empty pattern slots available.'); return; }
 
-    // deep-clone 16-step pattern
-    const src = patterns[currentBank] || [];
-    patterns[target] = src.map(row => Array.isArray(row) ? row.slice(0, STEPS).map(Boolean) : Array(STEPS).fill(false));
-
-    // deep-clone Piano Roll grid
-    const srcPR = pianoRoll[currentBank] || [];
-    pianoRoll[target] = srcPR.map(entry => {
-      if (!entry || !entry.notes) return undefined;
-      const copy = { loopSlice: { start: entry.loopSlice?.start||0, end: entry.loopSlice?.end||1 }, notes: [] };
-      for (let p=0; p<entry.notes.length; p++){
-        copy.notes[p] = entry.notes[p].map(cell => cell ? { vol: cell.vol||0, pan: cell.pan||0 } : null);
-      }
-      return copy;
-    });
+    cloneBankWithPR(currentBank, target);
 
     // switch UI to cloned bank
     currentBank = target;
