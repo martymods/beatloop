@@ -2536,6 +2536,15 @@
       return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${normalizedBase}${normalizedPath}`));
     };
 
+    const decodeAssetUrl = (value) => {
+      if (!value || typeof value !== 'string') return value;
+      try {
+        return decodeURI(value);
+      } catch {
+        return value;
+      }
+    };
+
     const toApiUrl = (path) => {
       if (!path || typeof path !== 'string') return path;
       if (/^https?:\/\//i.test(path)) return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(path));
@@ -8713,14 +8722,14 @@ let lastBar = -1;             // arranger playhead column
       return;
     }
     const rawFiles = Array.isArray(kit.files) ? kit.files : [];
-    const kitFiles = rawFiles.map(toAssetUrl);
+    const kitFiles = rawFiles.map((file) => decodeAssetUrl(toAssetUrl(file)));
     kitRowCount = rawFiles.length;
 
     const loopFiles = Array.from(selectedLoops);
     const instrumentFiles = Array.from(selectedInstruments);
     const extraEntries = [
-      ...loopFiles.map(file => ({ type: 'loop', file, url: toAssetUrl(file) })),
-      ...instrumentFiles.map(file => ({ type: 'instrument', file, url: toAssetUrl(file) })),
+      ...loopFiles.map(file => ({ type: 'loop', file, url: decodeAssetUrl(toAssetUrl(file)) })),
+      ...instrumentFiles.map(file => ({ type: 'instrument', file, url: decodeAssetUrl(toAssetUrl(file)) })),
     ];
     loopSources = extraEntries.map(entry => entry.url);
     const labels = [...kit.names, ...extraEntries.map(entry => filenameLabel(entry.file))];
