@@ -2598,8 +2598,8 @@
     const DEFAULT_FALLBACK_TRACK_SRC = TRACK_FALLBACK_SOURCES.length ? TRACK_FALLBACK_SOURCES[0] : '';
     const KNOWN_REMOTE_MEDIA_HOSTS = ['beatloop.co', 'www.beatloop.co', 'api.beatloop.co', 'beatloop-api.onrender.com'];
 
-    const shouldUseLocalMediaFallback = (value, { ignoreEnv = false } = {}) => {
-      if (!ignoreEnv && !IS_LOCAL_DEV_ENV) return false;
+    const shouldUseLocalMediaFallback = (value, { ignoreEnv = false, force = false } = {}) => {
+      if (!force && !ignoreEnv && !IS_LOCAL_DEV_ENV) return false;
       if (!value || typeof value !== 'string') return false;
       if (/^(data:|blob:|filesystem:)/i.test(value)) return false;
       try {
@@ -4414,17 +4414,44 @@ function createPost(track, { prepend = false } = {}) {
       trackWrapper.appendChild(audio)
 
       let localFallbackActive = normalized.localFallbackApplied
-      const tryApplyRuntimeFallback = (reason, extra = {}) => {
+      let authProxyActive = false
+      let authProxyUrl = null
+      let authProxyInFlight = null
+
+      const revokeAuthProxyUrl = () => {
+        if (!authProxyUrl) return
+        try { URL.revokeObjectURL(authProxyUrl) } catch {}
+        authProxyUrl = null
+        authProxyActive = false
+      }
+
+      if (card && typeof card.addEventListener === 'function') {
+        card.addEventListener('DOMNodeRemoved', (event) => {
+          if (event?.target !== card) return
+          revokeAuthProxyUrl()
+        })
+      }
+
+      const applyLocalTrackFallback = (reason, extra = {}, overrideOptions = {}) => {
         if (localFallbackActive) return false
-        const fallbackOptions = IS_LOCAL_DEV_ENV ? { ignoreEnv: true } : undefined
+        const attemptedSrc = normalized.originalUrl || normalized.url
+        const shouldForceFallback = overrideOptions.force === true
+          || (reason === 'media-error' && !IS_LOCAL_DEV_ENV)
+        const baseOptions = IS_LOCAL_DEV_ENV ? { ignoreEnv: true } : {}
+        const fallbackOptions = {
+          ...baseOptions,
+          ...(shouldForceFallback ? { force: true } : {}),
+          ...overrideOptions
+        }
         const fallbackResult = resolveLocalTrackFallback(
           normalized.id,
-          normalized.originalUrl || normalized.url,
+          attemptedSrc,
           fallbackOptions
         )
         if (!fallbackResult || !fallbackResult.fallbackApplied) return false
         const nextSrc = fallbackResult.url
         if (!nextSrc) return false
+
         const normalizeHref = (value) => {
           if (!value) return ''
           try {
@@ -4436,8 +4463,6 @@ function createPost(track, { prepend = false } = {}) {
         const currentHref = normalizeHref(audio.currentSrc || audio.src)
         const nextHref = normalizeHref(nextSrc)
         if (currentHref && nextHref && currentHref === nextHref) return false
-
-        const attemptedSrc = normalized.originalUrl || normalized.url
 
         localFallbackActive = true
         normalized.localFallbackApplied = true
@@ -4462,6 +4487,95 @@ function createPost(track, { prepend = false } = {}) {
         })
 
         return true
+      }
+
+      const tryApplyRuntimeFallback = (reason, extra = {}) => {
+        if (localFallbackActive) return false
+        const attemptedSrc = normalized.originalUrl || normalized.url
+
+        const shouldAttemptAuthProxy = () => {
+          if (!attemptedSrc) return false
+          if (authProxyActive || authProxyInFlight) return false
+          if (reason !== 'media-error') return false
+          if (typeof URL !== 'function') return false
+          try {
+            const parsed = new URL(attemptedSrc, window.location.origin)
+            if (!parsed.protocol.startsWith('http')) return false
+          } catch {
+            return false
+          }
+          const authHelper = window.AUTH && typeof window.AUTH.hdr === 'function' ? window.AUTH : null
+          if (!authHelper) return false
+          const headers = authHelper.hdr()
+          const hasAuthHeader = headers && Object.keys(headers).length > 0
+          return hasAuthHeader
+        }
+
+        if (shouldAttemptAuthProxy()) {
+          const authHelper = window.AUTH
+          const headers = authHelper && typeof authHelper.hdr === 'function' ? authHelper.hdr() : {}
+          const requestInit = {
+            method: 'GET',
+            headers: {
+              ...headers,
+              Accept: 'audio/*;q=0.9,application/octet-stream;q=0.8,*/*;q=0.5'
+            },
+            mode: 'cors',
+            credentials: 'include',
+            cache: 'no-store'
+          }
+
+          const handleAuthProxyFailure = (error) => {
+            authProxyActive = false
+            authProxyInFlight = null
+            logPlaybackEvent('error', 'auth-proxy-failed', {
+              reason,
+              attemptedSrc,
+              error: error?.message || String(error),
+              ...extra
+            })
+            applyLocalTrackFallback(reason, extra, { force: true })
+          }
+
+          authProxyInFlight = (async () => {
+            try {
+              const response = await fetch(attemptedSrc, requestInit)
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`)
+              }
+              const blob = await response.blob()
+              if (!blob || typeof blob.size !== 'number' || blob.size === 0) {
+                throw new Error('empty audio response')
+              }
+              const objectUrl = URL.createObjectURL(blob)
+              authProxyUrl = objectUrl
+              authProxyActive = true
+              authProxyInFlight = null
+              audio.src = objectUrl
+              try {
+                if (typeof audio.load === 'function') {
+                  audio.load()
+                }
+              } catch {}
+              logPlaybackEvent('warn', 'auth-proxy-applied', {
+                reason,
+                attemptedSrc,
+                proxiedSrc: objectUrl,
+                ...extra
+              })
+            } catch (error) {
+              handleAuthProxyFailure(error)
+            }
+          })()
+
+          return true
+        }
+
+        if (authProxyInFlight) {
+          return true
+        }
+
+        return applyLocalTrackFallback(reason, extra, { force: reason === 'media-error' })
       }
 
       const logPlaybackEvent = (level, eventName, extra = {}) => {
