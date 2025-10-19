@@ -19,7 +19,8 @@ import {
   durableStorageEnabled,
   getUploadsRoot,
   writeBufferToUploads,
-  deleteUploadKey
+  deleteUploadKey,
+  localPathForKey
 } from './storage/uploads.js';
 
 /* ============================ ENV ============================ */
@@ -1630,10 +1631,43 @@ app.get('/api/studio/sounds', async (req, res) => {
       filter.type = typeParam;
     }
 
-    const docs = await StudioSound.find(filter)
+    let docs = await StudioSound.find(filter)
       .sort({ createdAt: -1 })
       .limit(500)
       .lean();
+
+    docs = docs || [];
+
+    const missingIds = [];
+    if (!durableStorageEnabled() && docs.length > 0) {
+      const survivingDocs = [];
+      for (const doc of docs) {
+        const storageKey = doc?.storageKey;
+        if (typeof storageKey === 'string' && storageKey.trim()) {
+          const diskPath = localPathForKey(storageKey);
+          try {
+            await fs.promises.access(diskPath, fs.constants.R_OK);
+            survivingDocs.push(doc);
+          } catch {
+            if (doc?._id) missingIds.push(doc._id);
+          }
+          continue;
+        }
+        survivingDocs.push(doc);
+      }
+      docs = survivingDocs;
+    }
+
+    if (missingIds.length > 0) {
+      const missingObjectIds = missingIds
+        .map((id) => asObjectId(id))
+        .filter(Boolean);
+      if (missingObjectIds.length > 0) {
+        StudioSound.deleteMany({ _id: { $in: missingObjectIds } }).catch((error) => {
+          console.warn('Failed to clean up missing studio sounds', error);
+        });
+      }
+    }
 
     if (!docs || docs.length === 0) {
       return res.json({ loops: [], instruments: [] });
