@@ -4416,7 +4416,10 @@ function createPost(track, { prepend = false } = {}) {
       let localFallbackActive = normalized.localFallbackApplied
       const tryApplyRuntimeFallback = (reason, extra = {}) => {
         if (localFallbackActive) return false
-        const fallbackOptions = IS_LOCAL_DEV_ENV ? { ignoreEnv: true } : undefined
+        const shouldForceFallback = reason === 'media-error' || reason === 'error'
+        const fallbackOptions = (IS_LOCAL_DEV_ENV || shouldForceFallback)
+          ? { ignoreEnv: true }
+          : undefined
         const fallbackResult = resolveLocalTrackFallback(
           normalized.id,
           normalized.originalUrl || normalized.url,
