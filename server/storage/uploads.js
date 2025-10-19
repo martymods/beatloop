@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import dns from 'dns/promises';
 
 const uploadsRoot = path.join(process.cwd(), 'uploads');
 fs.mkdirSync(uploadsRoot, { recursive: true });
@@ -27,6 +28,40 @@ if (s3Configured && !s3HasCredentials) {
 }
 
 const FORCE_PATH_STYLE = /^true$/i.test(S3_FORCE_PATH_STYLE || '');
+
+let S3_PUBLIC_BASE = '';
+let S3_PUBLIC_BASE_HOST = '';
+let S3_PUBLIC_BASE_RESOLVES = true;
+
+const rawS3PublicBase = (S3_PUBLIC_BASE_URL || '').trim();
+if (rawS3PublicBase) {
+  try {
+    const candidate = rawS3PublicBase.includes('://')
+      ? rawS3PublicBase
+      : `https://${rawS3PublicBase}`;
+    const parsed = new URL(candidate);
+    const pathPart = parsed.pathname && parsed.pathname !== '/'
+      ? parsed.pathname.replace(/\/+$/, '')
+      : '';
+    S3_PUBLIC_BASE = `${parsed.protocol}//${parsed.host}${pathPart}`.replace(/\/+$/, '');
+    S3_PUBLIC_BASE_HOST = (parsed.hostname || '').toLowerCase();
+  } catch (error) {
+    console.warn('⚠️  Invalid S3_PUBLIC_BASE_URL; falling back to local uploads base.', error);
+    S3_PUBLIC_BASE = '';
+    S3_PUBLIC_BASE_HOST = '';
+  }
+}
+
+if (S3_PUBLIC_BASE && S3_PUBLIC_BASE_HOST) {
+  try {
+    await dns.lookup(S3_PUBLIC_BASE_HOST);
+  } catch (error) {
+    console.warn(
+      `⚠️  S3_PUBLIC_BASE_URL host failed DNS lookup: ${S3_PUBLIC_BASE_HOST}. Falling back to local uploads base.`
+    );
+    S3_PUBLIC_BASE_RESOLVES = false;
+  }
+}
 
 let s3Client = null;
 if (s3Enabled) {
@@ -68,10 +103,8 @@ export function localPathForKey(key) {
 export function durablePublicUrlForKey(key) {
   if (!s3Enabled) return null;
   if (!key) return null;
-  const trimmedBase = (S3_PUBLIC_BASE_URL || '').trim();
-  if (!trimmedBase) return null;
-  const base = trimmedBase.includes('://') ? trimmedBase : `https://${trimmedBase}`;
-  return `${base.replace(/\/+$/, '')}/${normalizedKey(key)}`;
+  if (!S3_PUBLIC_BASE || !S3_PUBLIC_BASE_RESOLVES) return null;
+  return `${S3_PUBLIC_BASE}/${normalizedKey(key)}`;
 }
 
 export async function writeStreamToUploads({ key, stream, contentType }) {
