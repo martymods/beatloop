@@ -2545,6 +2545,20 @@
       }
     };
 
+    const normalizeToneAssetUrl = (value) => {
+      if (!value || typeof value !== 'string') return value;
+      if (/^(data:|blob:|filesystem:)/i.test(value)) return value;
+      try {
+        return encodeURI(decodeURI(value));
+      } catch {
+        try {
+          return encodeURI(value);
+        } catch {
+          return value;
+        }
+      }
+    };
+
     const toApiUrl = (path) => {
       if (!path || typeof path !== 'string') return path;
       if (/^https?:\/\//i.test(path)) return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(path));
@@ -8722,14 +8736,14 @@ let lastBar = -1;             // arranger playhead column
       return;
     }
     const rawFiles = Array.isArray(kit.files) ? kit.files : [];
-    const kitFiles = rawFiles.map((file) => decodeAssetUrl(toAssetUrl(file)));
+    const kitFiles = rawFiles.map((file) => normalizeToneAssetUrl(toAssetUrl(file)));
     kitRowCount = rawFiles.length;
 
     const loopFiles = Array.from(selectedLoops);
     const instrumentFiles = Array.from(selectedInstruments);
     const extraEntries = [
-      ...loopFiles.map(file => ({ type: 'loop', file, url: decodeAssetUrl(toAssetUrl(file)) })),
-      ...instrumentFiles.map(file => ({ type: 'instrument', file, url: decodeAssetUrl(toAssetUrl(file)) })),
+      ...loopFiles.map(file => ({ type: 'loop', file, url: normalizeToneAssetUrl(toAssetUrl(file)) })),
+      ...instrumentFiles.map(file => ({ type: 'instrument', file, url: normalizeToneAssetUrl(toAssetUrl(file)) })),
     ];
     loopSources = extraEntries.map(entry => entry.url);
     const labels = [...kit.names, ...extraEntries.map(entry => filenameLabel(entry.file))];
@@ -8770,7 +8784,7 @@ let lastBar = -1;             // arranger playhead column
         dist.connect(pan);
         const gain=new Tone.Gain(state.gain).connect(dist);
         const p=new Tone.Player({
-          url: encodeURI(extraEntries[j].url), autostart:false, loop:false, fadeOut:0.01,
+          url: extraEntries[j].url, autostart:false, loop:false, fadeOut:0.01,
           onload: ()=>resolve(), onerror:(e)=>reject(e)
         }).connect(gain);
         loopPlayers[j]=p; volumes[row]=vol; panners[row]=pan; pitches[row]=0; rowGains[row]=gain; rowDistortions[row]=dist;
