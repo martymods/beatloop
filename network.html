@@ -2015,6 +2015,9 @@
             <option value="trap">Trap Kit</option>
             <option value="boom">Boom Bap</option>
             <option value="fl">FL Default (butterDAWg)</option>
+            <option value="drums">Drums for Drums</option>
+            <option value="kongas">Kongas Kit</option>
+            <option value="slappers">Slappers Kit</option>
           </select>
           <div id="blKitDetails" class="mt-3 space-y-2 text-xs text-white/70"></div>
         </div>
@@ -6271,7 +6274,7 @@ async function updateLeaderboard() {
         '/audio/kits/boom/hat.wav',
         '/audio/kits/boom/perc.wav'
       ]
-          },
+    },
     fl: {
       names: [
         'FL Kick 1',
@@ -6302,6 +6305,74 @@ async function updateLeaderboard() {
         '/audio/kits/fl-default/rawstyle_kick.wav',
         '/audio/kits/fl-default/normal.wav',
         '/audio/kits/fl-default/roland909.wav'
+      ]
+    },
+    drums: {
+      names: [
+        'Kick (Axel)',
+        'Snare (Aztec)',
+        'Clap (Ashes)',
+        'Hi-Hat (Blue)',
+        'Open Hat (Baller)',
+        'Perc (Betrayal)',
+        'Rimshot (Addy)',
+        '808 Bass (Evil 20)'
+      ],
+      files: [
+        '/audio/kits/Drums%20for%20Drums/Kick%20(Axel).wav',
+        '/audio/kits/Drums%20for%20Drums/Snare%20(Aztec).wav',
+        '/audio/kits/Drums%20for%20Drums/Clap%20(Ashes).wav',
+        '/audio/kits/Drums%20for%20Drums/Hihat%20(Blue).wav',
+        '/audio/kits/Drums%20for%20Drums/Open%20Hat%20(Baller).wav',
+        '/audio/kits/Drums%20for%20Drums/Percussion%20(Betrayal).wav',
+        '/audio/kits/Drums%20for%20Drums/Rimshot%20(Addy).wav',
+        '/audio/kits/Drums%20for%20Drums/808-BASS-Evil-20.wav'
+      ]
+    },
+    kongas: {
+      names: [
+        'Kick (Industry)',
+        'Snare (Denominator)',
+        'Clap (Classic)',
+        'Hi-Hat (Blue)',
+        'Hi-Hat (Disperser)',
+        'Open Hat (Colosseum)',
+        'Perc (Blue 2)',
+        'Rimshot (Castro)',
+        '808 Bass (Distorted)'
+      ],
+      files: [
+        '/audio/kits/Kongas/Kick%20(Industry).wav',
+        '/audio/kits/Kongas/Snare%20(Denominator).wav',
+        '/audio/kits/Kongas/Clap%20(Classic).wav',
+        '/audio/kits/Kongas/Hihat%20(Blue).wav',
+        '/audio/kits/Kongas/Hihat%20(Disperser).wav',
+        '/audio/kits/Kongas/Open%20Hat%20(Colosseum).wav',
+        '/audio/kits/Kongas/Percussion%20(Blue%202).wav',
+        '/audio/kits/Kongas/Rimshot%20(Castro).wav',
+        '/audio/kits/Kongas/808-BASS-distorted.wav'
+      ]
+    },
+    slappers: {
+      names: [
+        'Kick (Degree)',
+        'Snare (Backyard)',
+        'Clap (Bronze)',
+        'Hi-Hat (Crystal)',
+        'Open Hat (Broken)',
+        'Perc (Blem)',
+        'Rimshot (Business)',
+        '808 Bass D'
+      ],
+      files: [
+        '/audio/kits/Slappers/PG%20-%20Kick%20(Degree).wav',
+        '/audio/kits/Slappers/PG%20-%20Snare%20(Backyard).wav',
+        '/audio/kits/Slappers/PG%20-%20Clap%20(Bronze).wav',
+        '/audio/kits/Slappers/PG%20-%20Hihat%20(Crystal).wav',
+        '/audio/kits/Slappers/PG%20-%20Open%20Hat%20(Broken).wav',
+        '/audio/kits/Slappers/PG%20-%20Percussion%20(Blem).wav',
+        '/audio/kits/Slappers/PG%20-%20Rimshot%20(Business).wav',
+        '/audio/kits/Slappers/808-bass-d.wav'
       ]
     }
   };
@@ -6625,6 +6696,24 @@ const KIT_DETAILS = {
     source: 'butterDAWg /files/samples',
     description: 'Legacy FL-style kicks and a loop captured from butterDAWg to give Beatloop the classic starter kit.',
     midi: 'Rows 1–13 map to C3–C4 · Drum loop row is ideal for resampling'
+  },
+  drums: {
+    label: 'Drums for Drums Kit',
+    source: 'Beatloop Expansion',
+    description: 'Punchy modern essentials pairing tight hits with a subby 808 for instant groove starters.',
+    midi: 'C3–G3 eight-pad layout · Balanced for velocity-sensitive pad controllers'
+  },
+  kongas: {
+    label: 'Kongas Kit',
+    source: 'Beatloop Expansion',
+    description: 'Layered drums with dual hats and percussion accents inspired by Latin-infused trap textures.',
+    midi: 'C3–G3 extended pad spread · Extra hat lane for quick switch-ups'
+  },
+  slappers: {
+    label: 'Slappers Kit',
+    source: 'Beatloop Expansion',
+    description: 'Snappy transients and a throaty 808 tuned for halftime drops and trap grooves alike.',
+    midi: 'C3–G3 pad grid · Optimized for finger-drumming breakdowns'
   }
 };
 
