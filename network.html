@@ -51,6 +51,23 @@
     /* add glow used by buttons */
     .shadow-glow{box-shadow:0 0 0 2px rgba(124,58,237,.25),0 5px 25px rgba(124,58,237,.35)}
 
+    .bl-select {
+      background-color: rgba(24, 24, 34, 0.9);
+      color: #f4f4ff;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .bl-select:focus {
+      outline: none;
+      border-color: rgba(124, 58, 237, 0.55);
+      box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.35);
+    }
+
+    .bl-select option {
+      color: #f4f4ff;
+      background-color: #141420;
+    }
+
     /* ---------- Beatloop Studio layout resizing ---------- */
     #beatloopStudioLayout {
       --studio-left-width: 300px;
@@ -1945,7 +1962,7 @@
       <div class="flex items-center gap-2">
         <label class="hidden md:flex items-center gap-2 text-sm text-white/70">
           Pattern
-          <select id="blPattern" class="rounded-md bg-white/10 px-2 py-1">
+          <select id="blPattern" class="rounded-md bl-select px-2 py-1 text-sm">
             <option>1</option><option>2</option><option>3</option><option>4</option>
             <option>5</option><option>6</option><option>7</option><option>8</option>
             <option>9</option><option>10</option><option>11</option><option>12</option>
@@ -1954,7 +1971,7 @@
         </label>
         <label class="hidden md:flex items-center gap-2 text-sm text-white/70">
           Steps
-          <select id="blSteps" class="rounded-md bg-white/10 px-2 py-1">
+          <select id="blSteps" class="rounded-md bl-select px-2 py-1 text-sm">
             <option value="4">4</option>
             <option value="8">8</option>
             <option value="12">12</option>
@@ -1994,7 +2011,7 @@
 
         <div class="mt-4">
           <p class="text-xs text-white/60 mb-1">Kit</p>
-          <select id="blKit" class="w-full rounded-lg bg-white/10 px-2 py-2 text-sm">
+          <select id="blKit" class="w-full rounded-lg bl-select px-2 py-2 text-sm">
             <option value="trap">Trap Kit</option>
             <option value="boom">Boom Bap</option>
             <option value="fl">FL Default (butterDAWg)</option>
@@ -7438,7 +7455,7 @@ const AI_MELODY_SCALES = {
             <div class="truncate font-semibold text-white">${label}</div>
             <div class="text-[0.65rem] text-white/50">${meta.label}</div>
           </button>
-          <select data-route="${idx}" class="rounded-md bg-white/10 px-2 py-1 text-xs text-white">${options}</select>
+          <select data-route="${idx}" class="rounded-md bl-select px-2 py-1 text-xs">${options}</select>
         </div>
       `;
     }).join('');
@@ -7660,7 +7677,7 @@ const AI_MELODY_SCALES = {
       <div class="mt-4 space-y-3">
         <div>
           <label class="text-xs uppercase tracking-wide text-white/50">Target row</label>
-          <select id="aiRowSelect" class="mt-1 w-full rounded-lg bg-white/10 px-2 py-2 text-sm text-white/90"></select>
+          <select id="aiRowSelect" class="mt-1 w-full rounded-lg bl-select px-2 py-2 text-sm"></select>
         </div>
         <div>
           <label class="flex items-center justify-between text-xs uppercase tracking-wide text-white/50">
@@ -10474,7 +10491,7 @@ void main()
       <h4 id="prTitle" class="font-semibold">Piano Roll</h4>
       <div class="flex items-center gap-2">
         <span class="pr-badge">Resolution</span>
-        <select id="prSubdiv" class="rounded bg-white/10 px-2 py-1 text-sm">
+        <select id="prSubdiv" class="rounded bl-select px-2 py-1 text-sm">
           <option value="4" selected>1/4 step (64th)</option>
           <option value="8">1/8 step (128th)</option>
           <option value="16">1/16 step (256th)</option>
