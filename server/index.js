@@ -14,6 +14,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { lookup as mimeLookup, extension as mimeExtension } from 'mime-types';
 import dns from 'dns/promises';
+import { Readable } from 'stream';
 import {
   durablePublicUrlForKey,
   durableStorageEnabled,
@@ -369,6 +370,7 @@ const uploadsRoot = getUploadsRoot();
 const trackAudioDir = path.join(uploadsRoot, 'tracks');
 const trackCoverDir = path.join(uploadsRoot, 'covers');
 const messageAttachmentDir = path.join(uploadsRoot, 'messages');
+const PROXIED_STORAGE_PREFIXES = new Set(['studio']);
 const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio']);
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
@@ -397,6 +399,67 @@ function setUploadHeaders(res, filePath) {
   res.setHeader('Cache-Control', UPLOAD_CACHE_CONTROL);
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 }
+
+const DURABLE_UPLOAD_HEADER_PASSTHROUGH = [
+  'cache-control',
+  'content-type',
+  'content-length',
+  'accept-ranges',
+  'etag',
+  'last-modified',
+  'content-range',
+  'content-encoding',
+  'content-disposition',
+  'vary'
+];
+
+app.get('/uploads/:prefix/*', async (req, res, next) => {
+  const { prefix } = req.params;
+  if (!PROXIED_STORAGE_PREFIXES.has(prefix) || !durableUploadsAvailable) {
+    return next();
+  }
+
+  const remainder = (req.params[0] || '').replace(/^\/+/, '');
+  const key = normalizeUploadKey(prefix, remainder);
+  if (!key) {
+    return res.status(404).end();
+  }
+
+  const durableUrl = durablePublicUrlForKey(key);
+  if (!durableUrl) {
+    return res.status(404).end();
+  }
+
+  try {
+    const response = await fetch(durableUrl);
+    if (response.status === 404) {
+      return res.status(404).end();
+    }
+
+    if (!(response.ok || response.status === 304)) {
+      return res.status(502).json({ error: 'Failed to proxy upload' });
+    }
+
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    for (const headerName of DURABLE_UPLOAD_HEADER_PASSTHROUGH) {
+      const headerValue = response.headers.get(headerName);
+      if (headerValue) {
+        res.setHeader(headerName, headerValue);
+      }
+    }
+
+    res.status(response.status);
+
+    if (!response.body) {
+      return res.end();
+    }
+
+    return Readable.fromWeb(response.body).pipe(res);
+  } catch (error) {
+    console.error('Failed to proxy durable upload', { key, error });
+    return res.status(502).json({ error: 'Failed to retrieve upload' });
+  }
+});
 
 app.use(
   '/uploads',
@@ -617,7 +680,12 @@ function publicUploadUrl(req, folderOrKey, maybeFilename) {
   if (!key) return '';
 
   const prefix = key.split('/')[0];
-  if (maybeFilename === undefined && durableStorageEnabled() && DURABLE_STORAGE_PREFIXES.has(prefix)) {
+  if (
+    maybeFilename === undefined &&
+    durableStorageEnabled() &&
+    DURABLE_STORAGE_PREFIXES.has(prefix) &&
+    !PROXIED_STORAGE_PREFIXES.has(prefix)
+  ) {
     const durableUrl = durablePublicUrlForKey(key);
     if (durableUrl) return durableUrl;
   }
