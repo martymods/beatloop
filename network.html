@@ -162,15 +162,42 @@
 
     .bl-comment-pins {
       overflow: visible;
+      --bl-comment-pin-line: 60%;
     }
 
     .bl-comment-pin {
       position: absolute;
-      top: 0;
+      top: var(--bl-comment-pin-line);
       left: 0;
       transform: translate(-50%, -50%);
       pointer-events: none;
       z-index: 20;
+    }
+
+    .bl-comment-pin-progress-track,
+    .bl-comment-pin-progress {
+      position: absolute;
+      left: 0;
+      top: var(--bl-comment-pin-line);
+      height: 2px;
+      transform: translateY(-50%);
+      pointer-events: none;
+      border-radius: 999px;
+    }
+
+    .bl-comment-pin-progress-track {
+      width: 100%;
+      background: rgba(148, 163, 184, 0.18);
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.3);
+      z-index: 10;
+    }
+
+    .bl-comment-pin-progress {
+      width: 0;
+      background: linear-gradient(90deg, rgba(124, 58, 237, 0.65), rgba(34, 211, 238, 0.55));
+      box-shadow: 0 4px 12px rgba(34, 211, 238, 0.35);
+      z-index: 15;
+      transition: width 0.12s ease;
     }
 
     .bl-comment-pin .bl-comment-halo {
@@ -2171,6 +2198,11 @@
     .track-wave-inner { position: absolute; inset: 0; }
     .track-wave-progress { position: absolute; inset: 0; width: 0%; background: linear-gradient(90deg, rgba(124, 58, 237, 0.35), rgba(34, 211, 238, 0.25)); mix-blend-mode: screen; pointer-events: none; transition: width 0.12s ease; }
     .profile-track-wave--fallback .track-wave-progress { display: none; }
+    .track-wave-timestamps { position: absolute; top: 0.65rem; left: 1rem; right: 1rem; display: flex; justify-content: space-between; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(226, 232, 240, 0.75); pointer-events: none; z-index: 30; text-shadow: 0 2px 6px rgba(8, 8, 14, 0.6); }
+    .track-wave-timestamps span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; padding: 0.35rem 0.6rem; border-radius: 0.9rem; background: rgba(8, 8, 16, 0.55); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 12px rgba(8, 8, 16, 0.4); backdrop-filter: blur(6px); }
+    .track-wave-timestamps .track-wave-remaining { align-items: flex-end; text-align: right; }
+    .track-wave-timestamp-label { font-size: 0.55rem; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(226, 232, 240, 0.72); }
+    .track-wave-timestamp-value { font-size: 0.82rem; font-weight: 600; letter-spacing: 0.06em; color: #fff; text-transform: none; }
     .profile-track-audio { display: none; }
     .profile-track-audio--fallback { display: block; width: 100%; margin-top: 0.5rem; }
     .profile-album-entry { border-radius: 1.25rem; background: rgba(12, 12, 20, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; display: block; }
@@ -6192,6 +6224,33 @@ function createPost(track, { prepend = false } = {}) {
       const pinsContainer = document.createElement('div')
       pinsContainer.className = 'bl-comment-pins absolute inset-0 pointer-events-none'
       waveContainer.appendChild(pinsContainer)
+      const timestampsOverlay = document.createElement('div')
+      timestampsOverlay.className = 'track-wave-timestamps'
+      const durationBadge = document.createElement('span')
+      durationBadge.className = 'track-wave-duration'
+      durationBadge.setAttribute('aria-label', 'Track duration')
+      const durationBadgeLabel = document.createElement('span')
+      durationBadgeLabel.className = 'track-wave-timestamp-label'
+      durationBadgeLabel.textContent = 'Duration'
+      const durationValueEl = document.createElement('span')
+      durationValueEl.className = 'track-wave-timestamp-value'
+      durationValueEl.textContent = '0:00'
+      durationBadge.appendChild(durationBadgeLabel)
+      durationBadge.appendChild(durationValueEl)
+      const remainingBadge = document.createElement('span')
+      remainingBadge.className = 'track-wave-remaining'
+      remainingBadge.setAttribute('aria-label', 'Time remaining')
+      const remainingBadgeLabel = document.createElement('span')
+      remainingBadgeLabel.className = 'track-wave-timestamp-label'
+      remainingBadgeLabel.textContent = 'Left'
+      const remainingValueEl = document.createElement('span')
+      remainingValueEl.className = 'track-wave-timestamp-value'
+      remainingValueEl.textContent = '-0:00'
+      remainingBadge.appendChild(remainingBadgeLabel)
+      remainingBadge.appendChild(remainingValueEl)
+      timestampsOverlay.appendChild(durationBadge)
+      timestampsOverlay.appendChild(remainingBadge)
+      waveContainer.appendChild(timestampsOverlay)
       trackWrapper.appendChild(waveContainer)
 
       const audio = document.createElement('audio')
@@ -6202,6 +6261,7 @@ function createPost(track, { prepend = false } = {}) {
       trackWrapper.appendChild(audio)
 
       let trackWave = null
+      let pinProgressEl = null
       if (normalized.url) {
         trackWave = createWaveSurferForAudio(audio, waveInner, { height: 96 })
       }
@@ -6707,6 +6767,41 @@ function createPost(track, { prepend = false } = {}) {
       registerLeaderboardTrack(normalized)
       scheduleLeaderboardRefresh()
 
+      function rebuildPinProgress() {
+        if (!pinsContainer) return
+        pinProgressEl = null
+        if (typeof pinsContainer.querySelectorAll === 'function') {
+          pinsContainer.querySelectorAll('.bl-comment-pin-progress, .bl-comment-pin-progress-track').forEach(el => {
+            try { el.remove() } catch {}
+          })
+        }
+        const track = document.createElement('div')
+        track.className = 'bl-comment-pin-progress-track'
+        const progress = document.createElement('div')
+        progress.className = 'bl-comment-pin-progress'
+        pinsContainer.appendChild(track)
+        pinsContainer.appendChild(progress)
+        pinProgressEl = progress
+      }
+
+      function updateProgressUI(currentOverride, durationOverride) {
+        const duration = Number.isFinite(durationOverride) ? durationOverride : (Number(audio.duration) || 0)
+        const current = Number.isFinite(currentOverride) ? currentOverride : (Number(audio.currentTime) || 0)
+        if (duration > 0) {
+          const pct = Math.min(100, Math.max(0, (current / duration) * 100))
+          barProgress.style.width = pct + '%'
+          if (pinProgressEl) pinProgressEl.style.width = pct + '%'
+          durationValueEl.textContent = fmt(duration)
+          const remaining = Math.max(0, duration - current)
+          remainingValueEl.textContent = '-' + fmt(remaining)
+        } else {
+          barProgress.style.width = '0%'
+          if (pinProgressEl) pinProgressEl.style.width = '0%'
+          durationValueEl.textContent = '0:00'
+          remainingValueEl.textContent = '-0:00'
+        }
+      }
+
       function renderAll() {
         if (commentMarkers.length) {
           commentMarkers.forEach(marker => {
@@ -6728,6 +6823,7 @@ function createPost(track, { prepend = false } = {}) {
           latestComments,
           latestStats.likes
         )
+        rebuildPinProgress()
         const currentTime = Number(audio.currentTime) || 0
         markers.forEach(marker => {
           if (!marker) return
@@ -6737,6 +6833,7 @@ function createPost(track, { prepend = false } = {}) {
         })
         commentMarkers = markers
         lastProgressTime = currentTime
+        updateProgressUI(currentTime, Number(audio.duration) || 0)
         commentBtn.textContent = '💬 ' + (latestStats.comments || 0)
         likeBtn.textContent    = '❤️ ' + (latestStats.likes || 0)
         repostBtn.textContent = hasReposted
@@ -6894,15 +6991,13 @@ function createPost(track, { prepend = false } = {}) {
         playbackState.lastTime = Number(audio.currentTime) || 0
         lastProgressTime = playbackState.lastTime
         renderAll()
+        updateProgressUI(playbackState.lastTime, Number(audio.duration) || 0)
       })
 
       audio.addEventListener('timeupdate', () => {
         const duration = Number(audio.duration) || 0
         const current = Number(audio.currentTime) || 0
-        if (duration > 0) {
-          const pct = Math.min(100, Math.max(0, (current / duration) * 100))
-          barProgress.style.width = pct + '%'
-        }
+        updateProgressUI(current, duration)
         if (current + 0.05 < lastProgressTime) {
           resetCommentMarkers(true)
         }
@@ -6924,6 +7019,7 @@ function createPost(track, { prepend = false } = {}) {
         updatePlaybackThreshold()
         playbackState.lastTime = Number(audio.currentTime) || 0
         lastProgressTime = playbackState.lastTime
+        updateProgressUI(playbackState.lastTime, Number(audio.duration) || 0)
         trackWrapper.classList.add('is-playing')
         setPlayButtonState(playBtn, true, normalized.title || 'track')
         const meta = {
@@ -6943,6 +7039,7 @@ function createPost(track, { prepend = false } = {}) {
         const current = Number(audio.currentTime) || playbackState.lastTime
         playbackState.lastTime = current
         lastProgressTime = current
+        updateProgressUI(current, Number(audio.duration) || 0)
         trackWrapper.classList.remove('is-playing')
         setPlayButtonState(playBtn, false, normalized.title || 'track')
       })
@@ -6954,6 +7051,7 @@ function createPost(track, { prepend = false } = {}) {
         }
         playbackState.lastTime = current
         lastProgressTime = current
+        updateProgressUI(current, Number(audio.duration) || 0)
       })
 
       audio.addEventListener('seeked', () => {
@@ -6967,10 +7065,12 @@ function createPost(track, { prepend = false } = {}) {
           playbackState.lastTime = current
           lastProgressTime = current
         }
+        updateProgressUI(current, Number(audio.duration) || 0)
       })
 
       audio.addEventListener('ended', () => {
         audio.currentTime = 0
+        updateProgressUI(0, Number(audio.duration) || 0)
         resetPlaybackCycle()
         audio.play()
       })
