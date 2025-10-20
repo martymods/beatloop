@@ -6,7 +6,19 @@ import dns from 'dns/promises';
 const uploadsRoot = path.join(process.cwd(), 'uploads');
 fs.mkdirSync(uploadsRoot, { recursive: true });
 
-const runningInProduction = Boolean(process.env.RENDER || process.env.NODE_ENV === 'production');
+const RENDER_ENV_MARKERS = [
+  'RENDER',
+  'RENDER_EXTERNAL_URL',
+  'RENDER_EXTERNAL_HOSTNAME',
+  'RENDER_SERVICE_ID',
+  'RENDER_INSTANCE_ID',
+  'RENDER_REGION'
+];
+
+const runningInProduction = Boolean(
+  process.env.NODE_ENV === 'production' ||
+    RENDER_ENV_MARKERS.some((key) => Boolean(process.env[key]))
+);
 const DURABLE_STORAGE_REQUIRED_MESSAGE =
   'Durable uploads storage is required in production. Configure S3_BUCKET, S3_REGION, S3_PUBLIC_BASE_URL and AWS credentials.';
 
