@@ -3107,6 +3107,8 @@ app.get('/api/tracks', async (req, res) => {
         createdAt: doc.createdAt,
         bumpedAt: doc.bumpedAt || doc.createdAt,
         userId: doc.userId,
+        albumId: doc.albumId || null,
+        albumTrackOrder: Number.isFinite(doc.albumTrackOrder) ? doc.albumTrackOrder : null,
         user: userKey ? userMap.get(userKey) || null : null,
         stats: statsSummary(statsMap.get(key)),
         comments: commentsByTrack.get(key) || []
