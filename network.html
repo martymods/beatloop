@@ -3851,11 +3851,21 @@
 
     function normalizeComment(raw) {
       if (!raw || typeof raw !== 'object') return null
-      const likesValue = Number(
-        raw.likes ?? raw.likeCount ?? raw.like_count ?? raw.reactions ?? raw.reactionCount ??
-        raw.heartCount ?? raw.hearts ?? (raw.stats && raw.stats.likes) ?? (raw.meta && raw.meta.likes) ?? 0
-      )
-      const likes = Number.isFinite(likesValue) && likesValue > 0 ? likesValue : 0
+      const likeCandidates = [
+        raw.likes,
+        raw.likeCount,
+        raw.like_count,
+        raw.reactions,
+        raw.reactionCount,
+        raw.heartCount,
+        raw.hearts,
+        raw.stats && raw.stats.likes,
+        raw.meta && raw.meta.likes
+      ]
+      const firstProvided = likeCandidates.find(value => value !== undefined && value !== null && value !== '')
+      const likesProvided = likeCandidates.some(value => value !== undefined && value !== null && value !== '')
+      const likesNumber = Number(firstProvided)
+      const likes = Number.isFinite(likesNumber) && likesNumber > 0 ? likesNumber : 0
       return {
         id: raw.id || raw._id || null,
         text: typeof raw.text === 'string' ? raw.text : '',
@@ -3866,7 +3876,8 @@
         avatar: sanitizeAvatar(raw.avatar),
         userId: raw.userId || null,
         clientId: typeof raw.clientId === 'string' ? raw.clientId : null,
-        likes
+        likes,
+        likesProvided
       }
     }
 
@@ -4504,7 +4515,7 @@ let sessionsCard = null;
     }
 
     // ---------- Render comments & pins
-    function renderComments(trackId, listContainer, pinsContainer, duration, comments) {
+    function renderComments(trackId, listContainer, pinsContainer, duration, comments, fallbackLikes = null) {
       const markers = []
       const source = Array.isArray(comments)
         ? comments.map(normalizeComment).filter(Boolean)
@@ -4519,6 +4530,27 @@ let sessionsCard = null;
 
       const safeDuration = Number(duration) || 0
       const hasDuration = Number.isFinite(safeDuration) && safeDuration > 0
+
+      const fallbackTrackLikesRaw = (() => {
+        const direct = Number(fallbackLikes)
+        if (Number.isFinite(direct) && direct > 0) return direct
+        if (remoteStatsCache && typeof remoteStatsCache.get === 'function') {
+          const cached = remoteStatsCache.get(trackId)
+          if (cached) {
+            const cachedLikes = Number(cached.likes)
+            if (Number.isFinite(cachedLikes) && cachedLikes > 0) return cachedLikes
+          }
+        }
+        try {
+          const stored = getStats(trackId)
+          const storedLikes = Number(stored?.likes)
+          if (Number.isFinite(storedLikes) && storedLikes > 0) return storedLikes
+        } catch {}
+        return 0
+      })()
+      const fallbackTrackLikes = Number.isFinite(fallbackTrackLikesRaw)
+        ? Math.max(0, Math.round(fallbackTrackLikesRaw))
+        : 0
 
       const formatCommentLikes = (value) => {
         const n = Number(value)
@@ -4572,10 +4604,16 @@ let sessionsCard = null;
           bubble.className = 'bl-comment-bubble'
           const likesBadge = document.createElement('span')
           likesBadge.className = 'bl-comment-likes'
-          likesBadge.textContent = formatCommentLikes(c.likes)
+          const ownLikesRaw = Number(c.likes)
+          const ownLikes = Number.isFinite(ownLikesRaw) ? Math.max(0, Math.round(ownLikesRaw)) : 0
+          const explicitLikesProvided = Boolean(c && c.likesProvided)
+          const displayLikes = ownLikes > 0
+            ? ownLikes
+            : (explicitLikesProvided ? 0 : fallbackTrackLikes)
+          likesBadge.textContent = formatCommentLikes(displayLikes)
           likesBadge.setAttribute('aria-hidden', 'true')
-          if (Number(c.likes) > 0) {
-            likesBadge.title = Number(c.likes) === 1 ? '1 like' : `${formatCommentLikes(c.likes)} likes`
+          if (displayLikes > 0) {
+            likesBadge.title = displayLikes === 1 ? '1 like' : `${formatCommentLikes(displayLikes)} likes`
           } else {
             likesBadge.title = '0 likes'
           }
@@ -5529,7 +5567,14 @@ function createPost(track, { prepend = false } = {}) {
             }
           })
         }
-        const markers = renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0, latestComments)
+        const markers = renderComments(
+          normalized.id,
+          commentsList,
+          pinsContainer,
+          audio.duration || 0,
+          latestComments,
+          latestStats.likes
+        )
         const currentTime = Number(audio.currentTime) || 0
         markers.forEach(marker => {
           if (!marker) return
