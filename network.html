@@ -7337,11 +7337,32 @@ function createAlbumPost(album, { prepend = false } = {}) {
           ? remoteTracks.slice().sort((a, b) => resolveTrackCreatedAt(b) - resolveTrackCreatedAt(a))
           : []
         if (sortedRemote.length) markLeaderboardTracks(sortedRemote)
+        const remoteAlbumsQueued = new Set()
         for (const remote of sortedRemote) {
+          if (remaining <= 0) break
+          const remoteAlbumId = remote && remote.albumId ? String(remote.albumId) : null
+          if (remoteAlbumId) {
+            if (renderedAlbumIds.has(remoteAlbumId) || remoteAlbumsQueued.has(remoteAlbumId)) {
+              continue
+            }
+            const remoteAlbumMeta = {
+              ...(remote.album && typeof remote.album === 'object' ? remote.album : {}),
+              id: remoteAlbumId,
+              db: true
+            }
+            if (!remoteAlbumMeta.user && remote.user) remoteAlbumMeta.user = remote.user
+            if (!remoteAlbumMeta.ownerId && remote.ownerId) remoteAlbumMeta.ownerId = remote.ownerId
+            const materializedAlbum = await materializeAlbum(remoteAlbumMeta)
+            const albumCard = materializedAlbum ? createAlbumPost(materializedAlbum) : null
+            if (albumCard) {
+              remoteAlbumsQueued.add(remoteAlbumId)
+              remaining -= 1
+              continue
+            }
+          }
           const card = createPost(remote)
           if (card) {
             remaining -= 1
-            if (remaining <= 0) break
           }
         }
       }
