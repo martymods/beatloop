@@ -5008,6 +5008,12 @@ let sessionsCard = null;
         const activeUserId = normalizeUserId(currentUserId || currentUser?.id || currentUser?._id)
         const coverKey = track.coverKey || track.cover_key || null
         const isOwner = Boolean(track.db || (ownerId && activeUserId && ownerId === activeUserId))
+        const albumId = typeof track.albumId === 'string' && track.albumId
+          ? track.albumId
+          : (track.album && (track.album.id || track.album._id)) || null
+        const albumTrackOrder = Number.isFinite(track.albumTrackOrder)
+          ? track.albumTrackOrder
+          : (Number.isFinite(track.order) ? track.order : null)
         if (authorCandidate && typeof authorCandidate === 'object') {
           author = {
             ...authorCandidate,
@@ -5055,6 +5061,8 @@ let sessionsCard = null;
           localFallbackApplied,
           ownerId: ownerId || null,
           isOwner,
+          albumId: albumId || null,
+          albumTrackOrder: albumTrackOrder,
           stats: track.stats ? normalizeStats(track.stats) : undefined,
           comments: Array.isArray(track.comments) ? track.comments.map(normalizeComment).filter(Boolean) : undefined,
           user: author ? {
@@ -5231,7 +5239,8 @@ function recordUserTrackEntry(track) {
     url: track.url,
     caption: track.caption || '',
     createdAt: resolveTrackCreatedAt(track),
-    albumId: track.albumId || null
+    albumId: track.albumId || null,
+    albumTrackOrder: Number.isFinite(track.albumTrackOrder) ? track.albumTrackOrder : null
   }
   const existingIndex = entry.tracks.findIndex(item => item.id === record.id)
   if (existingIndex >= 0) {
