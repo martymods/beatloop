@@ -2944,6 +2944,54 @@
 
     const VERIFIED_MEDIA_UPLOAD_HOSTS = buildVerifiedMediaUploadHostSet();
 
+    const buildKnownRemoteMediaHostSet = () => {
+      const hosts = new Set();
+
+      const addHost = (candidate) => {
+        const normalized = normalizeHostForComparison(candidate);
+        if (normalized) hosts.add(normalized);
+      };
+
+      const addFromUrl = (value) => {
+        if (!value || typeof value !== 'string') return;
+        try {
+          const parsed = new URL(value, window.location.origin);
+          addHost(parsed.hostname);
+        } catch {
+          addHost(value);
+        }
+      };
+
+      for (const host of VERIFIED_MEDIA_UPLOAD_HOSTS) {
+        addHost(host);
+      }
+
+      addFromUrl(ASSETS_BASE);
+
+      for (const base of knownApiBases) {
+        addFromUrl(base);
+      }
+
+      addHost('.beatloop.co');
+
+      return hosts;
+    };
+
+    const KNOWN_REMOTE_MEDIA_HOSTS = buildKnownRemoteMediaHostSet();
+
+    const isKnownRemoteMediaHost = (hostname) => {
+      if (!hostname) return false;
+      const normalized = normalizeHostForComparison(hostname);
+      if (!normalized) return false;
+      if (KNOWN_REMOTE_MEDIA_HOSTS.has(normalized)) return true;
+      for (const host of KNOWN_REMOTE_MEDIA_HOSTS) {
+        if (host.startsWith('.') && (normalized === host.slice(1) || normalized.endsWith(host))) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     const isVerifiedMediaUploadHost = (hostname) => {
       if (!hostname) return false;
       const normalized = normalizeHostForComparison(hostname);
@@ -3133,8 +3181,6 @@
     const TRACK_FALLBACK_BY_ID = new Map(TRACKS.map(track => [track.id, track.url]));
     const TRACK_FALLBACK_SOURCES = TRACKS.map(track => track.url).filter(Boolean);
     const DEFAULT_FALLBACK_TRACK_SRC = TRACK_FALLBACK_SOURCES.length ? TRACK_FALLBACK_SOURCES[0] : '';
-    const KNOWN_REMOTE_MEDIA_HOSTS = ['beatloop.co', 'www.beatloop.co', 'api.beatloop.co', 'beatloop-api.onrender.com'];
-
     const shouldUseLocalMediaFallback = (value, { ignoreEnv = false, force = false } = {}) => {
       if (!force && !ignoreEnv && !IS_LOCAL_DEV_ENV) return false;
       if (!value || typeof value !== 'string') return false;
@@ -3145,7 +3191,7 @@
         const normalized = hostname.toLowerCase();
         if (!normalized || normalized === CURRENT_HOST) return false;
         if (LOCAL_DEV_HOSTS.has(normalized)) return false;
-        return KNOWN_REMOTE_MEDIA_HOSTS.some(host => normalized === host || normalized.endsWith(`.${host}`));
+        return isKnownRemoteMediaHost(normalized);
       } catch {
         return false;
       }
