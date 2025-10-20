@@ -3056,6 +3056,7 @@
 
     const STATIC_MEDIA_PREFIX = /^\/?(?:audio|img)\//i;
     const API_MEDIA_PREFIX = MEDIA_UPLOAD_PATH_PREFIX;
+    const STORAGE_MEDIA_PREFIX = /^\/?(?:tracks|covers|messages|avatars|tags|studio)\//i;
 
     const buildUploadUrlCandidates = (path) => {
       const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -3095,6 +3096,16 @@
         if (isVerifiedUploadUrl(value)) {
           return ensureHttpsMediaUrl(value);
         }
+        try {
+          const parsed = new URL(value);
+          const pathname = parsed.pathname || '';
+          const normalizedPathname = pathname.replace(/^\/+/, '');
+          const hasUploadsPrefix = MEDIA_UPLOAD_PATH_PREFIX.test(pathname);
+          if (!hasUploadsPrefix && STORAGE_MEDIA_PREFIX.test(normalizedPathname)) {
+            const proxiedPath = `/uploads/${normalizedPathname}${parsed.search || ''}${parsed.hash || ''}`;
+            return resolveUploadUrl(proxiedPath);
+          }
+        } catch {}
         return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(value));
       }
       if (value.startsWith('//')) {
