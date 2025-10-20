@@ -189,6 +189,7 @@ const TrackSchema = new mongoose.Schema({
   audioDurationSec: { type: Number, default: 0 },
   caption: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
+  bumpedAt: { type: Date, default: Date.now, index: true },
   updatedAt: { type: Date, default: Date.now }
 });
 
@@ -223,6 +224,10 @@ const TrackEventSchema = new mongoose.Schema({
     default: {}
   }
 });
+TrackEventSchema.index(
+  { trackId: 1, userId: 1, type: 1 },
+  { unique: true, partialFilterExpression: { type: 'repost' } }
+);
 
 const TrackCommentSchema = new mongoose.Schema({
   trackId: { type: mongoose.Schema.Types.ObjectId, ref: 'Track', required: true, index: true },
@@ -982,7 +987,8 @@ async function incrementTrackStats({
   field,
   count = 1,
   type,
-  metadata = {}
+  metadata = {},
+  skipEvent = false
 }) {
   const inc = sanitizeCount(count) || 0;
   if (!trackId || !userId || !field || !type || inc <= 0) {
@@ -997,21 +1003,23 @@ async function incrementTrackStats({
   const update = { $inc: { [field]: inc }, $setOnInsert: { trackId } };
   const stats = await TrackStat.findOneAndUpdate({ trackId }, update, { new: true, upsert: true });
 
-  const timestamp = coerceDate(metadata.timestamp) || new Date();
-  const meta = { ...metadata };
-  delete meta.timestamp;
-  if (!meta.source) meta.source = 'live';
-  try {
-    await TrackEvent.create({
-      trackId,
-      userId,
-      type,
-      count: inc,
-      createdAt: timestamp,
-      metadata: meta
-    });
-  } catch (err) {
-    console.warn('Failed to record track event', err);
+  if (!skipEvent) {
+    const timestamp = coerceDate(metadata.timestamp) || new Date();
+    const meta = { ...metadata };
+    delete meta.timestamp;
+    if (!meta.source) meta.source = 'live';
+    try {
+      await TrackEvent.create({
+        trackId,
+        userId,
+        type,
+        count: inc,
+        createdAt: timestamp,
+        metadata: meta
+      });
+    } catch (err) {
+      console.warn('Failed to record track event', err);
+    }
   }
 
   return stats;
@@ -2320,6 +2328,7 @@ app.post('/api/tracks', auth, (req, res) => {
           duration: trackDoc.audioDurationSec || null,
           caption: trackDoc.caption || '',
           createdAt: trackDoc.createdAt,
+          bumpedAt: trackDoc.bumpedAt,
           userId: trackDoc.userId,
           user: summary
         });
@@ -2446,10 +2455,16 @@ app.get('/api/tracks', async (req, res) => {
 
     const query = {};
     if (cursorDate) {
-      query.createdAt = { $lt: cursorDate };
+      query.$or = [
+        { bumpedAt: { $lt: cursorDate } },
+        { bumpedAt: { $exists: false }, createdAt: { $lt: cursorDate } }
+      ];
     }
 
-    const docs = await Track.find(query).sort({ createdAt: -1 }).limit(limit).lean();
+    const docs = await Track.find(query)
+      .sort({ bumpedAt: -1, createdAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
     const trackIds = docs.map(doc => doc._id).filter(Boolean);
     const userIds = Array.from(new Set(docs.map(doc => toIdString(doc.userId)).filter(Boolean)));
 
@@ -2503,6 +2518,7 @@ app.get('/api/tracks', async (req, res) => {
         duration: doc.audioDurationSec || null,
         caption: doc.caption || '',
         createdAt: doc.createdAt,
+        bumpedAt: doc.bumpedAt || doc.createdAt,
         userId: doc.userId,
         user: userKey ? userMap.get(userKey) || null : null,
         stats: statsSummary(statsMap.get(key)),
@@ -2511,7 +2527,8 @@ app.get('/api/tracks', async (req, res) => {
     });
 
     const last = docs.length ? docs[docs.length - 1] : null;
-    const nextCursor = last ? new Date(last.createdAt).toISOString() : null;
+    const cursorSource = last ? (last.bumpedAt || last.createdAt) : null;
+    const nextCursor = cursorSource ? new Date(cursorSource).toISOString() : null;
 
     res.json({ tracks, nextCursor });
   } catch (err) {
@@ -2529,6 +2546,71 @@ async function handleTrackMetric(req, res, { field, type }) {
 
   const count = sanitizeCount(req.body?.count) || 1;
   const timestamp = coerceDate(req.body?.timestamp);
+  const metadata = {};
+  if (timestamp) metadata.timestamp = timestamp;
+  let skipEvent = false;
+
+  if (type === 'play') {
+    const rawListened = Number(req.body?.listenedSec ?? req.body?.playedSec ?? req.body?.progressSec);
+    const listenedSec = Number.isFinite(rawListened) && rawListened > 0 ? rawListened : 0;
+    const rawDuration = Number(req.body?.durationSec);
+    const durationSec = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 0;
+    let trackDuration = Number(track.audioDurationSec);
+    if (!Number.isFinite(trackDuration) || trackDuration <= 0) {
+      trackDuration = durationSec;
+    }
+    const requiredSeconds = trackDuration >= 20 || trackDuration <= 0
+      ? 20
+      : Math.max(trackDuration, 0);
+    metadata.requiredSeconds = requiredSeconds;
+    if (durationSec) metadata.durationSec = durationSec;
+    if (listenedSec) metadata.listenedSec = listenedSec;
+
+    if (requiredSeconds > 0 && listenedSec + 0.05 < requiredSeconds) {
+      return res.status(202).json({
+        ok: false,
+        ignored: true,
+        reason: 'insufficient_listen_time',
+        requiredSeconds
+      });
+    }
+
+    const recentPlay = await TrackEvent.findOne({
+      trackId: track._id,
+      userId: req.user._id,
+      type: 'play'
+    }).sort({ createdAt: -1 });
+    if (recentPlay) {
+      const sinceMs = Date.now() - new Date(recentPlay.createdAt).getTime();
+      if (sinceMs < 500) {
+        return res.status(202).json({ ok: false, ignored: true, reason: 'duplicate_play' });
+      }
+    }
+  }
+
+  if (type === 'repost') {
+    const eventMeta = { ...metadata };
+    delete eventMeta.timestamp;
+    if (!eventMeta.source) eventMeta.source = 'live';
+    const existing = await TrackEvent.findOneAndUpdate(
+      { trackId: track._id, userId: req.user._id, type: 'repost' },
+      {
+        $setOnInsert: {
+          trackId: track._id,
+          userId: req.user._id,
+          type: 'repost',
+          count,
+          createdAt: timestamp || new Date(),
+          metadata: eventMeta
+        }
+      },
+      { upsert: true, new: false }
+    );
+    if (existing) {
+      return res.status(409).json({ error: 'already reposted' });
+    }
+    skipEvent = true;
+  }
 
   const stats = await incrementTrackStats({
     trackId: track._id,
@@ -2536,8 +2618,18 @@ async function handleTrackMetric(req, res, { field, type }) {
     field,
     count,
     type,
-    metadata: { timestamp }
+    metadata,
+    skipEvent
   });
+
+  if (type === 'repost') {
+    try {
+      track.bumpedAt = new Date();
+      await track.save();
+    } catch (err) {
+      console.warn('Failed to bump track after repost', err);
+    }
+  }
 
   res.json({ ok: true, stats: statsSummary(stats) });
 }
@@ -2723,21 +2815,22 @@ app.get('/api/leaderboard', auth, async (req, res) => {
       entries.push({
         score,
         stats,
-        track: {
-          id: trackDoc._id,
-          title: trackDoc.title || 'Untitled',
-          artist: trackDoc.artist || '',
-          bpm: trackDoc.bpm || 0,
-          audioUrl,
-          coverUrl: coverUrl || null,
-          duration: trackDoc.audioDurationSec || null,
-          caption: trackDoc.caption || '',
-          createdAt: trackDoc.createdAt,
-          userId: trackDoc.userId,
-          user: userKey ? userMap.get(userKey) || null : null,
-          stats
-        }
-      });
+          track: {
+            id: trackDoc._id,
+            title: trackDoc.title || 'Untitled',
+            artist: trackDoc.artist || '',
+            bpm: trackDoc.bpm || 0,
+            audioUrl,
+            coverUrl: coverUrl || null,
+            duration: trackDoc.audioDurationSec || null,
+            caption: trackDoc.caption || '',
+            createdAt: trackDoc.createdAt,
+            bumpedAt: trackDoc.bumpedAt || trackDoc.createdAt,
+            userId: trackDoc.userId,
+            user: userKey ? userMap.get(userKey) || null : null,
+            stats
+          }
+        });
     }
 
     entries.sort((a, b) => b.score - a.score);
