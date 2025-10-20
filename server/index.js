@@ -18,6 +18,7 @@ import { Readable } from 'stream';
 import {
   durablePublicUrlForKey,
   durableStorageEnabled,
+  getDurablePublicBase,
   getUploadsRoot,
   writeBufferToUploads,
   deleteUploadKey,
@@ -399,7 +400,7 @@ const uploadsRoot = getUploadsRoot();
 const trackAudioDir = path.join(uploadsRoot, 'tracks');
 const trackCoverDir = path.join(uploadsRoot, 'covers');
 const messageAttachmentDir = path.join(uploadsRoot, 'messages');
-const PROXIED_STORAGE_PREFIXES = new Set(['studio']);
+const PROXIED_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio']);
 const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio']);
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
@@ -697,12 +698,58 @@ function normalizeUploadKey(folder, name) {
   return '';
 }
 
+function rewriteDurableUrlToProxy(req, absoluteUrl) {
+  if (!absoluteUrl || typeof absoluteUrl !== 'string') return '';
+  if (!durableStorageEnabled()) return '';
+
+  const { url: durableBaseUrl, host: durableBaseHost } = getDurablePublicBase();
+  if (!durableBaseUrl || !durableBaseHost) return '';
+
+  try {
+    const parsed = new URL(absoluteUrl);
+    if ((parsed.hostname || '').toLowerCase() !== durableBaseHost) {
+      return '';
+    }
+
+    const baseUrl = new URL(durableBaseUrl);
+    const basePath = (baseUrl.pathname || '').replace(/\/+$/, '');
+    let relativePath = parsed.pathname || '';
+
+    if (basePath && basePath !== '/') {
+      if (!relativePath.startsWith(basePath)) {
+        return '';
+      }
+      const remainder = relativePath.slice(basePath.length);
+      if (remainder && !remainder.startsWith('/')) {
+        return '';
+      }
+      relativePath = remainder;
+    }
+
+    relativePath = relativePath.replace(/^\/+/, '');
+    const key = normalizeUploadKey(relativePath);
+    if (!key) return '';
+
+    const prefix = key.split('/')[0];
+    if (!PROXIED_STORAGE_PREFIXES.has(prefix)) return '';
+
+    const base = effectivePublicBase(req);
+    const search = parsed.search || '';
+    const hash = parsed.hash || '';
+    return `${base}/uploads/${key}${search}${hash}`;
+  } catch {
+    return '';
+  }
+}
+
 function publicUploadUrl(req, folderOrKey, maybeFilename) {
   if (/^https?:\/\//i.test(folderOrKey || '')) {
-    return folderOrKey;
+    const proxied = rewriteDurableUrlToProxy(req, folderOrKey);
+    return proxied || ensureHttpsForBeatloopHost(folderOrKey);
   }
   if (/^https?:\/\//i.test(maybeFilename || '')) {
-    return maybeFilename;
+    const proxied = rewriteDurableUrlToProxy(req, maybeFilename);
+    return proxied || ensureHttpsForBeatloopHost(maybeFilename);
   }
 
   const key = normalizeUploadKey(folderOrKey, maybeFilename);
@@ -775,7 +822,10 @@ function isAbsoluteUrl(value) {
 
 function presentStoredUploadUrl(req, url, storageKey) {
   const rawUrl = typeof url === 'string' ? url : '';
-  if (isAbsoluteUrl(rawUrl)) return rawUrl;
+  if (isAbsoluteUrl(rawUrl)) {
+    const proxied = rewriteDurableUrlToProxy(req, rawUrl);
+    return proxied || rawUrl;
+  }
   const fallback = typeof storageKey === 'string' && storageKey ? storageKey : rawUrl;
   const key = normalizeUploadKey(fallback);
   if (!key) return rawUrl;

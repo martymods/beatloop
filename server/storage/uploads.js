@@ -125,6 +125,16 @@ export function durablePublicUrlForKey(key) {
   return `${S3_PUBLIC_BASE}/${normalizedKey(key)}`;
 }
 
+export function getDurablePublicBase() {
+  if (!s3Enabled) {
+    return { url: '', host: '' };
+  }
+  if (!s3PublicUrlAvailable || !S3_PUBLIC_BASE) {
+    return { url: '', host: '' };
+  }
+  return { url: S3_PUBLIC_BASE, host: S3_PUBLIC_BASE_HOST };
+}
+
 export async function writeStreamToUploads({ key, stream, contentType }) {
   if (!key) throw new Error('storage key required');
   if (!stream) throw new Error('storage stream required');
