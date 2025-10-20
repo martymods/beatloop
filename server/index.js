@@ -157,7 +157,7 @@ const UserSchema = new mongoose.Schema({
   lastName: { type: String, default: '' },
   displayName: { type: String, default: '' },
   profileColor: { type: String, default: PROFILE_COLOR_DEFAULT },
-  tagUrl: String,            // 3-sec sound tag URL
+  tagUrl: String,            // 10-sec sound tag URL
   tagStorageKey: { type: String, default: '' },
   tagDurationSec: Number,
   totalOnlineSec: { type: Number, default: 0 },
@@ -2330,9 +2330,9 @@ app.post('/api/users/tag', auth, (req, res) => {
       file.buffer = null;
       return res.status(500).json({ error: 'could not process audio tag' });
     }
-    if (duration > 3.05) {
+    if (duration > 10.05) {
       file.buffer = null;
-      return res.status(400).json({ error: 'tag must be 3 seconds or less' });
+      return res.status(400).json({ error: 'tag must be 10 seconds or less' });
     }
 
     const previous = req.user.tagStorageKey || req.user.tagUrl || '';
