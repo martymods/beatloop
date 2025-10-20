@@ -188,6 +188,8 @@ const TrackSchema = new mongoose.Schema({
   coverUrl: { type: String, default: '' },
   audioDurationSec: { type: Number, default: 0 },
   caption: { type: String, default: '' },
+  albumId: { type: mongoose.Schema.Types.ObjectId, ref: 'Album', default: null, index: true },
+  albumTrackOrder: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
   bumpedAt: { type: Date, default: Date.now, index: true },
   updatedAt: { type: Date, default: Date.now }
@@ -312,6 +314,28 @@ const TrackEvent = mongoose.model('TrackEvent', TrackEventSchema);
 const TrackComment = mongoose.model('TrackComment', TrackCommentSchema);
 const DirectMessage = mongoose.model('DirectMessage', DirectMessageSchema);
 const StudioSound = mongoose.model('StudioSound', StudioSoundSchema);
+const AlbumTrackRefSchema = new mongoose.Schema({
+  trackId: { type: mongoose.Schema.Types.ObjectId, ref: 'Track', required: true },
+  order: { type: Number, default: 0 }
+}, { _id: false });
+
+const AlbumSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  title: { type: String, default: '' },
+  caption: { type: String, default: '' },
+  coverUrl: { type: String, default: '' },
+  coverStorageKey: { type: String, default: '' },
+  trackIds: { type: [AlbumTrackRefSchema], default: [] },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+AlbumSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+const Album = mongoose.model('Album', AlbumSchema);
 
 /* ============================ APP ============================ */
 const app = express();
@@ -756,6 +780,74 @@ function presentStoredUploadUrl(req, url, storageKey) {
   const key = normalizeUploadKey(fallback);
   if (!key) return rawUrl;
   return publicUploadUrl(req, key);
+}
+
+function resolveArtistFromUser(user) {
+  if (!user) return '';
+  const display = typeof user.displayName === 'string' ? user.displayName.trim() : '';
+  if (display) return display;
+  const first = typeof user.firstName === 'string' ? user.firstName.trim() : '';
+  const last = typeof user.lastName === 'string' ? user.lastName.trim() : '';
+  const combined = [first, last].filter(Boolean).join(' ').trim();
+  if (combined) return combined;
+  if (typeof user.name === 'string' && user.name.trim()) return user.name.trim();
+  return typeof user.email === 'string' ? user.email : '';
+}
+
+function presentAlbumTrack(req, trackDoc, albumDoc) {
+  if (!trackDoc) return null;
+  const order = Number.isFinite(trackDoc.albumTrackOrder)
+    ? trackDoc.albumTrackOrder
+    : (Array.isArray(albumDoc?.trackIds)
+      ? albumDoc.trackIds.find(entry => entry.trackId?.toString() === trackDoc._id?.toString())?.order || 0
+      : 0);
+  return {
+    id: trackDoc._id,
+    title: trackDoc.title || 'Untitled',
+    order,
+    url: presentStoredUploadUrl(req, trackDoc.audioUrl, trackDoc.audioUrl),
+    duration: trackDoc.audioDurationSec || null,
+    albumId: albumDoc?._id || null
+  };
+}
+
+function presentAlbum(req, albumDoc, { ownerSummary = null, trackDocs = [] } = {}) {
+  if (!albumDoc) return null;
+  const cover = presentStoredUploadUrl(req, albumDoc.coverUrl, albumDoc.coverStorageKey);
+  const tracks = [];
+  if (Array.isArray(albumDoc.trackIds) && albumDoc.trackIds.length) {
+    const trackMap = new Map(
+      trackDocs.map(doc => [doc?._id?.toString(), doc])
+    );
+    const sortedRefs = albumDoc.trackIds
+      .slice()
+      .sort((a, b) => (Number(a?.order) || 0) - (Number(b?.order) || 0));
+    for (const ref of sortedRefs) {
+      const trackId = ref?.trackId?.toString?.();
+      if (!trackId) continue;
+      const trackDoc = trackMap.get(trackId);
+      const payload = presentAlbumTrack(req, trackDoc, albumDoc);
+      if (payload) {
+        payload.order = Number(ref?.order) || payload.order || 0;
+        tracks.push(payload);
+      }
+    }
+  }
+
+  return {
+    id: albumDoc._id,
+    title: albumDoc.title || 'Untitled Album',
+    caption: albumDoc.caption || '',
+    cover,
+    coverStorageKey: albumDoc.coverStorageKey || '',
+    createdAt: albumDoc.createdAt,
+    updatedAt: albumDoc.updatedAt,
+    userId: albumDoc.userId,
+    ownerId: idToString(albumDoc.userId),
+    user: ownerSummary,
+    tracks,
+    db: true
+  };
 }
 
 async function userSummary(reqOrUser, maybeUser) {
@@ -2295,16 +2387,7 @@ app.post('/api/tracks', auth, (req, res) => {
       if (coverFile) coverFile.buffer = null;
       const audioUrl = publicUploadUrl(req, audioKey);
       const coverUrl = coverKey ? publicUploadUrl(req, coverKey) : '';
-      const artist = (() => {
-        const display = typeof req.user.displayName === 'string' ? req.user.displayName.trim() : '';
-        if (display) return display;
-        const first = typeof req.user.firstName === 'string' ? req.user.firstName.trim() : '';
-        const last = typeof req.user.lastName === 'string' ? req.user.lastName.trim() : '';
-        const combined = [first, last].filter(Boolean).join(' ').trim();
-        if (combined) return combined;
-        if (typeof req.user.name === 'string' && req.user.name.trim()) return req.user.name.trim();
-        return req.user.email;
-      })();
+      const artist = resolveArtistFromUser(req.user) || req.user.email;
 
       const trackDoc = await Track.create({
         userId: req.user._id,
@@ -2401,6 +2484,465 @@ app.post('/api/tracks/:id/cover', auth, (req, res) => {
   });
 });
 
+app.post('/api/albums', auth, async (req, res) => {
+  const body = req.body || {};
+  const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
+  const rawCaption = typeof body.caption === 'string' ? body.caption.trim() : '';
+  const title = rawTitle ? rawTitle.slice(0, 160) : '';
+  const caption = rawCaption ? rawCaption.slice(0, 500) : '';
+
+  try {
+    const albumDoc = await Album.create({
+      userId: req.user._id,
+      title,
+      caption,
+      coverUrl: '',
+      coverStorageKey: '',
+      trackIds: []
+    });
+    const ownerSummary = await userSummary(req, req.user);
+    res.json({ album: presentAlbum(req, albumDoc, { ownerSummary, trackDocs: [] }) });
+  } catch (error) {
+    console.error('Album create failed', error);
+    res.status(500).json({ error: 'could not create album' });
+  }
+});
+
+app.get('/api/albums', async (req, res) => {
+  try {
+    const limitParam = Number.parseInt(req.query?.limit, 10);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 25) : 5;
+    const cursorRaw = req.query?.cursor;
+    let cursorDate = null;
+    if (cursorRaw) {
+      const parsed = new Date(cursorRaw);
+      if (!Number.isNaN(parsed.valueOf())) {
+        cursorDate = parsed;
+      }
+    }
+
+    const query = {};
+    if (cursorDate) {
+      query.$or = [
+        { updatedAt: { $lt: cursorDate } },
+        { updatedAt: { $exists: false }, createdAt: { $lt: cursorDate } }
+      ];
+    }
+
+    const docs = await Album.find(query)
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+
+    const userIds = Array.from(new Set(
+      docs.map(doc => toIdString(doc.userId)).filter(Boolean)
+    ));
+
+    const ownerMap = new Map();
+    if (userIds.length) {
+      const objectIds = userIds.map(id => {
+        try {
+          return new mongoose.Types.ObjectId(id);
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+      if (objectIds.length) {
+        const owners = await User.find({ _id: { $in: objectIds } });
+        const summaries = await Promise.all(
+          owners.map(async owner => [owner._id.toString(), await userSummary(req, owner)])
+        );
+        for (const [key, value] of summaries) {
+          if (key && value) ownerMap.set(key, value);
+        }
+      }
+    }
+
+    const trackIdStrings = [];
+    for (const doc of docs) {
+      if (!Array.isArray(doc.trackIds)) continue;
+      for (const entry of doc.trackIds) {
+        const id = toIdString(entry?.trackId);
+        if (id) trackIdStrings.push(id);
+      }
+    }
+
+    const uniqueTrackIds = Array.from(new Set(trackIdStrings));
+    const trackMap = new Map();
+    if (uniqueTrackIds.length) {
+      const trackObjectIds = uniqueTrackIds.map(id => {
+        try {
+          return new mongoose.Types.ObjectId(id);
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+      if (trackObjectIds.length) {
+        const trackDocs = await Track.find({ _id: { $in: trackObjectIds } }).lean();
+        for (const track of trackDocs) {
+          const key = toIdString(track?._id);
+          if (key) trackMap.set(key, track);
+        }
+      }
+    }
+
+    const albums = docs.map(doc => {
+      const ownerSummary = ownerMap.get(toIdString(doc.userId));
+      const albumTrackDocs = Array.isArray(doc.trackIds)
+        ? doc.trackIds
+            .map(entry => trackMap.get(toIdString(entry?.trackId)))
+            .filter(Boolean)
+        : [];
+      return presentAlbum(req, doc, { ownerSummary, trackDocs: albumTrackDocs });
+    });
+
+    const nextCursor = docs.length === limit ? docs[docs.length - 1].updatedAt || docs[docs.length - 1].createdAt : null;
+
+    res.json({ albums, cursor: nextCursor || null });
+  } catch (error) {
+    console.error('Album list failed', error);
+    res.status(500).json({ error: 'could not load albums' });
+  }
+});
+
+app.get('/api/albums/:id', async (req, res) => {
+  const albumId = asObjectId(req.params?.id);
+  if (!albumId) {
+    return res.status(400).json({ error: 'invalid album id' });
+  }
+
+  try {
+    const albumDoc = await Album.findById(albumId).lean();
+    if (!albumDoc) {
+      return res.status(404).json({ error: 'album not found' });
+    }
+
+    const owner = albumDoc.userId ? await User.findById(albumDoc.userId) : null;
+    const ownerSummary = owner ? await userSummary(req, owner) : null;
+    const trackIds = Array.isArray(albumDoc.trackIds)
+      ? albumDoc.trackIds.map(entry => asObjectId(entry?.trackId)).filter(Boolean)
+      : [];
+    let trackDocs = [];
+    if (trackIds.length) {
+      trackDocs = await Track.find({ _id: { $in: trackIds } }).lean();
+    }
+
+    res.json({ album: presentAlbum(req, albumDoc, { ownerSummary, trackDocs }) });
+  } catch (error) {
+    console.error('Album fetch failed', error);
+    res.status(500).json({ error: 'could not load album' });
+  }
+});
+
+app.post('/api/albums/:id/tracks', auth, (req, res) => {
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
+  trackUpload.single('audio')(req, res, async (err) => {
+    if (err) {
+      const message = err.message || 'upload failed';
+      return res.status(400).json({ error: message });
+    }
+
+    const albumId = asObjectId(req.params?.id);
+    if (!albumId) {
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(400).json({ error: 'invalid album id' });
+    }
+
+    let albumDoc = null;
+    try {
+      albumDoc = await Album.findById(albumId);
+    } catch (lookupError) {
+      console.error('Album lookup failed during track upload', lookupError);
+    }
+
+    if (!albumDoc) {
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(404).json({ error: 'album not found' });
+    }
+
+    if (!albumDoc.userId || albumDoc.userId.toString() !== req.user._id.toString()) {
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(403).json({ error: 'not your album' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'missing audio file' });
+    }
+
+    if (req.file.size > 10 * 1024 * 1024) {
+      await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(400).json({ error: 'track must be 10MB or less' });
+    }
+
+    let duration = null;
+    try {
+      const meta = await parseBuffer(req.file.buffer, req.file.mimetype || null, { duration: true });
+      if (meta?.format?.duration) {
+        duration = Math.round(meta.format.duration * 1000) / 1000;
+      }
+    } catch {}
+
+    req.file.buffer = null;
+
+    const body = req.body || {};
+    const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
+    const titleFromFile = req.file.originalname ? req.file.originalname.replace(/\.[^.]+$/, '') : 'Untitled';
+    const title = (rawTitle || titleFromFile || 'Untitled').slice(0, 160);
+    const orderValue = Number.parseInt(body.order, 10);
+    const nextOrder = Number.isFinite(orderValue)
+      ? Math.max(0, orderValue)
+      : (Array.isArray(albumDoc.trackIds) ? albumDoc.trackIds.length : 0);
+
+    try {
+      const trackDoc = await Track.create({
+        userId: req.user._id,
+        title,
+        artist: resolveArtistFromUser(req.user) || req.user.email,
+        bpm: 0,
+        audioUrl: req.file.storageKey,
+        coverUrl: albumDoc.coverStorageKey || '',
+        audioDurationSec: duration || 0,
+        caption: '',
+        albumId,
+        albumTrackOrder: nextOrder
+      });
+
+      albumDoc.trackIds.push({ trackId: trackDoc._id, order: nextOrder });
+      await albumDoc.save();
+
+      const ownerSummary = await userSummary(req, req.user);
+      const trackIds = albumDoc.trackIds.map(entry => asObjectId(entry?.trackId)).filter(Boolean);
+      const trackDocs = trackIds.length ? await Track.find({ _id: { $in: trackIds } }) : [trackDoc];
+      const albumPayload = presentAlbum(req, albumDoc, {
+        ownerSummary,
+        trackDocs
+      });
+      const payload = albumPayload.tracks.find(entry => toIdString(entry?.id) === trackDoc._id.toString()) || null;
+
+      res.json({
+        album: albumPayload,
+        track: payload
+      });
+    } catch (createError) {
+      console.error('Album track upload failed', createError);
+      await deleteUploadKey(req.file.storageKey).catch(() => {});
+      res.status(500).json({ error: 'could not save album track' });
+    }
+  });
+});
+
+app.patch('/api/albums/:id/cover', auth, (req, res) => {
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
+  trackUpload.single('cover')(req, res, async (err) => {
+    if (err) {
+      const message = err.message || 'upload failed';
+      return res.status(400).json({ error: message });
+    }
+
+    const albumId = asObjectId(req.params?.id);
+    if (!albumId) {
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(400).json({ error: 'invalid album id' });
+    }
+
+    let albumDoc = null;
+    try {
+      albumDoc = await Album.findById(albumId);
+    } catch (lookupError) {
+      console.error('Album lookup failed during cover update', lookupError);
+    }
+
+    if (!albumDoc) {
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(404).json({ error: 'album not found' });
+    }
+
+    if (!albumDoc.userId || albumDoc.userId.toString() !== req.user._id.toString()) {
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(403).json({ error: 'not your album' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'missing file' });
+    }
+
+    if (req.file.size > 10 * 1024 * 1024) {
+      await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(400).json({ error: 'cover art must be 10MB or less' });
+    }
+
+    try {
+      await deleteUploadKey(albumDoc.coverStorageKey).catch(() => {});
+      albumDoc.coverUrl = req.file.storageKey;
+      albumDoc.coverStorageKey = req.file.storageKey;
+      await albumDoc.save();
+
+      const ownerSummary = await userSummary(req, req.user);
+      res.json({ album: presentAlbum(req, albumDoc, { ownerSummary, trackDocs: [] }) });
+    } catch (updateError) {
+      console.error('Album cover update failed', updateError);
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      res.status(500).json({ error: 'could not update album cover' });
+    }
+  });
+});
+
+app.patch('/api/albums/:id', auth, async (req, res) => {
+  const albumId = asObjectId(req.params?.id);
+  if (!albumId) {
+    return res.status(400).json({ error: 'invalid album id' });
+  }
+
+  let albumDoc = null;
+  try {
+    albumDoc = await Album.findById(albumId);
+  } catch (lookupError) {
+    console.error('Album lookup failed during update', lookupError);
+  }
+
+  if (!albumDoc) {
+    return res.status(404).json({ error: 'album not found' });
+  }
+
+  if (!albumDoc.userId || albumDoc.userId.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ error: 'not your album' });
+  }
+
+  const body = req.body || {};
+  const nextTitle = typeof body.title === 'string' ? body.title.trim().slice(0, 160) : null;
+  const nextCaption = typeof body.caption === 'string' ? body.caption.trim().slice(0, 500) : null;
+  const trackOrder = Array.isArray(body.trackOrder) ? body.trackOrder : null;
+  const trackUpdates = Array.isArray(body.tracks) ? body.tracks : [];
+
+  if (nextTitle !== null) {
+    albumDoc.title = nextTitle;
+  }
+  if (nextCaption !== null) {
+    albumDoc.caption = nextCaption;
+  }
+
+  if (trackOrder) {
+    const normalized = trackOrder
+      .map(value => ({
+        id: asObjectId(value?.id || value),
+        order: Number.parseInt(value?.order, 10)
+      }))
+      .filter(entry => entry.id);
+
+    if (normalized.length) {
+      const orderMap = new Map(normalized.map(entry => [entry.id.toString(), Number.isFinite(entry.order) ? entry.order : 0]));
+      albumDoc.trackIds = albumDoc.trackIds
+        .map(entry => {
+          const key = toIdString(entry?.trackId);
+          if (!key) return null;
+          if (!orderMap.has(key)) return { ...entry, trackId: entry.trackId, order: entry.order || 0 };
+          return { trackId: entry.trackId, order: orderMap.get(key) };
+        })
+        .filter(Boolean)
+        .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+    }
+  }
+
+  if (trackUpdates.length) {
+    const bulk = [];
+    for (const entry of trackUpdates) {
+      const trackId = asObjectId(entry?.id || entry?.trackId);
+      if (!trackId) continue;
+      const update = {};
+      if (typeof entry?.title === 'string') {
+        const trimmed = entry.title.trim();
+        if (trimmed) update.title = trimmed.slice(0, 160);
+      }
+      if (Number.isFinite(entry?.order)) {
+        update.albumTrackOrder = Math.max(0, Number(entry.order));
+      }
+      if (Number.isFinite(entry?.duration) || Number.isFinite(entry?.durationSec)) {
+        const durationValue = Number.isFinite(entry.duration) ? Number(entry.duration) : Number(entry.durationSec);
+        update.audioDurationSec = Math.max(0, durationValue || 0);
+      }
+      if (Object.keys(update).length) {
+        bulk.push({
+          updateOne: {
+            filter: { _id: trackId, albumId },
+            update: { $set: update }
+          }
+        });
+      }
+    }
+    if (bulk.length) {
+      try {
+        await Track.bulkWrite(bulk, { ordered: false });
+      } catch (bulkError) {
+        console.warn('Album track metadata update encountered errors', bulkError);
+      }
+    }
+  }
+
+  try {
+    await albumDoc.save();
+    const ownerSummary = await userSummary(req, req.user);
+    const trackIds = albumDoc.trackIds.map(entry => asObjectId(entry?.trackId)).filter(Boolean);
+    const trackDocs = trackIds.length ? await Track.find({ _id: { $in: trackIds } }) : [];
+    res.json({ album: presentAlbum(req, albumDoc, { ownerSummary, trackDocs }) });
+  } catch (updateError) {
+    console.error('Album update failed', updateError);
+    res.status(500).json({ error: 'could not update album' });
+  }
+});
+
+app.delete('/api/albums/:id', auth, async (req, res) => {
+  const albumId = asObjectId(req.params?.id);
+  if (!albumId) {
+    return res.status(400).json({ error: 'invalid album id' });
+  }
+
+  let albumDoc = null;
+  try {
+    albumDoc = await Album.findById(albumId);
+  } catch (lookupError) {
+    console.error('Album lookup failed during delete', lookupError);
+  }
+
+  if (!albumDoc) {
+    return res.status(404).json({ error: 'album not found' });
+  }
+
+  if (!albumDoc.userId || albumDoc.userId.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ error: 'not your album' });
+  }
+
+  const trackIds = Array.isArray(albumDoc.trackIds)
+    ? albumDoc.trackIds.map(entry => asObjectId(entry?.trackId)).filter(Boolean)
+    : [];
+
+  try {
+    if (trackIds.length) {
+      const tracks = await Track.find({ _id: { $in: trackIds } });
+      for (const trackDoc of tracks) {
+        await Track.deleteOne({ _id: trackDoc._id });
+        await TrackStats.deleteOne({ trackId: trackDoc._id });
+        await TrackEvent.deleteMany({ trackId: trackDoc._id });
+        await TrackComment.deleteMany({ trackId: trackDoc._id });
+        await deleteStoredUpload(trackDoc.audioUrl, 'tracks');
+        await deleteStoredUpload(trackDoc.coverUrl, 'covers');
+      }
+    }
+
+    await deleteUploadKey(albumDoc.coverStorageKey).catch(() => {});
+    await Album.deleteOne({ _id: albumDoc._id });
+    res.json({ ok: true });
+  } catch (deleteError) {
+    console.error('Album delete failed', deleteError);
+    res.status(500).json({ error: 'could not delete album' });
+  }
+});
+
 app.patch('/api/tracks/:id', auth, async (req, res) => {
   const trackId = asObjectId(req.params?.id);
   if (!trackId) {
@@ -2459,11 +3001,19 @@ app.delete('/api/tracks/:id', auth, async (req, res) => {
     return res.status(403).json({ error: 'not your track' });
   }
 
+  const albumId = trackDoc.albumId ? trackDoc.albumId.toString() : null;
+
   try {
     await Track.deleteOne({ _id: trackDoc._id });
     await TrackStats.deleteOne({ trackId: trackDoc._id });
     await TrackEvent.deleteMany({ trackId: trackDoc._id });
     await TrackComment.deleteMany({ trackId: trackDoc._id });
+    if (albumId) {
+      await Album.updateOne(
+        { _id: trackDoc.albumId },
+        { $pull: { trackIds: { trackId: trackDoc._id } } }
+      );
+    }
   } catch (ex) {
     console.error('Track delete failed', ex);
     return res.status(500).json({ error: 'could not delete track' });

@@ -6352,7 +6352,7 @@ function createPost(track, { prepend = false } = {}) {
 function createAlbumPost(album, { prepend = false } = {}) {
   if (!album || typeof album !== 'object') return null
   const normalized = { ...album }
-  const albumId = normalized.id || `album-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+  let albumId = normalized.id || `album-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
   if (renderedAlbumIds.has(albumId)) return null
   if (!Array.isArray(normalized.tracks) || !normalized.tracks.length) return null
 
@@ -6473,6 +6473,86 @@ function createAlbumPost(album, { prepend = false } = {}) {
   albumWrapper.appendChild(expandBtn)
 
   const trackControllers = new Map()
+  function normalizedTrackFromRemote(track, index) {
+    if (!track || !track.id) return null
+    return {
+      id: track.id,
+      title: track.title || 'Untitled',
+      order: Number.isFinite(track.order) ? track.order : index,
+      url: track.url || '',
+      duration: typeof track.duration === 'number' ? track.duration : (typeof track.durationSec === 'number' ? track.durationSec : null),
+      albumId,
+      db: true
+    }
+  }
+
+  if (normalized.db) {
+    applyRemoteAlbum(normalized)
+  } else {
+    updateStoredAlbumCache()
+  }
+
+  function updateStoredAlbumCache() {
+    const tracksMeta = normalized.tracks.map((track, index) => baseTrackMeta(track, index))
+    const cachedEntry = {
+      id: albumId,
+      title: normalized.title || 'Untitled Album',
+      coverKey: normalized.coverKey || null,
+      cover: resolveCover(),
+      caption: normalized.caption || '',
+      createdAt: normalized.createdAt || Date.now(),
+      tracks: tracksMeta,
+      trackIds: tracksMeta,
+      db: true,
+      user: normalized.user || null,
+      ownerId: normalized.ownerId || null
+    }
+    let found = false
+    customAlbums = (customAlbums || []).map(entry => {
+      if (!entry || entry.id !== albumId) return entry
+      found = true
+      return cachedEntry
+    }).filter(Boolean)
+    if (!found) customAlbums.push(cachedEntry)
+    setJSON('custom_albums', customAlbums)
+    recordUserAlbumEntry({
+      ...normalized,
+      id: albumId,
+      cover: resolveCover(),
+      tracks: normalized.tracks.map((track, index) => ({
+        id: track.id,
+        title: track.title || 'Untitled',
+        order: index,
+        url: track.url,
+        duration: track.duration || null,
+        albumId
+      }))
+    })
+  }
+
+  function applyRemoteAlbum(remote) {
+    if (!remote || typeof remote !== 'object') return
+    if (remote.id) {
+      albumId = remote.id
+      card.dataset.albumId = albumId
+    }
+    normalized.title = remote.title || normalized.title
+    normalized.caption = typeof remote.caption === 'string' ? remote.caption : normalized.caption
+    normalized.cover = remote.cover || normalized.cover
+    normalized.coverKey = remote.coverStorageKey || normalized.coverKey || null
+    normalized.createdAt = remote.createdAt || normalized.createdAt
+    normalized.updatedAt = remote.updatedAt || normalized.updatedAt
+    normalized.db = true
+    if (!normalized.user && remote.user) normalized.user = remote.user
+    if (remote.ownerId) normalized.ownerId = remote.ownerId
+    if (Array.isArray(remote.tracks)) {
+      normalized.tracks = remote.tracks
+        .map((track, index) => normalizedTrackFromRemote(track, index))
+        .filter(Boolean)
+    }
+    updateStoredAlbumCache()
+    updateCountLabel()
+  }
   let showAllTracks = false
 
   function updateCountLabel() {
@@ -6488,7 +6568,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
     }
   }
 
-  function persistAlbumMutation(mutator) {
+  async function persistAlbumMutation(mutator) {
     let updated = null
     customAlbums = (customAlbums || []).map(entry => {
       if (!entry || entry.id !== albumId) return entry
@@ -6512,15 +6592,38 @@ function createAlbumPost(album, { prepend = false } = {}) {
           albumId
         }))
       })
+      if (normalized.db && albumId) {
+        const orderPayload = normalized.tracks.map((track, index) => ({ id: track.id, order: index }))
+        const trackPayload = normalized.tracks.map((track, index) => ({
+          id: track.id,
+          order: index,
+          title: track.title || 'Untitled',
+          duration: track.duration || null
+        }))
+        try {
+          const remote = await apiUpdateAlbumMeta({
+            albumId,
+            title: normalized.title,
+            caption: normalized.caption,
+            trackOrder: orderPayload,
+            tracks: trackPayload
+          })
+          if (remote) {
+            applyRemoteAlbum(remote)
+          }
+        } catch (err) {
+          console.warn('Failed to sync album metadata', err)
+        }
+      }
     }
     return updated
   }
 
-  function persistTracksToStorage() {
+  async function persistTracksToStorage() {
     normalized.tracks = normalized.tracks
       .filter(track => track && track.id && track.url)
       .map((track, index) => ({ ...track, order: index }))
-    persistAlbumMutation(entry => {
+    await persistAlbumMutation(entry => {
       const tracksMeta = normalized.tracks.map((track, index) => baseTrackMeta(track, index))
       return {
         ...entry,
@@ -6530,57 +6633,41 @@ function createAlbumPost(album, { prepend = false } = {}) {
         caption: normalized.caption || entry.caption || ''
       }
     })
+    updateStoredAlbumCache()
     updateCountLabel()
   }
 
   async function handleAddTracks(files) {
     const additions = Array.from(files || []).filter(Boolean)
-    if (!additions.length) return
+    if (!additions.length || !albumId) return
     for (const file of additions) {
       try {
-        const trackId = `${albumId}-track-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
-        await putBlob('tracks', trackId, file)
-        const url = await getBlobUrl('tracks', trackId)
-        if (!url) continue
+        const currentIndex = normalized.tracks.length
         const fileName = typeof file.name === 'string' ? file.name.replace(/\.[^/.]+$/, '').trim() : ''
-        const title = fileName || `Track ${normalized.tracks.length + 1}`
-        const newTrack = {
-          id: trackId,
-          title,
-          order: normalized.tracks.length,
-          url,
-          duration: null,
-          albumId,
-          db: true
+        const title = fileName || `Track ${currentIndex + 1}`
+        const uploadResult = await apiUploadAlbumTrack({ albumId, file, title, order: currentIndex })
+        const remoteAlbum = uploadResult?.album || await apiFetchAlbum(albumId)
+        if (remoteAlbum) {
+          applyRemoteAlbum(remoteAlbum)
         }
-        normalized.tracks.push(newTrack)
       } catch (err) {
         console.warn('Failed to add album track', err)
         alert('One of the selected files could not be added.')
       }
     }
-    persistTracksToStorage()
+    await persistTracksToStorage()
     renderTrackList()
   }
 
   async function handleCoverChange(file) {
-    if (!file) return
-    const previousKey = normalized.coverKey || null
+    if (!file || !albumId) return
     try {
       const optimized = await compressAvatarImage(file, { maxDimension: 1024, quality: 0.85 })
-      const key = `cover-${Date.now()}`
-      await putBlob('covers', key, optimized)
-      const blobUrl = await getBlobUrl('covers', key)
-      normalized.coverKey = key
-      normalized.cover = blobUrl || DEFAULT_TRACK_COVER
-      coverImg.src = resolveCover()
-      if (previousKey && previousKey !== key) {
-        try { await deleteBlob('covers', previousKey) } catch {}
+      const coverFile = new File([optimized], file.name || optimized.name || 'cover.png', { type: optimized.type || 'image/png' })
+      const remote = await apiUpdateAlbumCover({ albumId, file: coverFile })
+      if (remote) {
+        applyRemoteAlbum(remote)
       }
-      persistAlbumMutation(entry => ({
-        ...entry,
-        coverKey: key
-      }))
       renderTrackList()
     } catch (err) {
       console.warn('Failed to update album cover', err)
@@ -6660,14 +6747,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
       const original = deleteBtn.textContent
       deleteBtn.textContent = 'Deleting…'
       try {
-        for (const track of normalized.tracks) {
-          if (track && track.id) {
-            try { await deleteBlob('tracks', track.id) } catch {}
-          }
-        }
-        if (normalized.coverKey) {
-          try { await deleteBlob('covers', normalized.coverKey) } catch {}
-        }
+        await apiDeleteAlbum(albumId)
         customAlbums = (customAlbums || []).filter(entry => entry && entry.id !== albumId)
         setJSON('custom_albums', customAlbums)
         renderedAlbumIds.delete(albumId)
@@ -6676,7 +6756,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
           trackId: albumId,
           trackTitle: normalized.title || 'Untitled Album',
           timestamp: Date.now(),
-          storage: 'local'
+          storage: 'cloud'
         })
       } catch (err) {
         console.error('Album delete failed', err)
@@ -6752,7 +6832,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
       renameBtn.type = 'button'
       renameBtn.className = 'text-xs text-white/60 hover:text-white'
       renameBtn.textContent = 'Rename'
-      renameBtn.addEventListener('click', (event) => {
+      renameBtn.addEventListener('click', async (event) => {
         event.preventDefault()
         event.stopPropagation()
         const currentTitle = track.title || 'Untitled'
@@ -6764,7 +6844,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
           return
         }
         track.title = trimmed
-        persistTracksToStorage()
+        await persistTracksToStorage()
         renderTrackList()
       })
       titleRow.appendChild(renameBtn)
@@ -6777,11 +6857,18 @@ function createAlbumPost(album, { prepend = false } = {}) {
         event.preventDefault()
         event.stopPropagation()
         if (!window.confirm('Remove this song from the album?')) return
-        try { await deleteBlob('tracks', track.id) } catch {}
-        trackControllers.delete(track.id)
-        normalized.tracks = normalized.tracks.filter(entry => entry && entry.id !== track.id)
-        persistTracksToStorage()
-        renderTrackList()
+        try {
+          await apiDeleteAlbumTrack(track.id)
+          trackControllers.delete(track.id)
+          normalized.tracks = normalized.tracks.filter(entry => entry && entry.id !== track.id)
+          await persistTracksToStorage()
+          const remoteAlbum = await apiFetchAlbum(albumId)
+          if (remoteAlbum) applyRemoteAlbum(remoteAlbum)
+          renderTrackList()
+        } catch (err) {
+          console.warn('Failed to remove album track', err)
+          alert('Track removal failed: ' + (err?.message || err))
+        }
       })
       titleRow.appendChild(removeBtn)
     }
@@ -7870,6 +7957,146 @@ async function updateLeaderboard() {
       return payload || {}
     }
 
+    function authHeaders(extra = {}) {
+      const headers = typeof AUTH?.hdr === 'function' ? AUTH.hdr() : {}
+      return { ...headers, ...extra }
+    }
+
+    function normalizeApiError(prefix, response, payload) {
+      const detail = payload?.error || payload?.message || ''
+      const trimmed = typeof detail === 'string' ? detail.trim() : ''
+      if (trimmed) return `${prefix}: ${trimmed}`
+      return `${prefix} (HTTP ${response.status})`
+    }
+
+    async function apiCreateAlbumRemote({ title = '', caption = '' } = {}) {
+      const apiBase = resolveTrackApiBase()
+      const response = await fetch(`${apiBase}/api/albums`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ title, caption })
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(normalizeApiError('Album create failed', response, payload))
+      }
+      return payload?.album || null
+    }
+
+    async function apiUploadAlbumTrack({ albumId, file, title = '', order = 0 }) {
+      if (!albumId) throw new Error('Album ID required')
+      if (!file) throw new Error('Audio file required')
+      const apiBase = resolveTrackApiBase()
+      const fd = new FormData()
+      fd.append('audio', file, file.name || 'track.mp3')
+      if (title && title.trim()) fd.append('title', title.trim())
+      fd.append('order', String(order || 0))
+      const response = await fetch(`${apiBase}/api/albums/${albumId}/tracks`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: fd
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(normalizeApiError('Add track failed', response, payload))
+      }
+      return payload
+    }
+
+    async function apiUpdateAlbumCover({ albumId, file }) {
+      if (!albumId) throw new Error('Album ID required')
+      if (!file) throw new Error('Cover file required')
+      const apiBase = resolveTrackApiBase()
+      const fd = new FormData()
+      fd.append('cover', file, file.name || 'cover.png')
+      const response = await fetch(`${apiBase}/api/albums/${albumId}/cover`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: fd
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(normalizeApiError('Album cover update failed', response, payload))
+      }
+      return payload?.album || null
+    }
+
+    async function apiUpdateAlbumMeta({ albumId, title, caption, trackOrder, tracks }) {
+      if (!albumId) throw new Error('Album ID required')
+      const apiBase = resolveTrackApiBase()
+      const body = {}
+      if (typeof title === 'string') body.title = title
+      if (typeof caption === 'string') body.caption = caption
+      if (Array.isArray(trackOrder)) body.trackOrder = trackOrder
+      if (Array.isArray(tracks)) body.tracks = tracks
+      const response = await fetch(`${apiBase}/api/albums/${albumId}`, {
+        method: 'PATCH',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body)
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(normalizeApiError('Album update failed', response, payload))
+      }
+      return payload?.album || null
+    }
+
+    async function apiDeleteAlbum(albumId) {
+      if (!albumId) throw new Error('Album ID required')
+      const apiBase = resolveTrackApiBase()
+      const response = await fetch(`${apiBase}/api/albums/${albumId}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(normalizeApiError('Album delete failed', response, payload))
+      }
+      return true
+    }
+
+    async function apiDeleteAlbumTrack(trackId) {
+      if (!trackId) throw new Error('Track ID required')
+      const apiBase = resolveTrackApiBase()
+      const response = await fetch(`${apiBase}/api/tracks/${trackId}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(normalizeApiError('Album track delete failed', response, payload))
+      }
+      return true
+    }
+
+    async function apiFetchAlbum(albumId) {
+      if (!albumId) return null
+      const apiBase = resolveTrackApiBase()
+      const response = await fetch(`${apiBase}/api/albums/${albumId}`, {
+        headers: authHeaders()
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(normalizeApiError('Album fetch failed', response, payload))
+      }
+      return payload?.album || null
+    }
+
+    async function apiFetchAlbums({ limit = 5, cursor = null } = {}) {
+      const params = new URLSearchParams()
+      params.set('limit', String(limit))
+      if (cursor) params.set('cursor', cursor)
+      const apiBase = resolveTrackApiBase()
+      const response = await fetch(`${apiBase}/api/albums?${params.toString()}`, {
+        headers: authHeaders()
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(normalizeApiError('Album list failed', response, payload))
+      }
+      return payload
+    }
+
     // ---------- Upload track -> staged draft
     uploadTrackInput.addEventListener('change', (e) => {
       const file = e.target.files && e.target.files[0]
@@ -8183,76 +8410,59 @@ async function updateLeaderboard() {
             const albumTitleInput = composerAlbumTitleInput ? composerAlbumTitleInput.value : pendingAlbum.title
             const resolvedAlbumTitle = (albumTitleInput && albumTitleInput.trim()) || (pendingAlbum.title && pendingAlbum.title.trim()) || 'Untitled Album'
             const createdAt = Date.now()
-            const albumId = pendingAlbum.id || 'album-' + createdAt
-            const ownerId = normalizeUserId(currentUserId || currentUser?.id || currentUser?._id)
-            const artistName = currentUser?.name || currentUser?.displayName || currentUser?.email || 'Beatloop creator'
-
-            const trackMetas = []
-            for (let i = 0; i < pendingAlbum.tracks.length; i += 1) {
-              const entry = pendingAlbum.tracks[i]
-              if (!entry || !entry.file) continue
-              const trackId = `${albumId}-track-${i + 1}-${Math.random().toString(36).slice(2,8)}`
-              const title = (entry.title && entry.title.trim()) || (entry.fileName && entry.fileName.replace(/\.[^/.]+$/, '').trim()) || `Track ${i + 1}`
-              await putBlob('tracks', trackId, entry.file)
-              trackMetas.push({
-                id: trackId,
-                title,
-                order: i,
-                coverKey: pendingCoverKey || null,
-                db: true,
-                createdAt: createdAt + i
-              })
+            const remoteAlbum = await apiCreateAlbumRemote({ title: resolvedAlbumTitle, caption: textVal })
+            if (!remoteAlbum || !remoteAlbum.id) {
+              throw new Error('Album creation failed.')
             }
 
-            if (!trackMetas.length) {
-              throw new Error('Album has no usable tracks.')
-            }
+            let latestAlbum = remoteAlbum
 
-            const albumUser = currentUser ? { ...currentUser, avatar: sanitizeAvatar(currentUser.avatar) } : null
-            const albumMeta = {
-              id: albumId,
-              title: resolvedAlbumTitle,
-              coverKey: pendingCoverKey || null,
-              createdAt,
-              caption: textVal,
-              tracks: trackMetas.map(t => ({ id: t.id, title: t.title, order: t.order })),
-              db: true,
-              artist: artistName,
-              user: albumUser,
-              ownerId
-            }
-
-            customAlbums.push(albumMeta)
-            if (customAlbums.length > 20) customAlbums.shift()
-            setJSON('custom_albums', customAlbums)
-
-            const coverUrl = pendingCoverKey ? (await getBlobUrl('covers', pendingCoverKey)) : DEFAULT_TRACK_COVER
-            const trackPayloads = []
-            for (const meta of trackMetas) {
-              const url = await getBlobUrl('tracks', meta.id)
-              if (url) {
-                trackPayloads.push({
-                  id: meta.id,
-                  title: meta.title,
-                  order: meta.order,
-                  url,
-                  duration: null,
-                  albumId
-                })
+            if (pendingCoverKey) {
+              try {
+                const coverUrl = await getBlobUrl('covers', pendingCoverKey)
+                if (coverUrl) {
+                  const coverResponse = await fetch(coverUrl)
+                  const coverBlob = await coverResponse.blob()
+                  const fileName = pendingCoverFilename || 'cover.png'
+                  const coverFile = new File([coverBlob], fileName, { type: coverBlob.type || 'image/png' })
+                  await apiUpdateAlbumCover({ albumId: remoteAlbum.id, file: coverFile })
+                  latestAlbum = await apiFetchAlbum(remoteAlbum.id) || latestAlbum
+                }
+              } catch (coverErr) {
+                console.warn('Album cover sync failed', coverErr)
               }
             }
 
-            createAlbumPost({
-              ...albumMeta,
-              cover: coverUrl || DEFAULT_TRACK_COVER,
-              tracks: trackPayloads
-            }, { prepend: true })
+            for (let i = 0; i < pendingAlbum.tracks.length; i += 1) {
+              const entry = pendingAlbum.tracks[i]
+              if (!entry || !entry.file) continue
+              const title = (entry.title && entry.title.trim()) || (entry.fileName && entry.fileName.replace(/\.[^/.]+$/, '').trim()) || `Track ${i + 1}`
+              const uploadResult = await apiUploadAlbumTrack({ albumId: remoteAlbum.id, file: entry.file, title, order: i })
+              latestAlbum = uploadResult?.album || latestAlbum
+            }
 
-            recordNotification('upload', `Uploaded album “${resolvedAlbumTitle}”`, 'Saved locally to your library.', {
-              trackId: albumMeta.id,
+            if (!latestAlbum || !Array.isArray(latestAlbum.tracks) || !latestAlbum.tracks.length) {
+              latestAlbum = await apiFetchAlbum(remoteAlbum.id) || latestAlbum
+            }
+
+            createAlbumPost({ ...latestAlbum, caption: textVal }, { prepend: true })
+
+            const storedAlbum = {
+              ...latestAlbum,
+              caption: textVal,
+              tracks: Array.isArray(latestAlbum.tracks)
+                ? latestAlbum.tracks.map(track => ({ id: track.id, title: track.title, order: track.order }))
+                : []
+            }
+            customAlbums.push(storedAlbum)
+            if (customAlbums.length > 20) customAlbums.shift()
+            setJSON('custom_albums', customAlbums)
+
+            recordNotification('upload', `Uploaded album “${resolvedAlbumTitle}”`, 'Your album is live on Beatloop.', {
+              trackId: latestAlbum?.id || remoteAlbum.id,
               trackTitle: resolvedAlbumTitle,
               timestamp: createdAt,
-              storage: 'local'
+              storage: 'cloud'
             })
 
             shouldResetAlbum = true
@@ -8266,7 +8476,7 @@ async function updateLeaderboard() {
             if (shouldResetAlbum) {
               pendingAlbum = null
               if (composerTextEl) composerTextEl.value = ''
-              await clearPendingCover({ deleteStored: false })
+              await clearPendingCover({ deleteStored: true })
               updateComposerAttachments()
             }
           }
@@ -8453,6 +8663,50 @@ async function updateLeaderboard() {
           }
         })
         .filter(Boolean)
+
+      try {
+        const remotePayload = await apiFetchAlbums({ limit: 20 })
+        const remoteAlbums = Array.isArray(remotePayload?.albums) ? remotePayload.albums : []
+        const normalizedRemote = remoteAlbums.map(album => {
+          if (!album || typeof album !== 'object') return null
+          const tracksMeta = Array.isArray(album.tracks)
+            ? album.tracks.map((track, index) => ({
+                id: track?.id || track?._id || null,
+                title: track?.title || 'Untitled',
+                order: Number.isFinite(track?.order) ? track.order : index
+              })).filter(entry => entry.id)
+            : []
+          const normalizedUser = album.user && typeof album.user === 'object'
+            ? {
+                ...album.user,
+                avatar: sanitizeAvatar(album.user.avatar || album.user.avatarUrl)
+              }
+            : null
+          return {
+            id: album.id,
+            title: album.title || 'Untitled Album',
+            cover: album.cover || DEFAULT_TRACK_COVER,
+            coverKey: album.coverStorageKey || null,
+            caption: album.caption || '',
+            createdAt: resolveTrackCreatedAt(album),
+            trackIds: tracksMeta,
+            tracks: tracksMeta,
+            user: normalizedUser,
+            ownerId: album.ownerId || null,
+            db: true
+          }
+        }).filter(Boolean)
+        if (normalizedRemote.length) {
+          const existingIds = new Set(customAlbums.map(entry => entry.id))
+          for (const album of normalizedRemote) {
+            if (existingIds.has(album.id)) continue
+            customAlbums.push(album)
+          }
+          setJSON('custom_albums', customAlbums)
+        }
+      } catch (err) {
+        console.warn('Failed to load remote albums', err)
+      }
 
       // Set composer avatar
       if (composerAvatarEl) {
