@@ -4606,14 +4606,19 @@ let sessionsCard = null;
           likesBadge.className = 'bl-comment-likes'
           const ownLikesRaw = Number(c.likes)
           const ownLikes = Number.isFinite(ownLikesRaw) ? Math.max(0, Math.round(ownLikesRaw)) : 0
-          const explicitLikesProvided = Boolean(c && c.likesProvided)
+          const fallbackAvailable = Number.isFinite(fallbackTrackLikes) && fallbackTrackLikes > 0
+          const usingFallbackLikes = ownLikes <= 0 && fallbackAvailable
           const displayLikes = ownLikes > 0
             ? ownLikes
-            : (explicitLikesProvided ? 0 : fallbackTrackLikes)
+            : (fallbackAvailable ? Math.max(0, Math.round(fallbackTrackLikes)) : 0)
           likesBadge.textContent = formatCommentLikes(displayLikes)
           likesBadge.setAttribute('aria-hidden', 'true')
           if (displayLikes > 0) {
-            likesBadge.title = displayLikes === 1 ? '1 like' : `${formatCommentLikes(displayLikes)} likes`
+            if (usingFallbackLikes) {
+              likesBadge.title = displayLikes === 1 ? '1 track like' : `${formatCommentLikes(displayLikes)} track likes`
+            } else {
+              likesBadge.title = displayLikes === 1 ? '1 like' : `${formatCommentLikes(displayLikes)} likes`
+            }
           } else {
             likesBadge.title = '0 likes'
           }
