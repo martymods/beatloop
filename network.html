@@ -162,7 +162,7 @@
 
     .bl-comment-pins {
       overflow: visible;
-      --bl-comment-pin-line: 60%;
+      --bl-comment-pin-line: 85%;
     }
 
     .bl-comment-pin {
@@ -2195,14 +2195,10 @@
     .profile-track-wave { margin-top: 0.75rem; }
     .profile-track-item--compact .profile-track-wave { margin-top: 0.6rem; }
     .track-wave-shell::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(34, 211, 238, 0.12)); opacity: 0.7; pointer-events: none; }
+    .track-remaining-time { font-variant-numeric: tabular-nums; pointer-events: none; text-align: right; min-width: 3.5rem; }
     .track-wave-inner { position: absolute; inset: 0; }
     .track-wave-progress { position: absolute; inset: 0; width: 0%; background: linear-gradient(90deg, rgba(124, 58, 237, 0.35), rgba(34, 211, 238, 0.25)); mix-blend-mode: screen; pointer-events: none; transition: width 0.12s ease; }
     .profile-track-wave--fallback .track-wave-progress { display: none; }
-    .track-wave-timestamps { position: absolute; top: 0.65rem; left: 1rem; right: 1rem; display: flex; justify-content: space-between; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(226, 232, 240, 0.75); pointer-events: none; z-index: 30; text-shadow: 0 2px 6px rgba(8, 8, 14, 0.6); }
-    .track-wave-timestamps span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; padding: 0.35rem 0.6rem; border-radius: 0.9rem; background: rgba(8, 8, 16, 0.55); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 12px rgba(8, 8, 16, 0.4); backdrop-filter: blur(6px); }
-    .track-wave-timestamps .track-wave-remaining { align-items: flex-end; text-align: right; }
-    .track-wave-timestamp-label { font-size: 0.55rem; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(226, 232, 240, 0.72); }
-    .track-wave-timestamp-value { font-size: 0.82rem; font-weight: 600; letter-spacing: 0.06em; color: #fff; text-transform: none; }
     .profile-track-audio { display: none; }
     .profile-track-audio--fallback { display: block; width: 100%; margin-top: 0.5rem; }
     .profile-album-entry { border-radius: 1.25rem; background: rgba(12, 12, 20, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; display: block; }
@@ -6224,33 +6220,11 @@ function createPost(track, { prepend = false } = {}) {
       const pinsContainer = document.createElement('div')
       pinsContainer.className = 'bl-comment-pins absolute inset-0 pointer-events-none'
       waveContainer.appendChild(pinsContainer)
-      const timestampsOverlay = document.createElement('div')
-      timestampsOverlay.className = 'track-wave-timestamps'
-      const durationBadge = document.createElement('span')
-      durationBadge.className = 'track-wave-duration'
-      durationBadge.setAttribute('aria-label', 'Track duration')
-      const durationBadgeLabel = document.createElement('span')
-      durationBadgeLabel.className = 'track-wave-timestamp-label'
-      durationBadgeLabel.textContent = 'Duration'
-      const durationValueEl = document.createElement('span')
-      durationValueEl.className = 'track-wave-timestamp-value'
-      durationValueEl.textContent = '0:00'
-      durationBadge.appendChild(durationBadgeLabel)
-      durationBadge.appendChild(durationValueEl)
-      const remainingBadge = document.createElement('span')
-      remainingBadge.className = 'track-wave-remaining'
-      remainingBadge.setAttribute('aria-label', 'Time remaining')
-      const remainingBadgeLabel = document.createElement('span')
-      remainingBadgeLabel.className = 'track-wave-timestamp-label'
-      remainingBadgeLabel.textContent = 'Left'
       const remainingValueEl = document.createElement('span')
-      remainingValueEl.className = 'track-wave-timestamp-value'
+      remainingValueEl.className = 'track-remaining-time ml-auto text-white/60 font-mono text-xs sm:text-sm tracking-tight whitespace-nowrap'
+      remainingValueEl.setAttribute('aria-label', 'Time remaining')
+      remainingValueEl.title = 'Time remaining'
       remainingValueEl.textContent = '-0:00'
-      remainingBadge.appendChild(remainingBadgeLabel)
-      remainingBadge.appendChild(remainingValueEl)
-      timestampsOverlay.appendChild(durationBadge)
-      timestampsOverlay.appendChild(remainingBadge)
-      waveContainer.appendChild(timestampsOverlay)
       trackWrapper.appendChild(waveContainer)
 
       const audio = document.createElement('audio')
@@ -6598,10 +6572,11 @@ function createPost(track, { prepend = false } = {}) {
       likeBtn.className = 'hover:text-white'
       likeBtn.dataset.act = 'like'
       likeBtn.dataset.id = normalized.id
-        likeBtn.textContent = '❤️ ' + (latestStats.likes || 0)
+      likeBtn.textContent = '❤️ ' + (latestStats.likes || 0)
       actions.appendChild(commentBtn)
       actions.appendChild(repostBtn)
       actions.appendChild(likeBtn)
+      actions.appendChild(remainingValueEl)
       function markRepostedState() {
         hasReposted = true
         repostBtn.disabled = true
@@ -6612,7 +6587,7 @@ function createPost(track, { prepend = false } = {}) {
       if (normalized.isOwner) {
         const renameBtn = document.createElement('button')
         renameBtn.type = 'button'
-        renameBtn.className = 'ml-auto text-white/70 hover:text-white'
+        renameBtn.className = 'ml-2 text-white/70 hover:text-white whitespace-nowrap'
         renameBtn.textContent = '✏️ Rename'
         actions.appendChild(renameBtn)
         renameBtn.addEventListener('click', async (event) => {
@@ -6791,13 +6766,11 @@ function createPost(track, { prepend = false } = {}) {
           const pct = Math.min(100, Math.max(0, (current / duration) * 100))
           barProgress.style.width = pct + '%'
           if (pinProgressEl) pinProgressEl.style.width = pct + '%'
-          durationValueEl.textContent = fmt(duration)
           const remaining = Math.max(0, duration - current)
           remainingValueEl.textContent = '-' + fmt(remaining)
         } else {
           barProgress.style.width = '0%'
           if (pinProgressEl) pinProgressEl.style.width = '0%'
-          durationValueEl.textContent = '0:00'
           remainingValueEl.textContent = '-0:00'
         }
       }
