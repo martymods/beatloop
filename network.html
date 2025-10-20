@@ -5242,17 +5242,64 @@ function recordUserTrackEntry(track) {
   entry.tracks.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
 }
 
+function normalizeAlbumTrackMeta(track, index = 0) {
+  if (!track || typeof track !== 'object') return null
+  const id = track.id || track._id || track.trackId || track.metaId
+  if (!id) return null
+  const order = Number.isFinite(track.order) ? track.order : index
+  const rawUrl = track.url || track.audioUrl || track.source || ''
+  const url = rawUrl ? resolveTrackMediaUrl(rawUrl) : ''
+  const durationCandidates = [
+    track.duration,
+    track.durationSec,
+    track.durationSecs,
+    track.durationSeconds,
+    track.audioDurationSec,
+    track.audioDurationSecs,
+    track.audioDurationSeconds,
+    track.lengthSec,
+    track.lengthSecs,
+    track.lengthSeconds
+  ]
+  let duration = null
+  for (const candidate of durationCandidates) {
+    const num = Number(candidate)
+    if (Number.isFinite(num) && num >= 0) {
+      duration = num
+      break
+    }
+  }
+  if (duration === null) {
+    const durationMsCandidates = [
+      track.durationMs,
+      track.durationMillis,
+      track.audioDurationMs,
+      track.audioDurationMillis
+    ]
+    for (const candidate of durationMsCandidates) {
+      const num = Number(candidate)
+      if (Number.isFinite(num) && num >= 0) {
+        duration = num / 1000
+        break
+      }
+    }
+  }
+  return {
+    id,
+    title: track.title || track.name || 'Untitled',
+    order,
+    url,
+    duration
+  }
+}
+
 function recordUserAlbumEntry(album) {
   if (!album || !album.id || !Array.isArray(album.tracks) || !album.tracks.length) return
   const entry = ensureLibraryEntryForUser(album.user || { email: album.userEmail, displayName: album.artist }, album.ownerId || '')
   if (!entry) return
-  const sanitizedTracks = album.tracks.map(track => ({
-    id: track.id,
-    title: track.title || 'Untitled',
-    order: Number.isFinite(track.order) ? track.order : 0,
-    url: track.url,
-    duration: track.duration || null
-  }))
+  const sanitizedTracks = album.tracks
+    .map((track, index) => normalizeAlbumTrackMeta(track, index))
+    .filter(Boolean)
   const record = {
     id: album.id,
     title: album.title || 'Untitled Album',
@@ -6474,16 +6521,9 @@ function createAlbumPost(album, { prepend = false } = {}) {
 
   const trackControllers = new Map()
   function normalizedTrackFromRemote(track, index) {
-    if (!track || !track.id) return null
-    return {
-      id: track.id,
-      title: track.title || 'Untitled',
-      order: Number.isFinite(track.order) ? track.order : index,
-      url: track.url || '',
-      duration: typeof track.duration === 'number' ? track.duration : (typeof track.durationSec === 'number' ? track.durationSec : null),
-      albumId,
-      db: true
-    }
+    const meta = normalizeAlbumTrackMeta(track, index)
+    if (!meta) return null
+    return { ...meta, albumId, db: true }
   }
 
   if (normalized.db) {
@@ -6493,7 +6533,9 @@ function createAlbumPost(album, { prepend = false } = {}) {
   }
 
   function updateStoredAlbumCache() {
-    const tracksMeta = normalized.tracks.map((track, index) => baseTrackMeta(track, index))
+    const tracksMeta = normalized.tracks
+      .map((track, index) => baseTrackMeta(track, index))
+      .filter(Boolean)
     const cachedEntry = {
       id: albumId,
       title: normalized.title || 'Untitled Album',
@@ -6561,11 +6603,9 @@ function createAlbumPost(album, { prepend = false } = {}) {
   }
 
   function baseTrackMeta(track, index) {
-    return {
-      id: track.id,
-      title: track.title || 'Untitled',
-      order: Number.isFinite(track.order) ? track.order : index
-    }
+    const meta = normalizeAlbumTrackMeta(track, index)
+    if (!meta) return null
+    return meta
   }
 
   async function persistAlbumMutation(mutator) {
@@ -7161,39 +7201,47 @@ function createAlbumPost(album, { prepend = false } = {}) {
     async function materializeAlbum(meta) {
       if (!meta || typeof meta !== 'object') return null
       const id = meta.id || `album-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
-      const createdAt = resolveTrackCreatedAt(meta)
+      let hydratedMeta = { ...meta, id }
       let cover = DEFAULT_TRACK_COVER
-      if (meta.coverKey) {
+      if (hydratedMeta.coverKey) {
         try {
-          const coverUrl = await getBlobUrl('covers', meta.coverKey)
+          const coverUrl = await getBlobUrl('covers', hydratedMeta.coverKey)
           if (coverUrl) cover = coverUrl
         } catch {}
-      } else if (meta.cover) {
-        cover = resolveTrackMediaUrl(meta.cover) || DEFAULT_TRACK_COVER
+      } else if (hydratedMeta.cover) {
+        cover = resolveTrackMediaUrl(hydratedMeta.cover) || DEFAULT_TRACK_COVER
       }
 
-      const tracksRaw = Array.isArray(meta.tracks) && meta.tracks.length ? meta.tracks : (Array.isArray(meta.trackIds) ? meta.trackIds : [])
+      let tracksRaw = Array.isArray(hydratedMeta.tracks) && hydratedMeta.tracks.length
+        ? hydratedMeta.tracks
+        : (Array.isArray(hydratedMeta.trackIds) ? hydratedMeta.trackIds : [])
+
+      const needsHydration = hydratedMeta.db !== false
+        && hydratedMeta.id
+        && (!Array.isArray(tracksRaw) || !tracksRaw.length || tracksRaw.some(entry => entry && !(entry.url || entry.audioUrl)))
+
+      if (needsHydration) {
+        try {
+          const remote = await apiFetchAlbum(hydratedMeta.id)
+          if (remote && typeof remote === 'object') {
+            hydratedMeta = { ...remote, id: remote.id || hydratedMeta.id }
+            if (Array.isArray(remote.tracks) && remote.tracks.length) {
+              tracksRaw = remote.tracks
+            }
+            if (!meta.cover && remote.cover) {
+              cover = resolveTrackMediaUrl(remote.cover) || cover
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to hydrate album metadata', err)
+        }
+      }
+
       const tracks = []
       for (let i = 0; i < tracksRaw.length; i += 1) {
-        const entry = tracksRaw[i]
-        if (!entry) continue
-        const trackId = entry.id || entry.trackId || entry.metaId
-        if (!trackId) continue
-        let url = entry.url || entry.audioUrl || ''
-        if (!url && meta.db !== false) {
-          try { url = await getBlobUrl('tracks', trackId) } catch {}
-        }
-        url = url ? resolveTrackMediaUrl(url) : ''
-        if (!url) continue
-        const orderRaw = Number.isFinite(entry.order) ? entry.order : i
-        tracks.push({
-          id: trackId,
-          title: entry.title || entry.name || 'Untitled',
-          order: orderRaw,
-          url,
-          duration: entry.duration || null,
-          albumId: id
-        })
+        const normalizedTrack = normalizeAlbumTrackMeta(tracksRaw[i], i)
+        if (!normalizedTrack || !normalizedTrack.url) continue
+        tracks.push({ ...normalizedTrack, albumId: id })
       }
       if (!tracks.length) return null
       tracks.sort((a, b) => {
@@ -7202,19 +7250,20 @@ function createAlbumPost(album, { prepend = false } = {}) {
         return a.title.localeCompare(b.title)
       })
 
-      const ownerId = meta.ownerId || meta.owner || meta.userId || null
-      const userInfo = meta.user && typeof meta.user === 'object'
-        ? sanitizeLibraryUserData(meta.user, normalizeLibraryKeyFromUser(meta.user, ownerId || ''))
+      const ownerId = hydratedMeta.ownerId || hydratedMeta.owner || hydratedMeta.userId || null
+      const userInfo = hydratedMeta.user && typeof hydratedMeta.user === 'object'
+        ? sanitizeLibraryUserData(hydratedMeta.user, normalizeLibraryKeyFromUser(hydratedMeta.user, ownerId || ''))
         : (currentUser ? sanitizeLibraryUserData(currentUser, normalizeLibraryKeyFromUser(currentUser, ownerId || '')) : null)
-      const artist = meta.artist
+      const artist = hydratedMeta.artist
         || (userInfo && (userInfo.displayName || userInfo.name || userInfo.email))
         || 'Beatloop creator'
-      const caption = typeof meta.caption === 'string' ? meta.caption : ''
+      const caption = typeof hydratedMeta.caption === 'string' ? hydratedMeta.caption : ''
+      const createdAt = resolveTrackCreatedAt(hydratedMeta)
 
       return {
-        ...meta,
+        ...hydratedMeta,
         id,
-        title: meta.title || 'Untitled Album',
+        title: hydratedMeta.title || 'Untitled Album',
         cover,
         createdAt,
         tracks,
@@ -8447,12 +8496,16 @@ async function updateLeaderboard() {
 
             createAlbumPost({ ...latestAlbum, caption: textVal }, { prepend: true })
 
+            const storedTracks = Array.isArray(latestAlbum.tracks)
+              ? latestAlbum.tracks
+                  .map((track, index) => normalizeAlbumTrackMeta(track, index))
+                  .filter(Boolean)
+              : []
             const storedAlbum = {
               ...latestAlbum,
               caption: textVal,
-              tracks: Array.isArray(latestAlbum.tracks)
-                ? latestAlbum.tracks.map(track => ({ id: track.id, title: track.title, order: track.order }))
-                : []
+              tracks: storedTracks,
+              trackIds: storedTracks
             }
             customAlbums.push(storedAlbum)
             if (customAlbums.length > 20) customAlbums.shift()
@@ -8640,15 +8693,18 @@ async function updateLeaderboard() {
       else customAlbums = customAlbums
         .map(album => {
           if (!album || typeof album !== 'object') return null
-          const trackIds = Array.isArray(album.trackIds)
-            ? album.trackIds
-                .map(entry => ({
-                  id: entry?.id || entry?.trackId || null,
-                  title: entry?.title || entry?.name || 'Untitled',
-                  order: Number.isFinite(entry?.order) ? entry.order : 0
-                }))
-                .filter(entry => entry.id)
+          const tracksFromTracks = Array.isArray(album.tracks)
+            ? album.tracks
+                .map((entry, index) => normalizeAlbumTrackMeta(entry, index))
+                .filter(Boolean)
             : []
+          const tracksFromIds = Array.isArray(album.trackIds)
+            ? album.trackIds
+                .map((entry, index) => normalizeAlbumTrackMeta(entry, index))
+                .filter(Boolean)
+            : []
+          const combinedTracks = tracksFromTracks.length ? tracksFromTracks : tracksFromIds
+          const trackIds = tracksFromIds.length ? tracksFromIds : combinedTracks
           const normalizedUser = album.user && typeof album.user === 'object'
             ? {
                 ...album.user,
@@ -8657,6 +8713,7 @@ async function updateLeaderboard() {
             : null
           return {
             ...album,
+            tracks: combinedTracks,
             trackIds,
             user: normalizedUser,
             createdAt: resolveTrackCreatedAt(album)
@@ -8670,11 +8727,9 @@ async function updateLeaderboard() {
         const normalizedRemote = remoteAlbums.map(album => {
           if (!album || typeof album !== 'object') return null
           const tracksMeta = Array.isArray(album.tracks)
-            ? album.tracks.map((track, index) => ({
-                id: track?.id || track?._id || null,
-                title: track?.title || 'Untitled',
-                order: Number.isFinite(track?.order) ? track.order : index
-              })).filter(entry => entry.id)
+            ? album.tracks
+                .map((track, index) => normalizeAlbumTrackMeta(track, index))
+                .filter(Boolean)
             : []
           const normalizedUser = album.user && typeof album.user === 'object'
             ? {
