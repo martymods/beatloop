@@ -6225,6 +6225,22 @@ function createPost(track, { prepend = false } = {}) {
         return applyLocalTrackFallback(reason, extra, { force: reason === 'media-error' })
       }
 
+      if (trackWave && typeof trackWave.on === 'function') {
+        try {
+          trackWave.on('error', (err) => {
+            const detail = {
+              via: 'wavesurfer-error',
+              message: err?.message || (typeof err === 'string' ? err : null)
+            }
+            if (!tryApplyRuntimeFallback('media-error', detail)) {
+              logPlaybackEvent('error', 'wavesurfer-error', detail)
+            }
+          })
+        } catch (listenerError) {
+          console.warn('Failed to register WaveSurfer error listener', listenerError)
+        }
+      }
+
       const logPlaybackEvent = (level, eventName, extra = {}) => {
         const payload = {
           trackId: normalized.id,
