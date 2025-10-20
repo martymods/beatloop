@@ -6351,14 +6351,17 @@ function createPost(track, { prepend = false } = {}) {
 
 function createAlbumPost(album, { prepend = false } = {}) {
   if (!album || typeof album !== 'object') return null
-  const normalized = album
+  const normalized = { ...album }
   const albumId = normalized.id || `album-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
   if (renderedAlbumIds.has(albumId)) return null
   if (!Array.isArray(normalized.tracks) || !normalized.tracks.length) return null
 
+  const viewerId = typeof getActiveUserId === 'function' ? getActiveUserId() : null
   const author = normalized.user || null
   const artistLabel = normalized.artist || (author && (author.displayName || author.name || author.email)) || 'Beatloop creator'
   const avatarSrc = sanitizeAvatar(author?.avatar || fallbackAvatar)
+  const isOwner = Boolean(normalized.db || (normalized.ownerId && viewerId && normalized.ownerId === viewerId))
+  normalized.isOwner = isOwner
 
   const card = document.createElement('article')
   card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
@@ -6430,7 +6433,6 @@ function createAlbumPost(album, { prepend = false } = {}) {
     captionEl.textContent = normalized.caption
     info.appendChild(captionEl)
   }
-
   header.appendChild(info)
   card.appendChild(header)
 
@@ -6440,7 +6442,8 @@ function createAlbumPost(album, { prepend = false } = {}) {
   const albumTop = document.createElement('div')
   albumTop.className = 'flex flex-col gap-3 md:flex-row md:items-start'
   const coverImg = document.createElement('img')
-  coverImg.src = normalized.cover || DEFAULT_TRACK_COVER
+  const resolveCover = () => normalized.cover || DEFAULT_TRACK_COVER
+  coverImg.src = resolveCover()
   coverImg.onerror = () => { coverImg.src = DEFAULT_TRACK_COVER }
   coverImg.alt = 'Album cover'
   coverImg.className = 'h-32 w-32 rounded-xl object-cover ring-1 ring-white/10'
@@ -6453,9 +6456,6 @@ function createAlbumPost(album, { prepend = false } = {}) {
   titleEl.textContent = normalized.title || 'Untitled Album'
   const countEl = document.createElement('p')
   countEl.className = 'mt-1 text-sm text-white/60'
-  countEl.textContent = normalized.tracks.length === 1
-    ? '1 track'
-    : `${normalized.tracks.length} tracks`
   albumMeta.appendChild(titleEl)
   albumMeta.appendChild(countEl)
   albumTop.appendChild(albumMeta)
@@ -6463,25 +6463,587 @@ function createAlbumPost(album, { prepend = false } = {}) {
 
   const trackList = document.createElement('ol')
   trackList.className = 'mt-4 space-y-3'
-  normalized.tracks.forEach((track, index) => {
+  albumWrapper.appendChild(trackList)
+
+  const expandBtn = document.createElement('button')
+  expandBtn.type = 'button'
+  expandBtn.className = 'mt-3 text-sm font-semibold text-primary hover:text-primary/80'
+  expandBtn.textContent = 'Show all tracks'
+  expandBtn.classList.add('hidden')
+  albumWrapper.appendChild(expandBtn)
+
+  const trackControllers = new Map()
+  let showAllTracks = false
+
+  function updateCountLabel() {
+    const total = normalized.tracks.length
+    countEl.textContent = total === 1 ? '1 track' : `${total} tracks`
+  }
+
+  function baseTrackMeta(track, index) {
+    return {
+      id: track.id,
+      title: track.title || 'Untitled',
+      order: Number.isFinite(track.order) ? track.order : index
+    }
+  }
+
+  function persistAlbumMutation(mutator) {
+    let updated = null
+    customAlbums = (customAlbums || []).map(entry => {
+      if (!entry || entry.id !== albumId) return entry
+      const next = mutator({ ...entry })
+      if (!next) return entry
+      updated = next
+      return next
+    }).filter(Boolean)
+    if (updated) {
+      setJSON('custom_albums', customAlbums)
+      recordUserAlbumEntry({
+        ...normalized,
+        id: albumId,
+        cover: resolveCover(),
+        tracks: normalized.tracks.map((track, index) => ({
+          id: track.id,
+          title: track.title || 'Untitled',
+          order: index,
+          url: track.url,
+          duration: track.duration || null,
+          albumId
+        }))
+      })
+    }
+    return updated
+  }
+
+  function persistTracksToStorage() {
+    normalized.tracks = normalized.tracks
+      .filter(track => track && track.id && track.url)
+      .map((track, index) => ({ ...track, order: index }))
+    persistAlbumMutation(entry => {
+      const tracksMeta = normalized.tracks.map((track, index) => baseTrackMeta(track, index))
+      return {
+        ...entry,
+        tracks: tracksMeta,
+        trackIds: tracksMeta,
+        coverKey: normalized.coverKey || entry.coverKey || null,
+        caption: normalized.caption || entry.caption || ''
+      }
+    })
+    updateCountLabel()
+  }
+
+  async function handleAddTracks(files) {
+    const additions = Array.from(files || []).filter(Boolean)
+    if (!additions.length) return
+    for (const file of additions) {
+      try {
+        const trackId = `${albumId}-track-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+        await putBlob('tracks', trackId, file)
+        const url = await getBlobUrl('tracks', trackId)
+        if (!url) continue
+        const fileName = typeof file.name === 'string' ? file.name.replace(/\.[^/.]+$/, '').trim() : ''
+        const title = fileName || `Track ${normalized.tracks.length + 1}`
+        const newTrack = {
+          id: trackId,
+          title,
+          order: normalized.tracks.length,
+          url,
+          duration: null,
+          albumId,
+          db: true
+        }
+        normalized.tracks.push(newTrack)
+      } catch (err) {
+        console.warn('Failed to add album track', err)
+        alert('One of the selected files could not be added.')
+      }
+    }
+    persistTracksToStorage()
+    renderTrackList()
+  }
+
+  async function handleCoverChange(file) {
+    if (!file) return
+    const previousKey = normalized.coverKey || null
+    try {
+      const optimized = await compressAvatarImage(file, { maxDimension: 1024, quality: 0.85 })
+      const key = `cover-${Date.now()}`
+      await putBlob('covers', key, optimized)
+      const blobUrl = await getBlobUrl('covers', key)
+      normalized.coverKey = key
+      normalized.cover = blobUrl || DEFAULT_TRACK_COVER
+      coverImg.src = resolveCover()
+      if (previousKey && previousKey !== key) {
+        try { await deleteBlob('covers', previousKey) } catch {}
+      }
+      persistAlbumMutation(entry => ({
+        ...entry,
+        coverKey: key
+      }))
+      renderTrackList()
+    } catch (err) {
+      console.warn('Failed to update album cover', err)
+      alert('Album cover update failed: ' + (err?.message || err))
+    }
+  }
+
+  const manageSection = document.createElement('div')
+  manageSection.className = 'mt-4 rounded-2xl border border-white/10 bg-black/50 p-4 hidden'
+  if (isOwner) {
+    const manageHeader = document.createElement('div')
+    manageHeader.className = 'flex flex-col gap-3'
+
+    const addRow = document.createElement('div')
+    addRow.className = 'flex flex-wrap items-center gap-3'
+    const addTracksBtn = document.createElement('button')
+    addTracksBtn.type = 'button'
+    addTracksBtn.className = 'rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20'
+    addTracksBtn.textContent = 'Add songs'
+    const addTracksInput = document.createElement('input')
+    addTracksInput.type = 'file'
+    addTracksInput.accept = 'audio/*'
+    addTracksInput.multiple = true
+    addTracksInput.className = 'hidden'
+    addTracksBtn.addEventListener('click', () => addTracksInput.click())
+    addTracksInput.addEventListener('change', async (event) => {
+      const files = event.target.files
+      event.target.value = ''
+      addTracksBtn.disabled = true
+      const original = addTracksBtn.textContent
+      addTracksBtn.textContent = 'Adding…'
+      try {
+        await handleAddTracks(files)
+      } finally {
+        addTracksBtn.disabled = false
+        addTracksBtn.textContent = original
+      }
+    })
+    addRow.appendChild(addTracksBtn)
+    addRow.appendChild(addTracksInput)
+
+    const coverBtn = document.createElement('button')
+    coverBtn.type = 'button'
+    coverBtn.className = 'rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20'
+    coverBtn.textContent = 'Change cover art'
+    const coverInput = document.createElement('input')
+    coverInput.type = 'file'
+    coverInput.accept = 'image/*'
+    coverInput.className = 'hidden'
+    coverBtn.addEventListener('click', () => coverInput.click())
+    coverInput.addEventListener('change', async (event) => {
+      const file = event.target.files && event.target.files[0]
+      event.target.value = ''
+      if (!file) return
+      coverBtn.disabled = true
+      const original = coverBtn.textContent
+      coverBtn.textContent = 'Updating…'
+      try {
+        await handleCoverChange(file)
+      } finally {
+        coverBtn.disabled = false
+        coverBtn.textContent = original
+      }
+    })
+    addRow.appendChild(coverBtn)
+    addRow.appendChild(coverInput)
+
+    manageHeader.appendChild(addRow)
+
+    const deleteBtn = document.createElement('button')
+    deleteBtn.type = 'button'
+    deleteBtn.className = 'w-full rounded-lg border border-red-400/40 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/10'
+    deleteBtn.textContent = 'Delete album'
+    deleteBtn.addEventListener('click', async () => {
+      if (!window.confirm('Delete this album? This cannot be undone.')) return
+      deleteBtn.disabled = true
+      const original = deleteBtn.textContent
+      deleteBtn.textContent = 'Deleting…'
+      try {
+        for (const track of normalized.tracks) {
+          if (track && track.id) {
+            try { await deleteBlob('tracks', track.id) } catch {}
+          }
+        }
+        if (normalized.coverKey) {
+          try { await deleteBlob('covers', normalized.coverKey) } catch {}
+        }
+        customAlbums = (customAlbums || []).filter(entry => entry && entry.id !== albumId)
+        setJSON('custom_albums', customAlbums)
+        renderedAlbumIds.delete(albumId)
+        card.remove()
+        recordNotification('delete', `Deleted album “${normalized.title || 'Untitled Album'}”`, 'Removed from your feed.', {
+          trackId: albumId,
+          trackTitle: normalized.title || 'Untitled Album',
+          timestamp: Date.now(),
+          storage: 'local'
+        })
+      } catch (err) {
+        console.error('Album delete failed', err)
+        alert('Delete failed: ' + (err?.message || err))
+        deleteBtn.disabled = false
+        deleteBtn.textContent = original
+        return
+      }
+      deleteBtn.textContent = original
+    })
+
+    manageHeader.appendChild(deleteBtn)
+    manageSection.appendChild(manageHeader)
+  }
+
+  const manageToggleBtn = document.createElement('button')
+  manageToggleBtn.type = 'button'
+  manageToggleBtn.className = 'mt-3 inline-flex items-center gap-2 self-start rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-white/20'
+  manageToggleBtn.textContent = 'Manage album'
+
+  function renderComment(entry) {
+    const row = document.createElement('div')
+    row.className = 'rounded-lg bg-white/5 p-2 text-sm text-white/80'
+    const authorName = entry.displayName || entry.user || 'Listener'
+    const header = document.createElement('p')
+    header.className = 'font-semibold text-white'
+    header.textContent = authorName
+    const body = document.createElement('p')
+    body.className = 'mt-1 whitespace-pre-wrap break-words'
+    body.textContent = entry.text || ''
+    row.appendChild(header)
+    row.appendChild(body)
+    return row
+  }
+
+  function buildTrackItem(track, index) {
+    const state = trackControllers.get(track.id) || { hasFetched: false }
+    trackControllers.set(track.id, state)
+
+    let latestStats = normalizeStats(track.stats || getStats(track.id))
+    setStats(track.id, latestStats)
+    let latestComments = Array.isArray(track.comments) && track.comments.length
+      ? track.comments.map(normalizeComment).filter(Boolean)
+      : getCommentsLocal(track.id)
+    persistComments(track.id, latestComments)
+
     const item = document.createElement('li')
-    item.className = 'rounded-xl bg-white/5 p-3 ring-1 ring-white/10'
+    item.className = 'flex flex-col gap-3 rounded-xl bg-white/5 p-3 ring-1 ring-white/10'
+    item.dataset.trackId = track.id
+
+    const headerRow = document.createElement('div')
+    headerRow.className = 'flex items-start gap-3'
+
+    const thumb = document.createElement('img')
+    thumb.src = resolveCover()
+    thumb.onerror = () => { thumb.src = DEFAULT_TRACK_COVER }
+    thumb.alt = 'Album art'
+    thumb.className = 'h-12 w-12 flex-shrink-0 rounded-lg object-cover ring-1 ring-white/10'
+    headerRow.appendChild(thumb)
+
+    const infoCol = document.createElement('div')
+    infoCol.className = 'min-w-0 flex-1'
+
     const titleRow = document.createElement('div')
-    titleRow.className = 'flex items-center justify-between gap-3'
+    titleRow.className = 'flex flex-wrap items-center gap-2'
     const trackTitle = document.createElement('span')
     trackTitle.className = 'font-medium text-white truncate'
     trackTitle.textContent = `${index + 1}. ${track.title || 'Untitled'}`
     titleRow.appendChild(trackTitle)
-    item.appendChild(titleRow)
+
+    if (isOwner) {
+      const renameBtn = document.createElement('button')
+      renameBtn.type = 'button'
+      renameBtn.className = 'text-xs text-white/60 hover:text-white'
+      renameBtn.textContent = 'Rename'
+      renameBtn.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        const currentTitle = track.title || 'Untitled'
+        const next = window.prompt('Rename song', currentTitle)
+        if (next === null) return
+        const trimmed = next.trim()
+        if (!trimmed) {
+          alert('Title cannot be empty.')
+          return
+        }
+        track.title = trimmed
+        persistTracksToStorage()
+        renderTrackList()
+      })
+      titleRow.appendChild(renameBtn)
+
+      const removeBtn = document.createElement('button')
+      removeBtn.type = 'button'
+      removeBtn.className = 'text-xs text-red-400 hover:text-red-300'
+      removeBtn.textContent = 'Remove'
+      removeBtn.addEventListener('click', async (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        if (!window.confirm('Remove this song from the album?')) return
+        try { await deleteBlob('tracks', track.id) } catch {}
+        trackControllers.delete(track.id)
+        normalized.tracks = normalized.tracks.filter(entry => entry && entry.id !== track.id)
+        persistTracksToStorage()
+        renderTrackList()
+      })
+      titleRow.appendChild(removeBtn)
+    }
+
+    infoCol.appendChild(titleRow)
+    headerRow.appendChild(infoCol)
+    item.appendChild(headerRow)
+
     const audio = document.createElement('audio')
     audio.controls = true
     audio.preload = 'none'
-    audio.className = 'mt-2 w-full'
+    audio.className = 'w-full'
     audio.src = track.url
     item.appendChild(audio)
-    trackList.appendChild(item)
+
+    const actions = document.createElement('div')
+    actions.className = 'flex flex-wrap items-center gap-3 text-sm text-white/70'
+    const commentBtn = document.createElement('button')
+    commentBtn.type = 'button'
+    commentBtn.className = 'hover:text-white'
+    commentBtn.dataset.act = 'comment'
+    commentBtn.dataset.id = track.id
+    const repostBtn = document.createElement('button')
+    repostBtn.type = 'button'
+    repostBtn.className = 'hover:text-white'
+    repostBtn.dataset.act = 'repost'
+    repostBtn.dataset.id = track.id
+    const likeBtn = document.createElement('button')
+    likeBtn.type = 'button'
+    likeBtn.className = 'hover:text-white'
+    likeBtn.dataset.act = 'like'
+    likeBtn.dataset.id = track.id
+    actions.appendChild(commentBtn)
+    actions.appendChild(repostBtn)
+    actions.appendChild(likeBtn)
+    item.appendChild(actions)
+
+    const commentsSection = document.createElement('div')
+    commentsSection.className = 'hidden rounded-lg bg-black/40 p-3'
+    const commentsList = document.createElement('div')
+    commentsList.className = 'space-y-2'
+    commentsSection.appendChild(commentsList)
+    const commentForm = document.createElement('form')
+    commentForm.className = 'mt-3 flex gap-2'
+    const commentInput = document.createElement('input')
+    commentInput.type = 'text'
+    commentInput.required = true
+    commentInput.placeholder = 'Leave a comment'
+    commentInput.className = 'flex-1 rounded-lg bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-primary/60'
+    const submitBtn = document.createElement('button')
+    submitBtn.type = 'submit'
+    submitBtn.className = 'rounded-lg bg-primary/70 px-3 py-2 text-sm font-semibold text-white hover:bg-primary'
+    submitBtn.textContent = 'Post'
+    commentForm.appendChild(commentInput)
+    commentForm.appendChild(submitBtn)
+    commentsSection.appendChild(commentForm)
+    item.appendChild(commentsSection)
+
+    function renderActions() {
+      commentBtn.textContent = '💬 ' + (latestStats.comments || 0)
+      repostBtn.textContent = '🔁 ' + (latestStats.reposts || 0)
+      likeBtn.textContent = '❤️ ' + (latestStats.likes || 0)
+    }
+
+    function renderComments() {
+      commentsList.innerHTML = ''
+      if (!latestComments.length) {
+        const empty = document.createElement('p')
+        empty.className = 'text-sm text-white/50'
+        empty.textContent = 'No comments yet.'
+        commentsList.appendChild(empty)
+        return
+      }
+      latestComments.forEach(entry => {
+        if (!entry) return
+        commentsList.appendChild(renderComment(entry))
+      })
+    }
+
+    function applyStats(stats) {
+      latestStats = normalizeStats(stats || latestStats)
+      setStats(track.id, latestStats)
+      renderActions()
+    }
+
+    function applyComments(comments) {
+      latestComments = Array.isArray(comments)
+        ? comments.map(normalizeComment).filter(Boolean)
+        : []
+      persistComments(track.id, latestComments)
+      renderActions()
+      renderComments()
+    }
+
+    renderActions()
+    renderComments()
+
+    commentBtn.addEventListener('click', () => {
+      const shouldShow = commentsSection.classList.contains('hidden')
+      commentsSection.classList.toggle('hidden', !shouldShow)
+      if (shouldShow) {
+        commentInput.focus()
+      }
+    })
+
+    commentForm.addEventListener('submit', async (event) => {
+      event.preventDefault()
+      const text = commentInput.value.trim()
+      if (!text) return
+      const optimistic = {
+        id: null,
+        text,
+        user: currentUser?.email || '',
+        displayName: currentUser?.displayName || currentUser?.name || 'You',
+        createdAt: Date.now(),
+        clientId: `comment-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+      }
+      latestComments = [...latestComments, optimistic]
+      applyComments(latestComments)
+      applyStats({ ...latestStats, comments: (latestStats.comments || 0) + 1 })
+      commentInput.value = ''
+      try {
+        const result = await postTrackComment(track.id, { text, clientId: optimistic.clientId })
+        if (result?.comment) {
+          latestComments = latestComments.map(entry => entry.clientId === optimistic.clientId ? result.comment : entry)
+          applyComments(latestComments)
+        } else {
+          applyComments(latestComments)
+        }
+        if (result?.stats) applyStats(result.stats)
+      } catch (err) {
+        console.warn('Failed to sync album comment', err)
+        applyComments(latestComments)
+      }
+    })
+
+    likeBtn.addEventListener('click', async () => {
+      if (likeBtn.dataset.loading === '1') return
+      likeBtn.dataset.loading = '1'
+      applyStats({ ...latestStats, likes: (latestStats.likes || 0) + 1 })
+      try {
+        const result = await recordTrackMetricRemote(track.id, 'likes')
+        if (result?.stats) applyStats(result.stats)
+      } catch (err) {
+        console.warn('Failed to sync like', err)
+      } finally {
+        likeBtn.dataset.loading = '0'
+      }
+    })
+
+    let hasReposted = false
+    function markRepostedState() {
+      hasReposted = true
+      repostBtn.disabled = true
+      repostBtn.classList.add('opacity-60', 'cursor-not-allowed')
+      renderActions()
+    }
+
+    repostBtn.addEventListener('click', async () => {
+      if (repostBtn.dataset.loading === '1' || hasReposted) return
+      repostBtn.dataset.loading = '1'
+      applyStats({ ...latestStats, reposts: (latestStats.reposts || 0) + 1 })
+      try {
+        const result = await recordTrackMetricRemote(track.id, 'reposts')
+        markRepostedState()
+        if (result?.stats) applyStats(result.stats)
+      } catch (err) {
+        console.warn('Failed to sync repost', err)
+        if (err && err.status === 409) {
+          markRepostedState()
+        }
+      } finally {
+        repostBtn.dataset.loading = '0'
+      }
+    })
+
+    if (!state.hasFetched) {
+      state.hasFetched = true
+      ;(async () => {
+        try {
+          const cachedLocalStats = getStats(track.id)
+          if (cachedLocalStats) applyStats(cachedLocalStats)
+          const remoteStats = await fetchTrackStatsRemote(track.id)
+          if (remoteStats) {
+            const mergedStats = await backfillTrackStats(track.id, cachedLocalStats, remoteStats)
+            applyStats(mergedStats || remoteStats)
+          }
+          const localComments = getCommentsLocal(track.id)
+          if (!latestComments.length && localComments.length) {
+            applyComments(localComments)
+          }
+          const remoteComments = await fetchTrackCommentsRemote(track.id)
+          if (remoteComments && remoteComments.length) {
+            const mergedComments = await backfillTrackComments(track.id, localComments, remoteComments)
+            applyComments(mergedComments)
+          }
+        } catch (err) {
+          console.warn('Failed to refresh album track stats/comments', err)
+        }
+      })()
+    }
+
+    recordUserTrackEntry({
+      ...track,
+      cover: resolveCover(),
+      albumId,
+      user: normalized.user,
+      ownerId: normalized.ownerId
+    })
+
+    return item
+  }
+
+  function renderTrackList() {
+    trackList.innerHTML = ''
+    normalized.tracks = normalized.tracks
+      .filter(track => track && track.id && track.url)
+      .sort((a, b) => {
+        const orderDiff = (a.order || 0) - (b.order || 0)
+        if (orderDiff !== 0) return orderDiff
+        return (a.title || '').localeCompare(b.title || '')
+      })
+    normalized.tracks.forEach((track, index) => {
+      track.order = index
+      track.albumId = albumId
+      const item = buildTrackItem(track, index)
+      if (!showAllTracks && index >= 3) {
+        item.classList.add('hidden')
+      } else {
+        item.classList.remove('hidden')
+      }
+      trackList.appendChild(item)
+    })
+    const shouldShowToggle = normalized.tracks.length > 3
+    if (shouldShowToggle) {
+      expandBtn.classList.remove('hidden')
+      expandBtn.textContent = showAllTracks
+        ? 'Show fewer tracks'
+        : `Show all tracks (${normalized.tracks.length - 3} more)`
+    } else {
+      expandBtn.classList.add('hidden')
+    }
+    updateCountLabel()
+  }
+
+  expandBtn.addEventListener('click', () => {
+    showAllTracks = !showAllTracks
+    renderTrackList()
   })
-  albumWrapper.appendChild(trackList)
+
+  if (isOwner) {
+    manageToggleBtn.addEventListener('click', () => {
+      const willShow = manageSection.classList.contains('hidden')
+      manageSection.classList.toggle('hidden', !willShow)
+      manageToggleBtn.textContent = willShow ? 'Hide album manager' : 'Manage album'
+    })
+    albumWrapper.appendChild(manageToggleBtn)
+    albumWrapper.appendChild(manageSection)
+  }
+
+  renderTrackList()
+
   card.appendChild(albumWrapper)
 
   if (feedEl) {
@@ -6494,8 +7056,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
 
   return card
 }
-
-    // ---------- Materialize meta -> playable track (resolve IDB blob URLs)
+// ---------- Materialize meta -> playable track (resolve IDB blob URLs)
     async function materialize(meta) {
       if (!meta) return null
         if (meta.db) {
