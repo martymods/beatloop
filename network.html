@@ -3608,11 +3608,19 @@
           headers: { 'Content-Type': 'application/json', ...AUTH.hdr() },
           body: JSON.stringify(body)
         })
-        if (!resp.ok) throw new Error(`${action} request failed`)
         const payload = await resp.json().catch(() => null)
-        const normalized = normalizeStats(payload?.stats)
-        remoteStatsCache.set(trackId, normalized)
-        setStats(trackId, normalized)
+        if (!resp.ok) {
+          const error = new Error(`${action} request failed`)
+          error.status = resp.status
+          error.payload = payload
+          throw error
+        }
+        const hasStats = payload && typeof payload.stats === 'object'
+        const normalized = hasStats ? normalizeStats(payload.stats) : null
+        if (hasStats && normalized) {
+          remoteStatsCache.set(trackId, normalized)
+          setStats(trackId, normalized)
+        }
         return { payload, stats: normalized }
       } catch (err) {
         console.warn(`Failed to record ${action}`, err)
@@ -4267,7 +4275,9 @@ let sessionsCard = null;
 
       function resolveTrackCreatedAt(track) {
         if (!track || typeof track !== 'object') return Date.now()
-        const direct = coerceTimestamp(track.createdAt ?? track.created_at ?? track.timestamp ?? track.date)
+        const direct = coerceTimestamp(
+          track.bumpedAt ?? track.bumped_at ?? track.createdAt ?? track.created_at ?? track.timestamp ?? track.date
+        )
         if (direct) return direct
         const alt = coerceTimestamp(track.createdAtMs ?? track.createdAtSec ?? track.createdAtSeconds)
         if (alt) return alt
@@ -4518,6 +4528,14 @@ function createPost(track, { prepend = false } = {}) {
     if (key) commentSeenKeys.add(key)
   })
   let commentsInitialized = false
+  let hasReposted = false
+  const playbackState = {
+    accumulated: 0,
+    lastTime: 0,
+    counted: false,
+    threshold: 20,
+    duration: 0
+  }
   const card = document.createElement('article')
   card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
   card.dataset.trackId = normalized.id
@@ -4949,6 +4967,12 @@ function createPost(track, { prepend = false } = {}) {
       actions.appendChild(commentBtn)
       actions.appendChild(repostBtn)
       actions.appendChild(likeBtn)
+      function markRepostedState() {
+        hasReposted = true
+        repostBtn.disabled = true
+        repostBtn.classList.add('opacity-60', 'cursor-not-allowed')
+        renderAll()
+      }
       let deleteInFlight = false
       if (normalized.isOwner) {
         const deleteBtn = document.createElement('button')
@@ -5058,7 +5082,9 @@ function createPost(track, { prepend = false } = {}) {
         renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0, latestComments)
         commentBtn.textContent = '💬 ' + (latestStats.comments || 0)
         likeBtn.textContent    = '❤️ ' + (latestStats.likes || 0)
-        repostBtn.textContent = '🔁 ' + (latestStats.reposts || 0)
+        repostBtn.textContent = hasReposted
+          ? '🔁 Reposted'
+          : '🔁 ' + (latestStats.reposts || 0)
       }
 
       function applyStats(stats) {
@@ -5152,17 +5178,74 @@ function createPost(track, { prepend = false } = {}) {
 
       renderAll()
 
+      const PLAYBACK_EPSILON = 0.05
+
+      function updatePlaybackThreshold() {
+        const duration = Number(audio.duration)
+        if (Number.isFinite(duration) && duration > 0) {
+          playbackState.duration = duration
+          playbackState.threshold = Math.min(20, duration)
+        } else {
+          playbackState.duration = 0
+          playbackState.threshold = 20
+        }
+      }
+
+      function resetPlaybackCycle() {
+        updatePlaybackThreshold()
+        playbackState.accumulated = 0
+        playbackState.counted = false
+        playbackState.lastTime = Number(audio.currentTime) || 0
+      }
+
+      function maybeRecordPlay() {
+        if (playbackState.counted) return
+        const threshold = playbackState.threshold || 0
+        if (threshold <= 0) return
+        if (playbackState.accumulated + PLAYBACK_EPSILON < threshold) return
+        playbackState.counted = true
+        const listened = Math.max(playbackState.accumulated, threshold)
+        const optimisticStats = { ...latestStats, plays: (latestStats.plays || 0) + 1 }
+        applyStats(optimisticStats)
+        const payload = { timestamp: Date.now(), listenedSec: listened }
+        const durationForPayload = playbackState.duration || (Number(audio.duration) || 0)
+        if (durationForPayload) payload.durationSec = durationForPayload
+        recordTrackMetricRemote(normalized.id, 'plays', payload)
+          .then(result => {
+            if (result?.stats) applyStats(result.stats)
+          })
+          .catch(err => { console.warn('Failed to sync play', err) })
+      }
+
+      function handlePlaybackProgress() {
+        const current = Number(audio.currentTime) || 0
+        if (current < playbackState.lastTime - 0.5) {
+          resetPlaybackCycle()
+        }
+        const delta = Math.max(0, current - playbackState.lastTime)
+        playbackState.accumulated += delta
+        playbackState.lastTime = current
+        maybeRecordPlay()
+      }
+
+      resetPlaybackCycle()
+
+      audio.addEventListener('loadedmetadata', () => {
+        updatePlaybackThreshold()
+        playbackState.lastTime = Number(audio.currentTime) || 0
+      })
+
       audio.addEventListener('timeupdate', () => {
         if (audio.duration) {
           const pct = (audio.currentTime / audio.duration) * 100
           barProgress.style.width = pct + '%'
         }
+        handlePlaybackProgress()
       })
-      audio.addEventListener('ended', () => {
-        audio.currentTime = 0
-        audio.play()
-      })
+
       audio.addEventListener('play', () => {
+        updatePlaybackThreshold()
+        playbackState.lastTime = Number(audio.currentTime) || 0
         const meta = {
           title: normalized.title,
           artist: normalized.artist,
@@ -5174,12 +5257,28 @@ function createPost(track, { prepend = false } = {}) {
         if ('mediaSession' in navigator) {
           try { navigator.mediaSession.metadata = new MediaMetadata(meta) } catch {}
         }
-        applyStats({ ...latestStats, plays: (latestStats.plays || 0) + 1 })
-        recordTrackMetricRemote(normalized.id, 'plays', { timestamp: Date.now() })
-          .then(result => {
-            if (result?.stats) applyStats(result.stats)
-          })
-          .catch(err => { console.warn('Failed to sync play', err) })
+      })
+
+      audio.addEventListener('pause', () => {
+        playbackState.lastTime = Number(audio.currentTime) || playbackState.lastTime
+      })
+
+      audio.addEventListener('seeking', () => {
+        playbackState.lastTime = Number(audio.currentTime) || 0
+      })
+
+      audio.addEventListener('seeked', () => {
+        if ((Number(audio.currentTime) || 0) < 0.5) {
+          resetPlaybackCycle()
+        } else {
+          playbackState.lastTime = Number(audio.currentTime) || 0
+        }
+      })
+
+      audio.addEventListener('ended', () => {
+        audio.currentTime = 0
+        resetPlaybackCycle()
+        audio.play()
       })
       btn.addEventListener('click', async () => {
         const text = input.value.trim()
@@ -5232,15 +5331,29 @@ function createPost(track, { prepend = false } = {}) {
         }
       })
       repostBtn.addEventListener('click', async () => {
-        if (repostBtn.dataset.loading === '1') return
+        if (repostBtn.dataset.loading === '1' || hasReposted) return
         repostBtn.dataset.loading = '1'
         statNotificationSuppress.reposts += 1
+        const previousStats = { ...latestStats }
         applyStats({ ...latestStats, reposts: (latestStats.reposts || 0) + 1 })
         try {
           const result = await recordTrackMetricRemote(normalized.id, 'reposts')
+          markRepostedState()
           if (result?.stats) applyStats(result.stats)
+          if (feedEl) {
+            if (card.parentElement === feedEl) {
+              try { feedEl.removeChild(card) } catch {}
+            }
+            const nowIso = new Date().toISOString()
+            card.dataset.bumpedAt = nowIso
+            feedEl.insertBefore(card, feedEl.firstChild || null)
+          }
         } catch (err) {
           console.warn('Failed to sync repost', err)
+          applyStats(previousStats)
+          if (err && err.status === 409) {
+            markRepostedState()
+          }
         } finally {
           repostBtn.dataset.loading = '0'
         }
