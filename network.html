@@ -158,6 +158,172 @@
     #blIntegrationPanels {
       scrollbar-gutter: stable both-edges;
     }
+
+    .bl-comment-pins {
+      overflow: visible;
+    }
+
+    .bl-comment-pin {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .bl-comment-pin .bl-comment-halo {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 48px;
+      height: 48px;
+      margin-top: -24px;
+      margin-left: -24px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(124,58,237,0.55) 0%, rgba(14,165,233,0.25) 55%, rgba(14,165,233,0) 70%);
+      opacity: 0;
+      transform: scale(0.6);
+      filter: blur(0);
+      z-index: 1;
+    }
+
+    .bl-comment-pin .bl-comment-avatar {
+      position: relative;
+      z-index: 2;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      object-fit: cover;
+      box-shadow: 0 6px 16px rgba(8, 8, 14, 0.5);
+      border: 2px solid rgba(255, 255, 255, 0.12);
+      background: #0c0c12;
+      transform-origin: center;
+    }
+
+    .bl-comment-pin .bl-comment-bubble {
+      position: absolute;
+      bottom: calc(100% + 0.5rem);
+      left: 50%;
+      transform: translate(-50%, -4px) scale(0.9);
+      opacity: 0;
+      pointer-events: none;
+      background: rgba(12, 12, 18, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 0.875rem;
+      padding: 0.45rem 0.75rem;
+      min-width: 150px;
+      max-width: 260px;
+      color: #f4f4ff;
+      font-size: 0.75rem;
+      line-height: 1.3;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: 0 18px 38px rgba(6, 6, 12, 0.55);
+      z-index: 3;
+    }
+
+    .bl-comment-pin .bl-comment-bubble::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-top: 8px solid rgba(12, 12, 18, 0.96);
+      border-left: 7px solid transparent;
+      border-right: 7px solid transparent;
+      transform: translate(-50%, -1px);
+      filter: drop-shadow(0 4px 4px rgba(6, 6, 12, 0.45));
+    }
+
+    .bl-comment-pin .bl-comment-likes {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.6rem;
+      height: 1.6rem;
+      padding: 0 0.25rem;
+      border-radius: 999px;
+      background: #e80202;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.75rem;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 6px 14px rgba(232, 2, 2, 0.45);
+    }
+
+    .bl-comment-pin .bl-comment-text {
+      margin: 0;
+      color: inherit;
+      font-size: 0.75rem;
+      font-weight: 500;
+      word-break: break-word;
+      white-space: normal;
+    }
+
+    .bl-comment-pin.is-animating .bl-comment-halo {
+      animation: blCommentHalo 2.4s ease-out forwards;
+    }
+
+    .bl-comment-pin.is-animating .bl-comment-avatar {
+      animation: blCommentAvatar 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    .bl-comment-pin.is-animating .bl-comment-bubble {
+      animation: blCommentBubble 2.6s cubic-bezier(0.25, 0.9, 0.3, 1.01) forwards;
+    }
+
+    @keyframes blCommentHalo {
+      0% {
+        opacity: 0;
+        transform: scale(0.4);
+      }
+      20% {
+        opacity: 0.65;
+        transform: scale(1);
+      }
+      60% {
+        opacity: 0.4;
+        transform: scale(1.25);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(1.45);
+      }
+    }
+
+    @keyframes blCommentAvatar {
+      0% {
+        transform: scale(0.7);
+      }
+      45% {
+        transform: scale(1.15);
+      }
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    @keyframes blCommentBubble {
+      0% {
+        opacity: 0;
+        transform: translate(-50%, -4px) scale(0.88);
+      }
+      15% {
+        opacity: 1;
+        transform: translate(-50%, -18px) scale(1);
+      }
+      75% {
+        opacity: 1;
+        transform: translate(-50%, -18px) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translate(-50%, -28px) scale(0.97);
+      }
+    }
   
     body.studio-embed {
       background: #0c0c12;
@@ -3638,6 +3804,11 @@
 
     function normalizeComment(raw) {
       if (!raw || typeof raw !== 'object') return null
+      const likesValue = Number(
+        raw.likes ?? raw.likeCount ?? raw.like_count ?? raw.reactions ?? raw.reactionCount ??
+        raw.heartCount ?? raw.hearts ?? (raw.stats && raw.stats.likes) ?? (raw.meta && raw.meta.likes) ?? 0
+      )
+      const likes = Number.isFinite(likesValue) && likesValue > 0 ? likesValue : 0
       return {
         id: raw.id || raw._id || null,
         text: typeof raw.text === 'string' ? raw.text : '',
@@ -3647,7 +3818,8 @@
         displayName: typeof raw.displayName === 'string' ? raw.displayName : '',
         avatar: sanitizeAvatar(raw.avatar),
         userId: raw.userId || null,
-        clientId: typeof raw.clientId === 'string' ? raw.clientId : null
+        clientId: typeof raw.clientId === 'string' ? raw.clientId : null,
+        likes
       }
     }
 
@@ -4213,10 +4385,30 @@ let sessionsCard = null;
     let pendingCoverKey = null      // IDB key for optional cover
 
     // ---------- Render comments & pins
-      function renderComments(trackId, listContainer, pinsContainer, duration, comments) {
-      const source = Array.isArray(comments) ? comments.map(normalizeComment).filter(Boolean) : getCommentsLocal(trackId)
+    function renderComments(trackId, listContainer, pinsContainer, duration, comments) {
+      const markers = []
+      const source = Array.isArray(comments)
+        ? comments.map(normalizeComment).filter(Boolean)
+        : getCommentsLocal(trackId)
       listContainer.innerHTML = ''
-      pinsContainer.innerHTML = ''
+      if (pinsContainer) {
+        pinsContainer.innerHTML = ''
+        if (typeof pinsContainer.classList?.add === 'function') {
+          pinsContainer.classList.add('bl-comment-pins')
+        }
+      }
+
+      const safeDuration = Number(duration) || 0
+      const hasDuration = Number.isFinite(safeDuration) && safeDuration > 0
+
+      const formatCommentLikes = (value) => {
+        const n = Number(value)
+        if (!Number.isFinite(n) || n <= 0) return '0'
+        if (n >= 1e6) return (n >= 1e7 ? Math.round(n / 1e6) : (n / 1e6).toFixed(1)) + 'M'
+        if (n >= 1e3) return (n >= 1e4 ? Math.round(n / 1e3) : (n / 1e3).toFixed(1)) + 'K'
+        return Math.round(n).toString()
+      }
+
       source.forEach(c => {
         const row = document.createElement('div')
         row.className = 'flex items-start gap-2 mb-2'
@@ -4237,17 +4429,49 @@ let sessionsCard = null;
         txtWrapper.appendChild(text)
         row.appendChild(txtWrapper)
         listContainer.appendChild(row)
-        if (duration) {
-          const pin = document.createElement('img')
-          pin.src = sanitizeAvatar(c.avatar)
-          pin.onerror = () => { pin.src = fallbackAvatar }
-          pin.alt = 'marker'
-          pin.className = 'absolute -translate-x-1/2 top-0 h-6 w-6 rounded-full ring-1 ring-white/10 object-cover pointer-events-none'
-          const pct = (c.time / duration) * 100
-          pin.style.left = pct + '%'
-          pinsContainer.appendChild(pin)
+
+        if (hasDuration && pinsContainer) {
+          const markerTime = Math.max(0, Number(c.time) || 0)
+          const pct = Math.min(100, Math.max(0, (markerTime / safeDuration) * 100))
+          const wrapper = document.createElement('div')
+          wrapper.className = 'bl-comment-pin'
+          wrapper.style.left = pct + '%'
+          wrapper.dataset.time = markerTime.toString()
+          if (c.id) wrapper.dataset.commentId = c.id
+          if (c.clientId && !c.id) wrapper.dataset.commentId = c.clientId
+          const halo = document.createElement('div')
+          halo.className = 'bl-comment-halo'
+          wrapper.appendChild(halo)
+          const pinAvatar = document.createElement('img')
+          pinAvatar.src = sanitizeAvatar(c.avatar)
+          pinAvatar.onerror = () => { pinAvatar.src = fallbackAvatar }
+          pinAvatar.alt = ''
+          pinAvatar.setAttribute('aria-hidden', 'true')
+          pinAvatar.className = 'bl-comment-avatar'
+          wrapper.appendChild(pinAvatar)
+          const bubble = document.createElement('div')
+          bubble.className = 'bl-comment-bubble'
+          const likesBadge = document.createElement('span')
+          likesBadge.className = 'bl-comment-likes'
+          likesBadge.textContent = formatCommentLikes(c.likes)
+          likesBadge.setAttribute('aria-hidden', 'true')
+          if (Number(c.likes) > 0) {
+            likesBadge.title = Number(c.likes) === 1 ? '1 like' : `${formatCommentLikes(c.likes)} likes`
+          } else {
+            likesBadge.title = '0 likes'
+          }
+          bubble.appendChild(likesBadge)
+          const bubbleText = document.createElement('p')
+          bubbleText.className = 'bl-comment-text'
+          bubbleText.textContent = c.text || 'Left a comment'
+          bubble.appendChild(bubbleText)
+          wrapper.appendChild(bubble)
+          pinsContainer.appendChild(wrapper)
+          markers.push({ time: markerTime, element: wrapper, played: false, timeoutId: null })
         }
       })
+
+      return markers
     }
 
       function coerceTimestamp(value) {
@@ -4535,16 +4759,49 @@ function createPost(track, { prepend = false } = {}) {
     const key = entry.id || entry.clientId || `${entry.user || ''}-${entry.createdAt || ''}-${entry.text || ''}`
     if (key) commentSeenKeys.add(key)
   })
-  let commentsInitialized = false
-  let hasReposted = false
-  const playbackState = {
-    accumulated: 0,
-    lastTime: 0,
-    counted: false,
-    threshold: 20,
-    duration: 0
-  }
-  const card = document.createElement('article')
+    let commentsInitialized = false
+    let hasReposted = false
+    const playbackState = {
+      accumulated: 0,
+      lastTime: 0,
+      counted: false,
+      threshold: 20,
+      duration: 0
+    }
+    let commentMarkers = []
+    let lastProgressTime = 0
+    const COMMENT_ANIMATION_DURATION_MS = 2800
+
+    function triggerCommentAnimation(marker) {
+      if (!marker || !marker.element) return
+      const el = marker.element
+      if (marker.timeoutId) {
+        clearTimeout(marker.timeoutId)
+      }
+      el.classList.remove('is-animating')
+      void el.offsetWidth
+      el.classList.add('is-animating')
+      marker.timeoutId = setTimeout(() => {
+        el.classList.remove('is-animating')
+        marker.timeoutId = null
+      }, COMMENT_ANIMATION_DURATION_MS)
+    }
+
+    function resetCommentMarkers(hard = false) {
+      commentMarkers.forEach(marker => {
+        if (!marker) return
+        marker.played = false
+        if (marker.timeoutId) {
+          clearTimeout(marker.timeoutId)
+          marker.timeoutId = null
+        }
+        if (hard && marker.element) {
+          marker.element.classList.remove('is-animating')
+        }
+      })
+    }
+
+    const card = document.createElement('article')
   card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
   card.dataset.trackId = normalized.id
 
@@ -4677,7 +4934,7 @@ function createPost(track, { prepend = false } = {}) {
       barWrapper.appendChild(barProgress)
       waveContainer.appendChild(barWrapper)
       const pinsContainer = document.createElement('div')
-      pinsContainer.className = 'absolute top-0 left-0 h-2 w-full pointer-events-none'
+      pinsContainer.className = 'absolute top-0 left-0 h-2 w-full pointer-events-none bl-comment-pins'
       waveContainer.appendChild(pinsContainer)
       trackWrapper.appendChild(waveContainer)
 
@@ -5087,7 +5344,28 @@ function createPost(track, { prepend = false } = {}) {
       scheduleLeaderboardRefresh()
 
       function renderAll() {
-        renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0, latestComments)
+        if (commentMarkers.length) {
+          commentMarkers.forEach(marker => {
+            if (!marker) return
+            if (marker.timeoutId) {
+              clearTimeout(marker.timeoutId)
+              marker.timeoutId = null
+            }
+            if (marker.element) {
+              marker.element.classList.remove('is-animating')
+            }
+          })
+        }
+        const markers = renderComments(normalized.id, commentsList, pinsContainer, audio.duration || 0, latestComments)
+        const currentTime = Number(audio.currentTime) || 0
+        markers.forEach(marker => {
+          if (!marker) return
+          if (marker.time < currentTime - 0.25) {
+            marker.played = true
+          }
+        })
+        commentMarkers = markers
+        lastProgressTime = currentTime
         commentBtn.textContent = '💬 ' + (latestStats.comments || 0)
         likeBtn.textContent    = '❤️ ' + (latestStats.likes || 0)
         repostBtn.textContent = hasReposted
@@ -5204,6 +5482,8 @@ function createPost(track, { prepend = false } = {}) {
         playbackState.accumulated = 0
         playbackState.counted = false
         playbackState.lastTime = Number(audio.currentTime) || 0
+        lastProgressTime = playbackState.lastTime
+        resetCommentMarkers(true)
       }
 
       function maybeRecordPlay() {
@@ -5241,19 +5521,38 @@ function createPost(track, { prepend = false } = {}) {
       audio.addEventListener('loadedmetadata', () => {
         updatePlaybackThreshold()
         playbackState.lastTime = Number(audio.currentTime) || 0
+        lastProgressTime = playbackState.lastTime
+        renderAll()
       })
 
       audio.addEventListener('timeupdate', () => {
-        if (audio.duration) {
-          const pct = (audio.currentTime / audio.duration) * 100
+        const duration = Number(audio.duration) || 0
+        const current = Number(audio.currentTime) || 0
+        if (duration > 0) {
+          const pct = Math.min(100, Math.max(0, (current / duration) * 100))
           barProgress.style.width = pct + '%'
         }
+        if (current + 0.05 < lastProgressTime) {
+          resetCommentMarkers(true)
+        }
+        if (commentMarkers.length) {
+          commentMarkers.forEach(marker => {
+            if (!marker || marker.played) return
+            const markerTime = Number(marker.time) || 0
+            if (current >= markerTime) {
+              marker.played = true
+              triggerCommentAnimation(marker)
+            }
+          })
+        }
+        lastProgressTime = current
         handlePlaybackProgress()
       })
 
       audio.addEventListener('play', () => {
         updatePlaybackThreshold()
         playbackState.lastTime = Number(audio.currentTime) || 0
+        lastProgressTime = playbackState.lastTime
         const meta = {
           title: normalized.title,
           artist: normalized.artist,
@@ -5268,18 +5567,30 @@ function createPost(track, { prepend = false } = {}) {
       })
 
       audio.addEventListener('pause', () => {
-        playbackState.lastTime = Number(audio.currentTime) || playbackState.lastTime
+        const current = Number(audio.currentTime) || playbackState.lastTime
+        playbackState.lastTime = current
+        lastProgressTime = current
       })
 
       audio.addEventListener('seeking', () => {
-        playbackState.lastTime = Number(audio.currentTime) || 0
+        const current = Number(audio.currentTime) || 0
+        if (current + 0.05 < lastProgressTime) {
+          resetCommentMarkers(true)
+        }
+        playbackState.lastTime = current
+        lastProgressTime = current
       })
 
       audio.addEventListener('seeked', () => {
-        if ((Number(audio.currentTime) || 0) < 0.5) {
+        const current = Number(audio.currentTime) || 0
+        if (current < 0.5) {
           resetPlaybackCycle()
         } else {
-          playbackState.lastTime = Number(audio.currentTime) || 0
+          if (current + 0.05 < lastProgressTime) {
+            resetCommentMarkers(true)
+          }
+          playbackState.lastTime = current
+          lastProgressTime = current
         }
       })
 
