@@ -2021,7 +2021,14 @@
           <span class="hidden sm:inline">Notifications</span>
         </button>
         <button id="openProfile" type="button" class="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary/40 md:hidden">
-          <span id="headerProfileAvatar" class="h-8 w-8 rounded-full bg-white/10 bg-cover bg-center ring-1 ring-white/10" style="background-image: url('./img/avatar-default.svg');"></span>
+          <img
+            id="headerProfileAvatar"
+            src="./img/avatar-default.svg"
+            data-fallback-src="./img/avatar-default.svg"
+            alt="Profile avatar"
+            class="h-8 w-8 rounded-full object-cover ring-1 ring-white/10"
+            loading="lazy"
+          />
           <span class="hidden sm:inline">Profile</span>
         </button>
         <button id="logoutBtn" class="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold shadow-glow hover:shadow-lg hover:shadow-primary/40 active:scale-[.99]">Log out</button>
@@ -11300,6 +11307,9 @@ void main()
   const profileNavContainer = document.querySelector('.bl-profile-nav');
   const profileNavBall = document.getElementById('profileNavBall');
   const headerProfileAvatar = document.getElementById('headerProfileAvatar');
+  const headerProfileAvatarFallback = (headerProfileAvatar instanceof HTMLImageElement)
+    ? (headerProfileAvatar.dataset.fallbackSrc || headerProfileAvatar.src)
+    : null;
   const profileNavCount = document.getElementById('profileNavCount');
   const profileNavPreview = document.getElementById('profileNavPreview');
   const profileFirstNameInput = document.getElementById('profileFirstNameInput');
@@ -11324,13 +11334,25 @@ void main()
   };
   window.profileState = profileState;
 
+  if (headerProfileAvatar instanceof HTMLImageElement && headerProfileAvatarFallback) {
+    headerProfileAvatar.addEventListener('error', () => {
+      if (headerProfileAvatarFallback && headerProfileAvatar.src !== headerProfileAvatarFallback) {
+        headerProfileAvatar.src = headerProfileAvatarFallback;
+      }
+    });
+  }
+
   function setProfileAvatarBackground(url) {
     const safeUrl = sanitizeAvatar(url);
     if (profileNavBall) {
       profileNavBall.style.backgroundImage = `url("${safeUrl}")`;
     }
     if (headerProfileAvatar) {
-      headerProfileAvatar.style.backgroundImage = `url("${safeUrl}")`;
+      if (headerProfileAvatar instanceof HTMLImageElement) {
+        headerProfileAvatar.src = safeUrl;
+      } else {
+        headerProfileAvatar.style.backgroundImage = `url("${safeUrl}")`;
+      }
     }
   }
 
