@@ -394,7 +394,16 @@
       text-align: center;
     }
 
-    .bl-leaderboard-grid > span {
+    .bl-leaderboard-metrics {
+      display: contents;
+    }
+
+    .bl-leaderboard-metrics > span {
+      text-align: center;
+    }
+
+    .bl-leaderboard-grid > span,
+    .bl-leaderboard-metrics > span {
       font-variant-numeric: tabular-nums;
     }
 
@@ -571,6 +580,7 @@
 
       .bl-leaderboard-body {
         padding: 0.75rem;
+        overflow-x: visible;
       }
 
       .bl-leaderboard-table {
@@ -579,18 +589,36 @@
       }
 
       .bl-leaderboard-grid {
-        grid-template-columns: 28px minmax(0, 2fr) repeat(6, minmax(0, 0.85fr));
-        gap: 0.4rem;
-        font-size: 0.75rem;
+        grid-template-columns: 32px minmax(0, 1fr);
+        gap: 0.45rem;
+        font-size: 0.78rem;
+        text-align: left;
+      }
+
+      .bl-leaderboard-header,
+      .bl-leaderboard-player {
+        grid-template-areas:
+          "rank track"
+          "rank metrics"
+          "rank combo"
+          "rank rating";
+        align-items: flex-start;
       }
 
       .bl-leaderboard-header {
-        font-size: 0.6rem;
+        font-size: 0.62rem;
         letter-spacing: 0.06em;
       }
 
       .bl-leaderboard-grid > span:first-child {
-        font-size: 0.9rem;
+        grid-area: rank;
+        font-size: 0.95rem;
+        justify-self: start;
+      }
+
+      .bl-leaderboard-header > span:nth-child(2),
+      .bl-leaderboard-player > .bl-leaderboard-track {
+        grid-area: track;
       }
 
       .bl-leaderboard-track {
@@ -607,16 +635,78 @@
       }
 
       .bl-leaderboard-trackTitles span {
+        font-size: 0.7rem;
+      }
+
+      .bl-leaderboard-header > .bl-leaderboard-metrics,
+      .bl-leaderboard-player > .bl-leaderboard-metrics {
+        grid-area: metrics;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.35rem 0.75rem;
+        width: 100%;
+      }
+
+      .bl-leaderboard-metrics > span {
         font-size: 0.68rem;
+        text-align: left;
+      }
+
+      .bl-leaderboard-header > span:nth-last-child(2),
+      .bl-leaderboard-player > span:nth-last-child(2) {
+        grid-area: combo;
+        font-size: 0.68rem;
+        text-align: left;
+      }
+
+      .bl-leaderboard-header > span:last-child,
+      .bl-leaderboard-player > .bl-leaderboard-rating {
+        grid-area: rating;
+        justify-self: start;
+        text-align: left;
+        font-size: 0.78rem;
       }
 
       .bl-leaderboard-player {
-        padding: 0.4rem 0.45rem;
+        padding: 0.45rem 0.5rem;
         font-size: 0.78rem;
+        row-gap: 0.35rem;
+      }
+
+      .bl-leaderboard-player > span:first-child {
+        align-self: flex-start;
       }
 
       .bl-leaderboard-player > span:not(:first-child) {
         font-size: 0.7rem;
+      }
+
+      .bl-leaderboard-player .bl-leaderboard-rating {
+        font-size: 0.9rem;
+      }
+
+      .bl-who-suggestion {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        padding: 0.7rem;
+      }
+
+      .bl-who-suggestion img {
+        width: 40px;
+        height: 40px;
+      }
+
+      .bl-who-meta {
+        flex: 1 1 calc(100% - 48px);
+        min-width: 0;
+      }
+
+      .bl-who-cta {
+        flex: 1 1 100%;
+        text-align: right;
+        font-size: 0.7rem;
+        color: rgba(255,255,255,.55);
       }
     }
 
@@ -662,7 +752,6 @@
     @media (max-width: 640px) {
       .bl-leaderboard {
         padding: 0.6rem 0.55rem 0.9rem;
-        --leaderboard-row-height: 48px;
       }
 
       .bl-leaderboard-top {
@@ -681,7 +770,7 @@
       }
 
       .bl-leaderboard-table {
-        min-width: 480px;
+        min-width: 100%;
       }
     }
   </style>
@@ -3768,6 +3857,7 @@ function ensureLoggedIn() {
 
   // ✅ make it globally available
   currentUser = { ...u, avatar: sanitizeAvatar(u.avatar) };
+  setProfileAvatarBackground(currentUser.avatar);
   if (typeof window.recordCurrentUserId === 'function') {
     window.recordCurrentUserId(currentUser);
   }
@@ -5719,11 +5809,31 @@ async function updateLeaderboard() {
     table.className = 'bl-leaderboard-table'
     const header = document.createElement('div')
     header.className = 'bl-leaderboard-grid bl-leaderboard-header'
-    ;['#', 'Track', 'Plays', 'Comments', 'Reposts', 'Likes', 'Combo', 'Rating'].forEach(text => {
+
+    const rankHeader = document.createElement('span')
+    rankHeader.textContent = '#'
+    header.appendChild(rankHeader)
+
+    const trackHeader = document.createElement('span')
+    trackHeader.textContent = 'Track'
+    header.appendChild(trackHeader)
+
+    const metricsHeader = document.createElement('div')
+    metricsHeader.className = 'bl-leaderboard-metrics'
+    ;['Plays', 'Comments', 'Reposts', 'Likes'].forEach(text => {
       const span = document.createElement('span')
       span.textContent = text
-      header.appendChild(span)
+      metricsHeader.appendChild(span)
     })
+    header.appendChild(metricsHeader)
+
+    const comboHeader = document.createElement('span')
+    comboHeader.textContent = 'Combo'
+    header.appendChild(comboHeader)
+
+    const ratingHeader = document.createElement('span')
+    ratingHeader.textContent = 'Rating'
+    header.appendChild(ratingHeader)
     table.appendChild(header)
 
     const list = document.createElement('div')
@@ -5764,11 +5874,14 @@ async function updateLeaderboard() {
       if (entry.isSelf) selfRow = row
 
       const metrics = [entry.stats.plays, entry.stats.comments, entry.stats.reposts, entry.stats.likes]
+      const metricsWrap = document.createElement('div')
+      metricsWrap.className = 'bl-leaderboard-metrics'
       metrics.forEach(value => {
         const span = document.createElement('span')
         span.textContent = formatNumber(value)
-        row.appendChild(span)
+        metricsWrap.appendChild(span)
       })
+      row.appendChild(metricsWrap)
 
       const comboCell = document.createElement('span')
       comboCell.textContent = entry.comboBonus > 0 ? '+' + formatNumber(entry.comboBonus) : '—'
