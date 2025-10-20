@@ -36,7 +36,19 @@ const {
   RENDER_EXTERNAL_URL
 } = process.env;
 
-const RUNNING_IN_PRODUCTION = Boolean(process.env.RENDER || process.env.NODE_ENV === 'production');
+const RENDER_ENV_MARKERS = [
+  'RENDER',
+  'RENDER_EXTERNAL_URL',
+  'RENDER_EXTERNAL_HOSTNAME',
+  'RENDER_SERVICE_ID',
+  'RENDER_INSTANCE_ID',
+  'RENDER_REGION'
+];
+
+const RUNNING_IN_PRODUCTION = Boolean(
+  process.env.NODE_ENV === 'production' ||
+    RENDER_ENV_MARKERS.some((key) => Boolean(process.env[key]))
+);
 const DURABLE_UPLOADS_REQUIRED_MESSAGE =
   'Durable uploads storage is required in production. Configure S3_BUCKET, S3_REGION, S3_PUBLIC_BASE_URL and AWS credentials.';
 const durableUploadsAvailable = durableStorageEnabled();
