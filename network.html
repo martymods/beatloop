@@ -2838,13 +2838,56 @@
     const CURRENT_HOST = (window.location.hostname || '').toLowerCase();
     const IS_LOCAL_DEV_ENV = LOCAL_DEV_HOSTS.has(CURRENT_HOST) || window.location.protocol === 'file:';
 
-    const DEFAULT_ASSETS_BASE = 'https://www.beatloop.co';
+    const DEFAULT_ASSET_BASES = ['https://www.beatloop.co', 'https://beatloop.co'];
     const normalizedMetaAssetsBase = normalizeAssetBase(metaAssetsBase);
     const normalizedDerivedAssetsBase = normalizeAssetBase(derivedAssetsBase);
-    const ASSETS_BASE = (IS_LOCAL_DEV_ENV && normalizedDerivedAssetsBase)
-      || normalizedMetaAssetsBase
-      || normalizedDerivedAssetsBase
-      || DEFAULT_ASSETS_BASE;
+
+    const ASSET_BASE_CANDIDATES = (() => {
+      const candidates = [];
+      const seen = new Set();
+      const registerCandidate = (value) => {
+        const normalized = normalizeAssetBase(value);
+        if (!normalized || seen.has(normalized)) return;
+        const push = (candidate) => {
+          const normalizedCandidate = normalizeAssetBase(candidate);
+          if (!normalizedCandidate || seen.has(normalizedCandidate)) return;
+          seen.add(normalizedCandidate);
+          candidates.push(normalizedCandidate);
+        };
+        push(normalized);
+        try {
+          const parsed = new URL(normalized);
+          const { protocol, hostname, port } = parsed;
+          if (!hostname) return;
+          const suffix = port ? `:${port}` : '';
+          if (hostname.startsWith('www.')) {
+            push(`${protocol}//${hostname.slice(4)}${suffix}`);
+          } else {
+            push(`${protocol}//www.${hostname}${suffix}`);
+          }
+        } catch {}
+      };
+
+      const ordered = [];
+      if (IS_LOCAL_DEV_ENV && normalizedDerivedAssetsBase) {
+        ordered.push(normalizedDerivedAssetsBase);
+      }
+      if (normalizedMetaAssetsBase) {
+        ordered.push(normalizedMetaAssetsBase);
+      }
+      if (normalizedDerivedAssetsBase) {
+        ordered.push(normalizedDerivedAssetsBase);
+      }
+      for (const base of DEFAULT_ASSET_BASES) {
+        ordered.push(base);
+      }
+      for (const base of ordered) {
+        registerCandidate(base);
+      }
+      return candidates;
+    })();
+
+    const ASSETS_BASE = ASSET_BASE_CANDIDATES.length ? ASSET_BASE_CANDIDATES[0] : '';
     window.ASSETS_BASE = ASSETS_BASE;
 
     const BEATLOOP_HOST_CHECK = host => {
@@ -3065,6 +3108,48 @@
       return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${normalizedBase}${normalizedPath}`));
     };
 
+    const buildAssetUrlCandidates = (path) => {
+      if (!path || typeof path !== 'string') return [];
+      const trimmed = path.trim();
+      if (!trimmed) return [];
+      if (/^(data:|blob:|filesystem:)/i.test(trimmed)) return [trimmed];
+      if (/^https?:\/\//i.test(trimmed)) {
+        const normalized = ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(trimmed));
+        return normalized ? [normalized] : [];
+      }
+      if (trimmed.startsWith('//')) {
+        try {
+          const normalized = ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`${window.location.protocol}${trimmed}`));
+          return normalized ? [normalized] : [];
+        } catch {
+          const normalized = ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(`https:${trimmed}`));
+          return normalized ? [normalized] : [];
+        }
+      }
+      const normalizedPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+      const results = [];
+      if (ASSET_BASE_CANDIDATES.length) {
+        for (const base of ASSET_BASE_CANDIDATES) {
+          results.push(`${base.replace(/\/+$/, '')}${normalizedPath}`);
+        }
+      }
+      if (!results.length) {
+        try {
+          const origin = window.location && window.location.origin;
+          if (origin && origin !== 'null' && origin !== 'undefined') {
+            results.push(`${origin.replace(/\/+$/, '')}${normalizedPath}`);
+          }
+        } catch {}
+        if (!results.length) {
+          results.push(trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
+        }
+      }
+      const unique = Array.from(new Set(results.filter(Boolean)));
+      return unique
+        .map(value => ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(value)))
+        .filter(Boolean);
+    };
+
     const decodeAssetUrl = (value) => {
       if (!value || typeof value !== 'string') return value;
       try {
@@ -3109,7 +3194,11 @@
     const buildUploadUrlCandidates = (path) => {
       const normalizedPath = path.startsWith('/') ? path : `/${path}`;
       const list = [];
-      if (ASSETS_BASE) {
+      if (ASSET_BASE_CANDIDATES.length) {
+        for (const assetBase of ASSET_BASE_CANDIDATES) {
+          list.push(`${assetBase.replace(/\/+$/, '')}${normalizedPath}`);
+        }
+      } else if (ASSETS_BASE) {
         list.push(`${ASSETS_BASE.replace(/\/+$/, '')}${normalizedPath}`);
       }
       const currentBase = getCurrentApiBase();
@@ -3183,14 +3272,32 @@
       { id: 'it-is-what',    title: 'It is what it is',  artist: 'kloverfreshproduction', bpm: 90, url: '/audio/it-is.mp3',          cover: '/img/covers/it-is.jpg' }
     ]
 
-    const TRACKS = TRACK_LIBRARY.map(track => ({
-      ...track,
-      url: toAssetUrl(track.url),
-      cover: track.cover ? toAssetUrl(track.cover) : track.cover
-    }));
+    const TRACKS = TRACK_LIBRARY.map(track => {
+      const fallbackSources = buildAssetUrlCandidates(track.url);
+      const coverCandidates = track.cover ? buildAssetUrlCandidates(track.cover) : [];
+      const primaryUrl = fallbackSources.length ? fallbackSources[0] : toAssetUrl(track.url);
+      const primaryCover = coverCandidates.length
+        ? coverCandidates[0]
+        : (track.cover ? toAssetUrl(track.cover) : track.cover);
+      return {
+        ...track,
+        url: primaryUrl,
+        cover: primaryCover,
+        fallbackSources
+      };
+    });
 
-    const TRACK_FALLBACK_BY_ID = new Map(TRACKS.map(track => [track.id, track.url]));
-    const TRACK_FALLBACK_SOURCES = TRACKS.map(track => track.url).filter(Boolean);
+    const TRACK_FALLBACK_BY_ID = new Map(TRACKS.map(track => [track.id, track.fallbackSources || []]));
+    const TRACK_FALLBACK_SOURCES = (() => {
+      const sources = [];
+      for (const track of TRACKS) {
+        if (!track || !Array.isArray(track.fallbackSources)) continue;
+        for (const source of track.fallbackSources) {
+          if (source) sources.push(source);
+        }
+      }
+      return Array.from(new Set(sources));
+    })();
     const DEFAULT_FALLBACK_TRACK_SRC = TRACK_FALLBACK_SOURCES.length ? TRACK_FALLBACK_SOURCES[0] : '';
     const shouldUseLocalMediaFallback = (value, { ignoreEnv = false, force = false } = {}) => {
       if (!force && !ignoreEnv && !IS_LOCAL_DEV_ENV) return false;
@@ -3208,21 +3315,91 @@
       }
     };
 
+    const LOCAL_TRACK_FALLBACK_HISTORY = new Map();
+    const GLOBAL_FALLBACK_HISTORY_KEY = '__global__';
+
+    const normalizeFallbackHistoryKey = (value) => {
+      if (!value || typeof value !== 'string') return '';
+      const trimmed = value.trim();
+      if (!trimmed) return '';
+      try {
+        const parsed = new URL(trimmed, window.location.origin);
+        const protocol = parsed.protocol || '';
+        const hostname = (parsed.hostname || '').toLowerCase();
+        const port = parsed.port ? `:${parsed.port}` : '';
+        const pathname = (parsed.pathname || '').replace(/\/+$/, '');
+        return `${protocol}//${hostname}${port}${pathname}`;
+      } catch {
+        return trimmed;
+      }
+    };
+
+    const getTrackFallbackHistory = (trackId) => {
+      const key = trackId || GLOBAL_FALLBACK_HISTORY_KEY;
+      let history = LOCAL_TRACK_FALLBACK_HISTORY.get(key);
+      if (!history) {
+        history = new Set();
+        LOCAL_TRACK_FALLBACK_HISTORY.set(key, history);
+      }
+      return history;
+    };
+
+    const recordTrackFallbackAttempt = (trackId, value) => {
+      const normalized = normalizeFallbackHistoryKey(value);
+      if (!normalized) return;
+      const history = getTrackFallbackHistory(trackId);
+      history.add(normalized);
+    };
+
+    const selectNextTrackFallbackCandidate = (trackId) => {
+      const history = getTrackFallbackHistory(trackId);
+      if (trackId && TRACK_FALLBACK_BY_ID.has(trackId)) {
+        const trackCandidates = TRACK_FALLBACK_BY_ID.get(trackId) || [];
+        for (const candidate of trackCandidates) {
+          const normalizedCandidate = normalizeFallbackHistoryKey(candidate);
+          if (!candidate || !normalizedCandidate || history.has(normalizedCandidate)) continue;
+          history.add(normalizedCandidate);
+          return candidate;
+        }
+      }
+      for (const candidate of TRACK_FALLBACK_SOURCES) {
+        const normalizedCandidate = normalizeFallbackHistoryKey(candidate);
+        if (!candidate || !normalizedCandidate || history.has(normalizedCandidate)) continue;
+        history.add(normalizedCandidate);
+        return candidate;
+      }
+      if (DEFAULT_FALLBACK_TRACK_SRC) {
+        const normalizedDefault = normalizeFallbackHistoryKey(DEFAULT_FALLBACK_TRACK_SRC);
+        if (normalizedDefault && !history.has(normalizedDefault)) {
+          history.add(normalizedDefault);
+          return DEFAULT_FALLBACK_TRACK_SRC;
+        }
+      }
+      return '';
+    };
+
     const resolveLocalTrackFallback = (trackId, resolvedUrl, options = {}) => {
-      if (!resolvedUrl) {
+      if (options && options.currentSrc) {
+        recordTrackFallbackAttempt(trackId, options.currentSrc);
+      }
+      if (resolvedUrl) {
+        recordTrackFallbackAttempt(trackId, resolvedUrl);
+      } else {
         return { url: resolvedUrl, fallbackApplied: false };
       }
       if (!shouldUseLocalMediaFallback(resolvedUrl, options)) {
         return { url: resolvedUrl, fallbackApplied: false };
       }
-      const candidate = trackId && TRACK_FALLBACK_BY_ID.get(trackId);
-      if (candidate && candidate !== resolvedUrl) {
-        return { url: candidate, fallbackApplied: true };
+      const nextCandidate = selectNextTrackFallbackCandidate(trackId);
+      if (!nextCandidate) {
+        return { url: resolvedUrl, fallbackApplied: false };
       }
-      if (DEFAULT_FALLBACK_TRACK_SRC && DEFAULT_FALLBACK_TRACK_SRC !== resolvedUrl) {
-        return { url: DEFAULT_FALLBACK_TRACK_SRC, fallbackApplied: true };
+      const normalizedAttempt = normalizeFallbackHistoryKey(resolvedUrl);
+      const normalizedNext = normalizeFallbackHistoryKey(nextCandidate);
+      if (normalizedAttempt && normalizedAttempt === normalizedNext) {
+        return { url: resolvedUrl, fallbackApplied: false };
       }
-      return { url: resolvedUrl, fallbackApplied: false };
+      return { url: nextCandidate, fallbackApplied: true };
     };
 
     // Defaults (leave fallbackAvatar as-is)
@@ -6074,7 +6251,6 @@ function createPost(track, { prepend = false } = {}) {
       }
 
       const applyLocalTrackFallback = (reason, extra = {}, overrideOptions = {}) => {
-        if (localFallbackActive) return false
         const attemptedSrc = normalized.originalUrl || normalized.url
         const shouldForceFallback = overrideOptions.force === true
           || (reason === 'media-error' && !IS_LOCAL_DEV_ENV)
@@ -6087,7 +6263,10 @@ function createPost(track, { prepend = false } = {}) {
         const fallbackResult = resolveLocalTrackFallback(
           normalized.id,
           attemptedSrc,
-          fallbackOptions
+          {
+            ...fallbackOptions,
+            currentSrc: audio.currentSrc || audio.src
+          }
         )
         if (!fallbackResult || !fallbackResult.fallbackApplied) return false
         const nextSrc = fallbackResult.url
@@ -6120,7 +6299,7 @@ function createPost(track, { prepend = false } = {}) {
           }
         } catch {}
         if (trackWave && typeof trackWave.load === 'function') {
-          try { trackWave.load(audio) } catch {}
+          try { trackWave.load(audio.src) } catch {}
         }
 
         logPlaybackEvent('warn', 'fallback-applied', {
@@ -6134,13 +6313,13 @@ function createPost(track, { prepend = false } = {}) {
       }
 
       const tryApplyRuntimeFallback = (reason, extra = {}) => {
-        if (localFallbackActive) return false
         const attemptedSrc = normalized.originalUrl || normalized.url
 
         const shouldAttemptAuthProxy = () => {
           if (!attemptedSrc) return false
           if (authProxyActive || authProxyInFlight) return false
           if (reason !== 'media-error') return false
+          if (localFallbackActive) return false
           if (typeof URL !== 'function') return false
           try {
             const parsed = new URL(attemptedSrc, window.location.origin)
@@ -6202,7 +6381,7 @@ function createPost(track, { prepend = false } = {}) {
                 }
               } catch {}
               if (trackWave && typeof trackWave.load === 'function') {
-                try { trackWave.load(audio) } catch {}
+                try { trackWave.load(audio.src) } catch {}
               }
               logPlaybackEvent('warn', 'auth-proxy-applied', {
                 reason,
