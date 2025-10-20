@@ -14,6 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Amatic+SC&family=Roboto+Condensed:wght@300;400;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/wavesurfer.js@7"></script>
   <style>
     html, body { font-family: Inter, ui-sans-serif, system-ui, -apple-system; }
     body {
@@ -2093,48 +2094,91 @@
     .bl-who-close{position:absolute;top:1rem;right:1rem;width:38px;height:38px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(12,12,18,.6);color:#fff;font-size:1.25rem;line-height:1;display:grid;place-items:center;cursor:pointer;transition:background .2s,transform .2s}
     .bl-who-close:hover{background:rgba(255,255,255,.12);transform:scale(1.05)}
     .bl-who-close:focus-visible{outline:2px solid rgba(124,58,237,.6);outline-offset:2px}
-    .bl-who-overlay .user-profile-container{display:flex;flex-direction:column;align-items:center;gap:1.25rem;position:sticky;top:1.5rem}
-    .bl-who-overlay .user-profile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:clamp(260px,40vw,320px);height:clamp(240px,40vw,320px);border-radius:1rem;overflow:hidden;box-shadow:0 15px 55px rgba(0,0,0,.45);background-color:rgba(18,18,24,.9);background-size:cover;background-position:center;text-align:center;padding:1.5rem}
-    .bl-who-overlay .user-profile::after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,rgba(12,12,20,.85) 10%,rgba(12,12,20,.35) 70%,rgba(12,12,20,.1) 100%)}
-    .bl-who-overlay .user-profile h3,.bl-who-overlay .user-profile p{position:relative;z-index:1;margin:0}
-    .bl-who-overlay .user-profile h3{font-size:1.35rem;letter-spacing:.25rem;text-transform:uppercase}
-    .bl-who-overlay .user-profile p{margin-top:.5rem;font-weight:300;letter-spacing:.08rem;color:rgba(255,255,255,.85)}
-    .bl-who-overlay .user-info{position:relative;z-index:1;display:flex;width:clamp(240px,36vw,280px);justify-content:space-around;gap:.75rem;list-style:none;padding:1.5rem .75rem .75rem;margin:-1.75rem 0 0;background:rgba(255,255,255,.96);border-radius:1rem;box-shadow:0 5px 55px rgba(0,0,0,.5)}
-    .bl-who-overlay .user-info li{text-align:center}
-    .bl-who-overlay .user-info h3{margin:0;font-size:1.35rem;color:#0f172a}
-    .bl-who-overlay .user-info small{display:block;margin-top:.15rem;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(15,23,42,.55)}
-    .bl-who-overlay .follow-btn{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;width:clamp(200px,32vw,240px);padding:1.1rem 1.5rem .9rem;border-radius:.85rem;text-transform:uppercase;letter-spacing:.35rem;font-weight:600;text-decoration:none;color:#fff;background:linear-gradient(135deg,#8b5cf6,#0ea5e9);box-shadow:0 8px 40px rgba(14,165,233,.45);transition:transform .2s,box-shadow .2s}
-    .bl-who-overlay .follow-btn:hover{transform:translateY(-2px);box-shadow:0 12px 45px rgba(14,165,233,.55)}
-    .bl-who-overlay .follow-btn.is-following{background:rgba(255,255,255,.9);color:#0f172a;box-shadow:0 8px 40px rgba(255,255,255,.25)}
-    .bl-who-extra{position:relative;z-index:1;background:rgba(12,12,18,.75);border:1px solid rgba(255,255,255,.08);border-radius:1rem;padding:1.5rem;display:flex;flex-direction:column;gap:1rem;min-height:0}
-    .bl-who-extra h4{margin:0;font-size:.95rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.7)}
-    .bl-who-extra dl{margin:0;display:grid;gap:.75rem}
-    .bl-who-extra dl div{display:flex;justify-content:space-between;gap:1rem;align-items:baseline}
-    .bl-who-extra dt{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.5)}
-    .bl-who-extra dd{margin:0;font-size:.95rem;font-weight:500;color:rgba(255,255,255,.9);text-align:right}
-    .bl-who-actions{display:flex;flex-wrap:wrap;gap:.75rem}
-    .bl-who-contact{display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1rem;border-radius:.75rem;border:1px solid rgba(148,163,184,.25);color:rgba(255,255,255,.85);text-decoration:none;transition:background .2s,border-color .2s}
-    .bl-who-contact:hover{background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.45)}
-    .bl-who-tag-audio{width:100%;border-radius:.75rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);padding:.5rem}
-    .bl-who-tag-audio.hidden{display:none}
-    .profile-library{margin-top:2rem;display:flex;flex-direction:column;gap:1.5rem}
-    .profile-library__heading{margin:0;font-size:.95rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.65)}
-    .profile-empty{margin:0;font-size:.85rem;color:rgba(255,255,255,.45)}
-    .profile-empty.hidden{display:none}
-    .profile-track-list,.profile-album-list{display:flex;flex-direction:column;gap:1rem}
-    .profile-track-list.hidden,.profile-album-list.hidden{display:none}
-    .profile-track-item,.profile-album-summary{display:flex;align-items:center;gap:1rem;padding:.75rem 1rem;border-radius:.85rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}
-    .profile-track-cover,.profile-album-cover{width:56px;height:56px;border-radius:.75rem;object-fit:cover;border:1px solid rgba(255,255,255,.08);box-shadow:0 10px 25px rgba(5,5,12,.35)}
-    .profile-track-meta{flex:1;min-width:0}
-    .profile-track-title{margin:0;font-weight:600;font-size:.95rem;color:#fff}
-    .profile-track-caption{margin:.15rem 0 0;font-size:.8rem;color:rgba(255,255,255,.55)}
-    .profile-track-audio{width:100%;margin-top:.5rem}
-    .profile-album-entry{border-radius:1rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);overflow:hidden;display:block}
-    .profile-album-entry[open] .profile-album-summary{border-bottom:1px solid rgba(255,255,255,.05);border-radius:1rem 1rem 0 0}
-    .profile-album-tracks{padding:1rem;display:flex;flex-direction:column;gap:.75rem;background:rgba(12,12,20,.65)}
-    .profile-album-track{display:flex;flex-direction:column;gap:.35rem;padding:.5rem .75rem;border-radius:.75rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
-    .profile-album-track h5{margin:0;font-size:.9rem;color:#fff}
-    .profile-album-track audio{width:100%}
+    .bl-who-overlay .user-profile-container { position: sticky; top: 1.5rem; display: flex; flex-direction: column; align-items: stretch; gap: 1.5rem; }
+    .bl-who-overlay .user-profile { position: relative; display: flex; flex-direction: column; gap: 1.5rem; border-radius: 1.5rem; padding: 1.75rem; background: rgba(12, 12, 20, 0.85); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55); overflow: hidden; isolation: isolate; --profile-card-image: url('./img/avatar-default.svg'); }
+    .bl-who-overlay .user-profile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(circle at top, rgba(124, 58, 237, 0.32), rgba(14, 165, 233, 0.14) 65%, rgba(8, 8, 16, 0.85)), var(--profile-card-image); background-size: cover; background-position: center; filter: saturate(118%); opacity: 0.9; z-index: 0; }
+    .bl-who-overlay .user-profile::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(180deg, rgba(5, 5, 12, 0.05), rgba(5, 5, 12, 0.78)); z-index: 0; }
+    .bl-who-overlay .user-profile > * { position: relative; z-index: 1; }
+    .user-profile__visual { display: flex; align-items: center; gap: 1rem; }
+    .user-profile__avatar-wrap { position: relative; width: 96px; height: 96px; flex-shrink: 0; }
+    .user-profile__avatar-wrap::before { content: ''; position: absolute; inset: -6px; border-radius: 1.5rem; background: linear-gradient(135deg, rgba(124, 58, 237, 0.58), rgba(34, 211, 238, 0.45)); filter: blur(12px); opacity: 0.75; }
+    .user-profile__avatar { position: relative; width: 100%; height: 100%; border-radius: 1.25rem; object-fit: cover; box-shadow: 0 18px 40px rgba(8, 8, 18, 0.65); border: 2px solid rgba(255, 255, 255, 0.22); }
+    .user-profile__body { display: flex; flex-direction: column; gap: 0.5rem; }
+    .user-profile__tagline { margin: 0; font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.7); }
+    .user-profile__name { margin: 0; font-size: 1.65rem; font-weight: 700; letter-spacing: 0.02em; color: #fff; text-shadow: 0 6px 24px rgba(5, 5, 12, 0.7); }
+    .bl-who-overlay .user-info { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; list-style: none; padding: 0; margin: 0; }
+    .bl-who-overlay .user-info li { background: rgba(12, 12, 20, 0.65); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 1rem; padding: 1rem; text-align: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02); }
+    .bl-who-overlay .user-info h3 { margin: 0; font-size: 1.25rem; font-weight: 700; color: #fff; }
+    .bl-who-overlay .user-info small { display: block; margin-top: 0.35rem; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
+    .bl-who-overlay .follow-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.85rem 1rem; border-radius: 1rem; font-weight: 600; text-decoration: none; color: #fff; background: linear-gradient(135deg, rgba(124, 58, 237, 0.95), rgba(34, 211, 238, 0.82)); border: 1px solid rgba(124, 58, 237, 0.55); box-shadow: 0 18px 45px rgba(124, 58, 237, 0.45); transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
+    .bl-who-overlay .follow-btn:hover { transform: translateY(-1px); box-shadow: 0 22px 55px rgba(124, 58, 237, 0.5); }
+    .bl-who-overlay .follow-btn.is-following { background: rgba(124, 58, 237, 0.18); color: #c4b5fd; border-color: rgba(124, 58, 237, 0.45); box-shadow: none; }
+    .bl-who-extra { position: relative; z-index: 1; background: rgba(12, 12, 20, 0.8); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 1.5rem; padding: 1.75rem; display: flex; flex-direction: column; gap: 1.25rem; min-height: 0; box-shadow: 0 18px 55px rgba(0, 0, 0, 0.45); }
+    .bl-who-extra h4 { margin: 0; font-size: 0.95rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255, 255, 255, 0.7); }
+    .bl-who-extra dl { margin: 0; display: grid; gap: 0.75rem; }
+    .bl-who-extra dl div { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+    .bl-who-extra dt { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.5); }
+    .bl-who-extra dd { margin: 0; font-size: 0.95rem; font-weight: 500; color: rgba(255, 255, 255, 0.92); text-align: right; }
+    .bl-who-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .bl-who-contact { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1rem; border-radius: 0.9rem; border: 1px solid rgba(148, 163, 184, 0.3); color: rgba(255, 255, 255, 0.85); text-decoration: none; transition: background 0.2s ease, border-color 0.2s ease; }
+    .bl-who-contact:hover { background: rgba(148, 163, 184, 0.12); border-color: rgba(148, 163, 184, 0.45); }
+    .profile-tag-player { margin-top: 1.75rem; }
+    .profile-tag-player .profile-track-header { align-items: flex-start; }
+    .profile-tag-icon { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 1.25rem; background: linear-gradient(135deg, rgba(124, 58, 237, 0.88), rgba(34, 211, 238, 0.65)); color: #fff; font-size: 1.4rem; box-shadow: 0 16px 38px rgba(124, 58, 237, 0.4); text-shadow: 0 8px 18px rgba(8, 8, 16, 0.7); flex-shrink: 0; }
+    .profile-tag-player .profile-track-caption { margin-top: 0.25rem; }
+    .profile-tag-player--fallback .track-wave-shell { display: none; }
+    .profile-tag-player--fallback .profile-track-controls { display: none; }
+    .profile-tag-player--fallback .profile-track-audio { margin-top: 0.85rem; }
+    .profile-library { margin-top: 2rem; display: flex; flex-direction: column; gap: 1.75rem; }
+    .profile-library__heading { margin: 0; font-size: 0.95rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255, 255, 255, 0.65); }
+    .profile-empty { margin: 0; font-size: 0.85rem; color: rgba(255, 255, 255, 0.45); }
+    .profile-empty.hidden { display: none; }
+    .profile-track-list,
+    .profile-album-list { display: flex; flex-direction: column; gap: 1.25rem; }
+    .profile-track-list.hidden,
+    .profile-album-list.hidden { display: none; }
+    .profile-track-item,
+    .profile-album-summary { position: relative; display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; border-radius: 1.25rem; background: rgba(12, 12, 20, 0.85); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45); }
+    .profile-track-item.is-playing { border-color: rgba(124, 58, 237, 0.55); box-shadow: 0 20px 55px rgba(124, 58, 237, 0.4); }
+    .profile-track-item--compact { padding: 1rem; }
+    .profile-track-header { display: flex; align-items: center; gap: 1rem; }
+    .profile-track-cover,
+    .profile-album-cover { width: 64px; height: 64px; border-radius: 1rem; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 12px 30px rgba(124, 58, 237, 0.3); }
+    .profile-track-item--compact .profile-track-cover { width: 56px; height: 56px; }
+    .profile-track-meta { flex: 1; min-width: 0; }
+    .profile-track-title { margin: 0; font-weight: 600; font-size: 1rem; color: #fff; }
+    .profile-track-caption { margin: 0.35rem 0 0; font-size: 0.85rem; color: rgba(255, 255, 255, 0.6); }
+    .profile-track-controls { display: flex; align-items: center; gap: 0.75rem; }
+    .track-play-button { width: 46px; height: 46px; border-radius: 999px; border: none; display: grid; place-items: center; font-size: 1.2rem; font-weight: 600; color: #fff; background: linear-gradient(135deg, rgba(124, 58, 237, 0.95), rgba(34, 211, 238, 0.85)); box-shadow: 0 18px 45px rgba(124, 58, 237, 0.4); cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
+    .track-play-button:hover { transform: translateY(-1px); box-shadow: 0 22px 60px rgba(124, 58, 237, 0.45); }
+    .track-play-button[data-state="pause"] { background: rgba(12, 12, 20, 0.9); border: 1px solid rgba(124, 58, 237, 0.5); color: #c4b5fd; box-shadow: none; }
+    .track-play-button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+    .feed-track-card {
+      border-radius: 1.25rem;
+      background: rgba(12, 12, 20, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+    }
+    .feed-track-card.is-playing {
+      border-color: rgba(124, 58, 237, 0.5);
+      box-shadow: 0 22px 60px rgba(124, 58, 237, 0.35);
+    }
+    .track-wave-shell { position: relative; height: 92px; border-radius: 1rem; overflow: hidden; background: rgba(8, 8, 16, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02); }
+    .profile-track-item--compact .track-wave-shell { height: 74px; }
+    .profile-track-wave { margin-top: 0.75rem; }
+    .profile-track-item--compact .profile-track-wave { margin-top: 0.6rem; }
+    .track-wave-shell::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(34, 211, 238, 0.12)); opacity: 0.7; pointer-events: none; }
+    .track-wave-inner { position: absolute; inset: 0; }
+    .track-wave-progress { position: absolute; inset: 0; width: 0%; background: linear-gradient(90deg, rgba(124, 58, 237, 0.35), rgba(34, 211, 238, 0.25)); mix-blend-mode: screen; pointer-events: none; transition: width 0.12s ease; }
+    .profile-track-wave--fallback .track-wave-progress { display: none; }
+    .profile-track-audio { display: none; }
+    .profile-track-audio--fallback { display: block; width: 100%; margin-top: 0.5rem; }
+    .profile-album-entry { border-radius: 1.25rem; background: rgba(12, 12, 20, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; display: block; }
+    .profile-album-entry[open] .profile-album-summary { border-bottom: 1px solid rgba(255, 255, 255, 0.08); border-radius: 1.25rem 1.25rem 0 0; }
+    .profile-album-tracks { padding: 1rem; display: flex; flex-direction: column; gap: 1rem; background: rgba(12, 12, 20, 0.65); }
+    .profile-album-track { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; border-radius: 1rem; background: rgba(8, 8, 16, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .profile-album-track h5 { margin: 0; font-size: 0.95rem; color: #fff; }
+    .profile-album-track audio { width: 100%; }
     .cover-score-wrapper{width:100%;border-radius:1.25rem;background:rgba(12,12,20,.7);border:1px solid rgba(255,255,255,.05);padding:1.25rem;overflow:hidden}
     .cover-score-wrapper.hidden{display:none}
     .cover-score{display:grid;gap:30px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));justify-items:center}
@@ -2161,7 +2205,7 @@
     .bl-who-cta{font-size:.75rem;color:rgba(255,255,255,.45)}
     .bl-who-suggestion.following{background:rgba(124,58,237,.12);border-color:rgba(124,58,237,.35)}
     .bl-who-suggestion.following .bl-who-cta{color:rgba(255,255,255,.7)}
-    @media (max-width:900px){.bl-who-dialog{grid-template-columns:1fr;padding:1.25rem;max-height:calc(100vh - 2.5rem)}.bl-who-overlay .user-profile-container{position:static}.bl-who-overlay .user-profile{width:min(320px,100%);height:min(320px,72vw)}.bl-who-overlay .user-info{width:min(280px,90%)}.bl-who-overlay .follow-btn{width:min(240px,85%)}.bl-who-extra{min-height:auto}}
+    @media (max-width:900px){.bl-who-dialog{grid-template-columns:1fr;padding:1.25rem;max-height:calc(100vh - 2.5rem)}.bl-who-overlay .user-profile-container{position:static}.bl-who-overlay .user-profile{width:100%}.bl-who-overlay .user-info{grid-template-columns:repeat(1,minmax(0,1fr))}.bl-who-overlay .follow-btn{width:100%}.bl-who-extra{min-height:auto}}
     .bl-notify-overlay{position:fixed;inset:0;background:rgba(12,12,18,.82);backdrop-filter:blur(14px);z-index:85;display:none;align-items:center;justify-content:center;padding:1.5rem}
     .bl-notify-overlay.active{display:flex}
     .bl-notify-dialog{position:relative;width:min(640px,95vw);max-height:90vh;overflow:hidden;background:linear-gradient(145deg,rgba(24,24,36,.96),rgba(12,12,20,.92));border-radius:1.25rem;border:1px solid rgba(255,255,255,.08);box-shadow:0 25px 60px rgba(0,0,0,.55);display:flex;flex-direction:column}
@@ -3126,6 +3170,46 @@
 
     // Defaults (leave fallbackAvatar as-is)
     const fallbackAvatar = toAssetUrl('/img/avatar-default.svg');
+
+    function createWaveSurferForAudio(audioEl, container, options = {}) {
+      if (!audioEl || !container) return null;
+      if (typeof WaveSurfer !== 'function') return null;
+      try { audioEl.crossOrigin = 'anonymous'; } catch {}
+      const height = Number.isFinite(options.height) ? options.height : 88;
+      const waveColor = options.waveColor || ['#ffffff1a', '#7c3aed80'];
+      const progressColor = options.progressColor || ['#7c3aed', '#22d3ee'];
+      try {
+        const wave = WaveSurfer.create({
+          container,
+          backend: 'MediaElement',
+          media: audioEl,
+          height,
+          waveColor,
+          progressColor,
+          cursorWidth: 0,
+          barWidth: 2,
+          barGap: 1,
+          barRadius: 2,
+          normalize: true,
+          interact: true,
+          dragToSeek: true,
+          responsive: true
+        });
+        return wave;
+      } catch (err) {
+        console.warn('WaveSurfer initialization failed', err);
+        return null;
+      }
+    }
+
+    function setPlayButtonState(button, playing, labelBase = 'track') {
+      if (!button) return;
+      const label = labelBase ? String(labelBase) : 'track';
+      button.dataset.state = playing ? 'pause' : 'play';
+      button.textContent = playing ? '⏸' : '▶';
+      const action = playing ? 'Pause' : 'Play';
+      button.setAttribute('aria-label', `${action} ${label}`.trim());
+    }
 
     const SESSION_LOG_PREFIX = '[Beatloop Session]';
     const sessionInfo  = (...args) => console.info(SESSION_LOG_PREFIX, ...args);
@@ -4238,11 +4322,192 @@ let sessionsCard = null;
     let feedIsLoading = false
     const userLibrary = new Map()
 
+    const profileTrackPlayers = new Map();
+
+    function destroyProfileTrackWaves() {
+      profileTrackPlayers.forEach(entry => {
+        if (!entry) return;
+        try { entry.audio?.pause?.(); } catch {}
+        if (typeof entry.cleanup === 'function') {
+          try { entry.cleanup(); } catch {}
+        } else if (entry.wave && typeof entry.wave.destroy === 'function') {
+          try { entry.wave.destroy(); } catch {}
+        }
+      });
+      profileTrackPlayers.clear();
+    }
+
+    function registerProfileTrackPlayer(row, audio, wave, playBtn, label) {
+      if (!row || !audio || !playBtn) return;
+      const normalizedLabel = label ? String(label) : 'track';
+      const updateState = () => {
+        const playing = !audio.paused && !audio.ended;
+        row.classList.toggle('is-playing', playing);
+        setPlayButtonState(playBtn, playing, normalizedLabel);
+      };
+      const handlePlay = () => {
+        profileTrackPlayers.forEach(entry => {
+          if (!entry || entry.audio === audio) return;
+          try { entry.audio.pause(); } catch {}
+        });
+        updateState();
+      };
+      const handlePause = () => updateState();
+      const handleEnded = () => {
+        try { audio.currentTime = 0; } catch {}
+        updateState();
+      };
+      const handleClick = (event) => {
+        event.preventDefault();
+        if (playBtn.disabled) return
+        if (audio.paused || audio.ended) {
+          const playPromise = audio.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => {});
+          }
+        } else {
+          audio.pause();
+        }
+      };
+      audio.addEventListener('play', handlePlay);
+      audio.addEventListener('pause', handlePause);
+      audio.addEventListener('ended', handleEnded);
+      playBtn.addEventListener('click', handleClick);
+      let waveInteractionHandler = null;
+      if (wave && typeof wave.on === 'function') {
+        waveInteractionHandler = () => {
+          if (audio.paused || audio.ended) {
+            const playPromise = audio.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+              playPromise.catch(() => {});
+            }
+          }
+        };
+        wave.on('interaction', waveInteractionHandler);
+      }
+      updateState();
+      profileTrackPlayers.set(row, {
+        audio,
+        wave,
+        playBtn,
+        cleanup() {
+          audio.removeEventListener('play', handlePlay);
+          audio.removeEventListener('pause', handlePause);
+          audio.removeEventListener('ended', handleEnded);
+          playBtn.removeEventListener('click', handleClick);
+          if (wave && waveInteractionHandler && typeof wave.un === 'function') {
+            try { wave.un('interaction', waveInteractionHandler); } catch {}
+          }
+          if (wave && typeof wave.destroy === 'function') {
+            try { wave.destroy(); } catch {}
+          }
+        }
+      });
+    }
+
+    function resetProfileTagPlayer() {
+      if (!ensureProfileRefs()) return;
+      const { tagPlayer, tagPlayBtn, tagWave, tagAudio, tagCaption } = profileRefs;
+      if (tagPlayer) {
+        const entry = profileTrackPlayers.get(tagPlayer);
+        if (entry && typeof entry.cleanup === 'function') {
+          try { entry.cleanup(); } catch {}
+        }
+        profileTrackPlayers.delete(tagPlayer);
+        tagPlayer.classList.add('hidden');
+        tagPlayer.classList.remove('is-playing');
+        tagPlayer.classList.remove('profile-tag-player--fallback');
+      }
+      if (tagPlayBtn) {
+        tagPlayBtn.disabled = true;
+        setPlayButtonState(tagPlayBtn, false, 'sound tag');
+      }
+      if (tagWave) {
+        tagWave.innerHTML = '';
+      }
+      if (tagAudio) {
+        try { tagAudio.pause(); } catch {}
+        try { tagAudio.currentTime = 0; } catch {}
+        tagAudio.removeAttribute('src');
+        tagAudio.controls = false;
+        tagAudio.classList.remove('profile-track-audio--fallback');
+      }
+      if (tagCaption) {
+        tagCaption.textContent = 'Tap play to preview their signature tag.';
+      }
+    }
+
+    function setupProfileTagPlayer(sourceUrl) {
+      if (!ensureProfileRefs()) return;
+      const { tagPlayer, tagPlayBtn, tagWave, tagAudio, tagCaption } = profileRefs;
+      if (!tagPlayer || !tagAudio) return;
+
+      const existingEntry = profileTrackPlayers.get(tagPlayer);
+      if (existingEntry && typeof existingEntry.cleanup === 'function') {
+        try { existingEntry.cleanup(); } catch {}
+      }
+      profileTrackPlayers.delete(tagPlayer);
+
+      const hasSource = Boolean(sourceUrl);
+      if (!hasSource) {
+        if (tagWave) tagWave.innerHTML = '';
+        tagPlayer.classList.remove('hidden');
+        tagPlayer.classList.add('profile-tag-player--fallback');
+        tagPlayer.classList.remove('is-playing');
+        if (tagCaption) tagCaption.textContent = 'Sound tag unavailable.';
+        if (tagPlayBtn) {
+          tagPlayBtn.disabled = true;
+          setPlayButtonState(tagPlayBtn, false, 'sound tag');
+        }
+        if (tagAudio) {
+          tagAudio.removeAttribute('src');
+          tagAudio.controls = false;
+          tagAudio.classList.remove('profile-track-audio--fallback');
+        }
+        return;
+      }
+
+      if (tagCaption) {
+        tagCaption.textContent = 'Tap play to preview their signature tag.';
+      }
+
+      tagAudio.src = sourceUrl;
+      tagAudio.preload = 'metadata';
+      tagAudio.controls = false;
+      tagAudio.classList.remove('profile-track-audio--fallback');
+
+      let wave = null;
+      if (tagWave) {
+        tagWave.innerHTML = '';
+        wave = createWaveSurferForAudio(tagAudio, tagWave, { height: 80 });
+      }
+
+      if (wave && tagPlayBtn) {
+        tagPlayer.classList.remove('hidden');
+        tagPlayer.classList.remove('profile-tag-player--fallback');
+        tagPlayer.classList.remove('is-playing');
+        tagPlayBtn.disabled = false;
+        registerProfileTrackPlayer(tagPlayer, tagAudio, wave, tagPlayBtn, 'sound tag');
+      } else {
+        if (tagWave) tagWave.innerHTML = '';
+        tagPlayer.classList.remove('hidden');
+        tagPlayer.classList.add('profile-tag-player--fallback');
+        tagPlayer.classList.remove('is-playing');
+        tagAudio.controls = true;
+        tagAudio.classList.add('profile-track-audio--fallback');
+        if (tagPlayBtn) {
+          tagPlayBtn.disabled = true;
+          setPlayButtonState(tagPlayBtn, false, 'sound tag');
+        }
+      }
+    }
+
     const profileRefs = {
       overlay: null,
       dialog: null,
       closeBtn: null,
       card: null,
+      avatarImage: null,
       name: null,
       subtitle: null,
       stat1Value: null,
@@ -4256,7 +4521,11 @@ let sessionsCard = null;
       onlineDetail: null,
       tagDetail: null,
       contactLink: null,
+      tagPlayer: null,
+      tagPlayBtn: null,
+      tagWave: null,
       tagAudio: null,
+      tagCaption: null,
       albumsWrapper: null,
       albumGallery: null,
       albumList: null,
@@ -4276,6 +4545,7 @@ let sessionsCard = null;
       profileRefs.dialog = profileRefs.overlay.querySelector('.bl-who-dialog')
       profileRefs.closeBtn = document.getElementById('whoProfileClose')
       profileRefs.card = document.getElementById('whoProfileCard')
+      profileRefs.avatarImage = document.getElementById('whoProfileAvatar')
       profileRefs.name = document.getElementById('whoProfileName')
       profileRefs.subtitle = document.getElementById('whoProfileSubtitle')
       profileRefs.stat1Value = document.getElementById('whoProfileStat1Value')
@@ -4289,7 +4559,11 @@ let sessionsCard = null;
       profileRefs.onlineDetail = document.getElementById('whoProfileOnlineDetail')
       profileRefs.tagDetail = document.getElementById('whoProfileTagDetail')
       profileRefs.contactLink = document.getElementById('whoProfileContactLink')
+      profileRefs.tagPlayer = document.getElementById('profileTagPlayer')
+      profileRefs.tagPlayBtn = document.getElementById('profileTagPlay')
+      profileRefs.tagWave = document.getElementById('profileTagWave')
       profileRefs.tagAudio = document.getElementById('whoProfileTagAudio')
+      profileRefs.tagCaption = document.getElementById('profileTagCaption')
       profileRefs.albumsWrapper = document.getElementById('profileAlbumGalleryWrapper')
       profileRefs.albumGallery = document.getElementById('profileAlbumGallery')
       profileRefs.albumList = document.getElementById('profileAlbumList')
@@ -4298,6 +4572,12 @@ let sessionsCard = null;
       profileRefs.trackGallery = document.getElementById('profileTrackGallery')
       profileRefs.trackList = document.getElementById('profileTrackList')
       profileRefs.tracksEmpty = document.getElementById('profileTracksEmpty')
+
+      if (profileRefs.tagPlayBtn && !profileRefs.tagPlayBtn.dataset.initialized) {
+        setPlayButtonState(profileRefs.tagPlayBtn, false, 'sound tag')
+        profileRefs.tagPlayBtn.disabled = true
+        profileRefs.tagPlayBtn.dataset.initialized = '1'
+      }
 
       if (profileRefs.closeBtn && !profileRefs.closeBtn.dataset.bound) {
         profileRefs.closeBtn.addEventListener('click', closeWhoProfile)
@@ -4321,6 +4601,7 @@ let sessionsCard = null;
 
     function resetProfileLibrary() {
       if (!ensureProfileRefs()) return
+      destroyProfileTrackWaves()
       if (profileRefs.albumGallery) profileRefs.albumGallery.innerHTML = ''
       if (profileRefs.albumsWrapper) profileRefs.albumsWrapper.classList.add('hidden')
       if (profileRefs.albumList) {
@@ -4431,16 +4712,65 @@ let sessionsCard = null;
                 .slice()
                 .sort((a, b) => (a.order || 0) - (b.order || 0))
                 .forEach((track, index) => {
+                  const displayTitle = `${index + 1}. ${track.title || 'Untitled'}`
                   const trackRow = document.createElement('div')
-                  trackRow.className = 'profile-album-track'
-                  const heading = document.createElement('h5')
-                  heading.textContent = `${index + 1}. ${track.title || 'Untitled'}`
+                  trackRow.className = 'profile-track-item profile-track-item--compact profile-album-track'
+
+                  const header = document.createElement('div')
+                  header.className = 'profile-track-header'
+                  const coverThumb = document.createElement('img')
+                  coverThumb.className = 'profile-track-cover'
+                  coverThumb.src = track.cover || album.cover || DEFAULT_TRACK_COVER
+                  coverThumb.onerror = () => { coverThumb.src = DEFAULT_TRACK_COVER }
+                  coverThumb.alt = displayTitle
+                  header.appendChild(coverThumb)
+
+                  const meta = document.createElement('div')
+                  meta.className = 'profile-track-meta'
+                  const heading = document.createElement('p')
+                  heading.className = 'profile-track-title'
+                  heading.textContent = displayTitle
+                  meta.appendChild(heading)
+                  header.appendChild(meta)
+
+                  const controls = document.createElement('div')
+                  controls.className = 'profile-track-controls'
+                  const playBtn = document.createElement('button')
+                  playBtn.type = 'button'
+                  playBtn.className = 'track-play-button'
+                  controls.appendChild(playBtn)
+                  header.appendChild(controls)
+
+                  trackRow.appendChild(header)
+
+                  const waveShell = document.createElement('div')
+                  waveShell.className = 'track-wave-shell profile-track-wave'
+                  const waveInner = document.createElement('div')
+                  waveInner.className = 'track-wave-inner'
+                  waveShell.appendChild(waveInner)
+                  trackRow.appendChild(waveShell)
+
                   const audio = document.createElement('audio')
-                  audio.controls = true
-                  audio.preload = 'none'
-                  audio.src = track.url
-                  trackRow.appendChild(heading)
+                  audio.className = 'profile-track-audio'
+                  audio.preload = 'metadata'
+                  if (track.url) audio.src = track.url
                   trackRow.appendChild(audio)
+
+                  let wave = null
+                  if (track.url) {
+                    wave = createWaveSurferForAudio(audio, waveInner, { height: 72 })
+                  }
+
+                  if (!track.url || !wave) {
+                    audio.controls = true
+                    audio.classList.add('profile-track-audio--fallback')
+                    waveShell.classList.add('profile-track-wave--fallback')
+                    playBtn.disabled = true
+                    setPlayButtonState(playBtn, false, displayTitle)
+                  } else {
+                    registerProfileTrackPlayer(trackRow, audio, wave, playBtn, displayTitle)
+                  }
+
                   tracksWrap.appendChild(trackRow)
                 })
               details.appendChild(tracksWrap)
@@ -4467,11 +4797,17 @@ let sessionsCard = null;
           singles.forEach(track => {
             const row = document.createElement('div')
             row.className = 'profile-track-item'
+
+            const header = document.createElement('div')
+            header.className = 'profile-track-header'
+
             const coverThumb = document.createElement('img')
             coverThumb.className = 'profile-track-cover'
             coverThumb.src = track.cover || DEFAULT_TRACK_COVER
             coverThumb.onerror = () => { coverThumb.src = DEFAULT_TRACK_COVER }
             coverThumb.alt = track.title || 'Track cover'
+            header.appendChild(coverThumb)
+
             const meta = document.createElement('div')
             meta.className = 'profile-track-meta'
             const title = document.createElement('p')
@@ -4484,14 +4820,46 @@ let sessionsCard = null;
               caption.textContent = track.caption
               meta.appendChild(caption)
             }
+            header.appendChild(meta)
+
+            const controls = document.createElement('div')
+            controls.className = 'profile-track-controls'
+            const playBtn = document.createElement('button')
+            playBtn.type = 'button'
+            playBtn.className = 'track-play-button'
+            controls.appendChild(playBtn)
+            header.appendChild(controls)
+
+            row.appendChild(header)
+
+            const waveShell = document.createElement('div')
+            waveShell.className = 'track-wave-shell profile-track-wave'
+            const waveInner = document.createElement('div')
+            waveInner.className = 'track-wave-inner'
+            waveShell.appendChild(waveInner)
+            row.appendChild(waveShell)
+
             const audio = document.createElement('audio')
-            audio.controls = true
-            audio.preload = 'none'
             audio.className = 'profile-track-audio'
-            audio.src = track.url
-            row.appendChild(coverThumb)
-            row.appendChild(meta)
+            audio.preload = 'metadata'
+            if (track.url) audio.src = track.url
             row.appendChild(audio)
+
+            let wave = null
+            if (track.url) {
+              wave = createWaveSurferForAudio(audio, waveInner, { height: 84 })
+            }
+
+            if (!track.url || !wave) {
+              audio.controls = true
+              audio.classList.add('profile-track-audio--fallback')
+              waveShell.classList.add('profile-track-wave--fallback')
+              playBtn.disabled = true
+              setPlayButtonState(playBtn, false, track.title || 'track')
+            } else {
+              registerProfileTrackPlayer(row, audio, wave, playBtn, track.title || 'track')
+            }
+
             profileRefs.trackList.appendChild(row)
           })
         }
@@ -4579,9 +4947,13 @@ let sessionsCard = null;
       if (!profileRefs.overlay) return
       profileRefs.overlay.classList.remove('active')
       profileRefs.overlay.setAttribute('aria-hidden', 'true')
-      if (profileRefs.tagAudio) {
-        try { profileRefs.tagAudio.pause() } catch {}
-        try { profileRefs.tagAudio.currentTime = 0 } catch {}
+      destroyProfileTrackWaves()
+      resetProfileTagPlayer()
+      if (profileRefs.card) {
+        profileRefs.card.style.removeProperty('--profile-card-image')
+      }
+      if (profileRefs.avatarImage) {
+        profileRefs.avatarImage.src = fallbackAvatar
       }
       resetProfileLibrary()
       document.body.style.overflow = previousBodyOverflow || ''
@@ -4596,6 +4968,8 @@ let sessionsCard = null;
       previousBodyOverflow = document.body.style.overflow || ''
       document.body.style.overflow = 'hidden'
 
+      resetProfileTagPlayer()
+
       if (profileRefs.overlay) {
         profileRefs.overlay.classList.add('active')
         profileRefs.overlay.setAttribute('aria-hidden', 'false')
@@ -4603,7 +4977,15 @@ let sessionsCard = null;
 
       const sanitizedAvatar = sanitizeAvatar(activeProfileUser.avatar)
       if (profileRefs.card) {
-        profileRefs.card.style.backgroundImage = sanitizedAvatar ? `url('${sanitizedAvatar}')` : ''
+        if (sanitizedAvatar) {
+          profileRefs.card.style.setProperty('--profile-card-image', `url('${sanitizedAvatar}')`)
+        } else {
+          profileRefs.card.style.removeProperty('--profile-card-image')
+        }
+      }
+      if (profileRefs.avatarImage) {
+        profileRefs.avatarImage.src = sanitizedAvatar || fallbackAvatar
+        profileRefs.avatarImage.onerror = () => { profileRefs.avatarImage.src = fallbackAvatar }
       }
 
       const displayName = activeProfileUser.displayName || activeProfileUser.name || activeProfileUser.email || 'Beatloop creator'
@@ -4656,17 +5038,13 @@ let sessionsCard = null;
         }
       }
 
-      if (profileRefs.tagAudio) {
-        if (hasTag) {
-          profileRefs.tagAudio.src = toAssetUrl(activeProfileUser.tagUrl)
-          profileRefs.tagAudio.classList.remove('hidden')
-        } else {
-          profileRefs.tagAudio.removeAttribute('src')
-          profileRefs.tagAudio.classList.add('hidden')
-        }
-      }
-
       renderProfileLibrary(activeProfileUser)
+      if (hasTag) {
+        const tagSrc = toAssetUrl(activeProfileUser.tagUrl)
+        setupProfileTagPlayer(tagSrc)
+      } else if (profileRefs.tagCaption) {
+        profileRefs.tagCaption.textContent = 'No sound tag uploaded yet.'
+      }
       updateFollowButtonState(activeProfileUser)
     }
 
@@ -5518,14 +5896,14 @@ function createPost(track, { prepend = false } = {}) {
       }
 
       const trackWrapper = document.createElement('div')
-      trackWrapper.className = 'mt-3 rounded-xl bg-black/30 p-3 ring-1 ring-white/10'
+      trackWrapper.className = 'mt-3 feed-track-card rounded-2xl border border-white/10 bg-black/30 p-4 ring-1 ring-white/10'
       const trackRow = document.createElement('div')
       trackRow.className = 'flex items-center gap-3'
       const coverImg = document.createElement('img')
       coverImg.src = normalized.cover || DEFAULT_TRACK_COVER
       coverImg.onerror = () => { coverImg.src = DEFAULT_TRACK_COVER }
       coverImg.alt = 'cover'
-      coverImg.className = 'h-10 w-10 rounded-md ring-1 ring-white/10 object-cover'
+      coverImg.className = 'h-12 w-12 rounded-xl ring-1 ring-white/10 object-cover'
       if (normalized.isOwner) {
         coverImg.classList.add('track-cover-editable')
         coverImg.setAttribute('role', 'button')
@@ -5549,7 +5927,7 @@ function createPost(track, { prepend = false } = {}) {
       }
       trackRow.appendChild(coverImg)
       const metaDiv = document.createElement('div')
-      metaDiv.className = 'min-w-0'
+      metaDiv.className = 'min-w-0 flex-1'
       const artistEl = document.createElement('div')
       artistEl.className = 'text-sm text-white/70 truncate'
       artistEl.textContent = normalized.artist
@@ -5559,28 +5937,62 @@ function createPost(track, { prepend = false } = {}) {
       metaDiv.appendChild(artistEl)
       metaDiv.appendChild(titleEl)
       trackRow.appendChild(metaDiv)
+      const controlsWrap = document.createElement('div')
+      controlsWrap.className = 'ml-auto flex items-center gap-2'
+      const playBtn = document.createElement('button')
+      playBtn.type = 'button'
+      playBtn.className = 'track-play-button'
+      controlsWrap.appendChild(playBtn)
+      trackRow.appendChild(controlsWrap)
       trackWrapper.appendChild(trackRow)
 
       const waveContainer = document.createElement('div')
-      waveContainer.className = 'mt-2 h-14 w-full relative'
-      const barWrapper = document.createElement('div')
-      barWrapper.className = 'absolute inset-0 h-2 w-full bg-white/10 rounded overflow-hidden'
+      waveContainer.className = 'track-wave-shell mt-4'
+      const waveInner = document.createElement('div')
+      waveInner.className = 'track-wave-inner'
+      waveContainer.appendChild(waveInner)
       const barProgress = document.createElement('div')
       barProgress.style.width = '0%'
-      barProgress.className = 'absolute top-0 left-0 h-2 bg-primary rounded'
-      barWrapper.appendChild(barProgress)
-      waveContainer.appendChild(barWrapper)
+      barProgress.className = 'track-wave-progress'
+      waveContainer.appendChild(barProgress)
       const pinsContainer = document.createElement('div')
-      pinsContainer.className = 'absolute top-0 left-0 h-2 w-full pointer-events-none bl-comment-pins'
+      pinsContainer.className = 'bl-comment-pins absolute inset-0 pointer-events-none'
       waveContainer.appendChild(pinsContainer)
       trackWrapper.appendChild(waveContainer)
 
       const audio = document.createElement('audio')
       audio.src = normalized.url
       audio.preload = 'metadata'
-      audio.controls = true
-      audio.className = 'w-full mt-2'
+      audio.controls = false
+      audio.className = 'profile-track-audio'
       trackWrapper.appendChild(audio)
+
+      let trackWave = null
+      if (normalized.url) {
+        trackWave = createWaveSurferForAudio(audio, waveInner, { height: 96 })
+      }
+      if (!trackWave) {
+        audio.controls = true
+        audio.classList.add('profile-track-audio--fallback')
+        waveContainer.classList.add('profile-track-wave--fallback')
+        playBtn.disabled = true
+        setPlayButtonState(playBtn, false, normalized.title || 'track')
+      } else {
+        setPlayButtonState(playBtn, false, normalized.title || 'track')
+      }
+
+      playBtn.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        if (audio.paused || audio.ended) {
+          const playPromise = audio.play()
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => {})
+          }
+        } else {
+          audio.pause()
+        }
+      })
 
       let localFallbackActive = normalized.localFallbackApplied
       let authProxyActive = false
@@ -5598,6 +6010,9 @@ function createPost(track, { prepend = false } = {}) {
         card.addEventListener('DOMNodeRemoved', (event) => {
           if (event?.target !== card) return
           revokeAuthProxyUrl()
+          if (trackWave && typeof trackWave.destroy === 'function') {
+            try { trackWave.destroy() } catch {}
+          }
         })
       }
 
@@ -5647,6 +6062,9 @@ function createPost(track, { prepend = false } = {}) {
             audio.load()
           }
         } catch {}
+        if (trackWave && typeof trackWave.load === 'function') {
+          try { trackWave.load(audio) } catch {}
+        }
 
         logPlaybackEvent('warn', 'fallback-applied', {
           reason,
@@ -5726,6 +6144,9 @@ function createPost(track, { prepend = false } = {}) {
                   audio.load()
                 }
               } catch {}
+              if (trackWave && typeof trackWave.load === 'function') {
+                try { trackWave.load(audio) } catch {}
+              }
               logPlaybackEvent('warn', 'auth-proxy-applied', {
                 reason,
                 attemptedSrc,
@@ -6251,6 +6672,8 @@ function createPost(track, { prepend = false } = {}) {
         updatePlaybackThreshold()
         playbackState.lastTime = Number(audio.currentTime) || 0
         lastProgressTime = playbackState.lastTime
+        trackWrapper.classList.add('is-playing')
+        setPlayButtonState(playBtn, true, normalized.title || 'track')
         const meta = {
           title: normalized.title,
           artist: normalized.artist,
@@ -6268,6 +6691,8 @@ function createPost(track, { prepend = false } = {}) {
         const current = Number(audio.currentTime) || playbackState.lastTime
         playbackState.lastTime = current
         lastProgressTime = current
+        trackWrapper.classList.remove('is-playing')
+        setPlayButtonState(playBtn, false, normalized.title || 'track')
       })
 
       audio.addEventListener('seeking', () => {
@@ -8816,24 +9241,31 @@ async function updateLeaderboard() {
       <button id="whoProfileClose" class="bl-who-close" aria-label="Close profile">×</button>
       <div class="user-profile-container">
         <div id="whoProfileCard" class="user-profile">
-          <h3 id="whoProfileName">Beatloop Creator</h3>
-          <p id="whoProfileSubtitle">@beatloop</p>
+          <div class="user-profile__visual">
+            <div class="user-profile__avatar-wrap">
+              <img id="whoProfileAvatar" class="user-profile__avatar" src="./img/avatar-default.svg" alt="Profile avatar" />
+            </div>
+            <div class="user-profile__body">
+              <p id="whoProfileSubtitle" class="user-profile__tagline">@beatloop</p>
+              <h3 id="whoProfileName" class="user-profile__name">Beatloop Creator</h3>
+            </div>
+          </div>
+          <ul class="user-info">
+            <li>
+              <h3 id="whoProfileStat1Value">0</h3>
+              <small id="whoProfileStat1Label">time online</small>
+            </li>
+            <li>
+              <h3 id="whoProfileStat2Value">0</h3>
+              <small id="whoProfileStat2Label">days on beatloop</small>
+            </li>
+            <li>
+              <h3 id="whoProfileStat3Value">Pending</h3>
+              <small id="whoProfileStat3Label">sound tag</small>
+            </li>
+          </ul>
+          <a id="whoProfileFollow" class="follow-btn" href="#">Follow</a>
         </div>
-        <ul class="user-info">
-          <li>
-            <h3 id="whoProfileStat1Value">0</h3>
-            <small id="whoProfileStat1Label">time online</small>
-          </li>
-          <li>
-            <h3 id="whoProfileStat2Value">0</h3>
-            <small id="whoProfileStat2Label">days on beatloop</small>
-          </li>
-          <li>
-            <h3 id="whoProfileStat3Value">Pending</h3>
-            <small id="whoProfileStat3Label">sound tag</small>
-          </li>
-        </ul>
-        <a id="whoProfileFollow" class="follow-btn" href="#">Follow</a>
       </div>
       <div class="bl-who-extra">
         <h4>Creator highlights</h4>
@@ -8869,12 +9301,26 @@ async function updateLeaderboard() {
           </div>
           <div id="profileTrackList" class="profile-track-list hidden"></div>
         </div>
-        <audio id="whoProfileTagAudio" class="bl-who-tag-audio hidden" controls preload="none"></audio>
+        <div id="profileTagPlayer" class="profile-track-item profile-tag-player hidden">
+          <div class="profile-track-header">
+            <div class="profile-tag-icon" aria-hidden="true">🔊</div>
+            <div class="profile-track-meta">
+              <p class="profile-track-title">Sound tag</p>
+              <p id="profileTagCaption" class="profile-track-caption">Tap play to preview their signature tag.</p>
+            </div>
+            <div class="profile-track-controls">
+              <button id="profileTagPlay" class="track-play-button" type="button"></button>
+            </div>
+          </div>
+          <div class="track-wave-shell profile-track-wave">
+            <div id="profileTagWave" class="track-wave-inner"></div>
+          </div>
+          <audio id="whoProfileTagAudio" class="profile-track-audio" preload="none"></audio>
+        </div>
       </div>
     </div>
   </div>
 
-<script src="https://unpkg.com/wavesurfer.js@7"></script>
 <!-- Tone.js for WebAudio sequencing -->
 <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
 <script>
