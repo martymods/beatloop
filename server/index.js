@@ -2401,6 +2401,43 @@ app.post('/api/tracks/:id/cover', auth, (req, res) => {
   });
 });
 
+app.patch('/api/tracks/:id', auth, async (req, res) => {
+  const trackId = asObjectId(req.params?.id);
+  if (!trackId) {
+    return res.status(400).json({ error: 'invalid track id' });
+  }
+
+  const body = req.body || {};
+  const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
+  if (!rawTitle) {
+    return res.status(400).json({ error: 'title is required' });
+  }
+  const nextTitle = rawTitle.slice(0, 140);
+
+  let trackDoc = null;
+  try {
+    trackDoc = await Track.findById(trackId);
+  } catch (err) {
+    console.error('Track lookup failed during rename', err);
+  }
+  if (!trackDoc) {
+    return res.status(404).json({ error: 'track not found' });
+  }
+  if (!trackDoc.userId || trackDoc.userId.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ error: 'not your track' });
+  }
+
+  trackDoc.title = nextTitle;
+  try {
+    await trackDoc.save();
+  } catch (err) {
+    console.error('Track rename failed', err);
+    return res.status(500).json({ error: 'could not update track title' });
+  }
+
+  return res.json({ id: trackDoc._id, title: trackDoc.title });
+});
+
 app.delete('/api/tracks/:id', auth, async (req, res) => {
   const trackId = asObjectId(req.params?.id);
   if (!trackId) {

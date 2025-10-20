@@ -2261,6 +2261,30 @@
           </button>
           <span id="recordingStatus" class="text-white/60 hidden">Recording…</span>
         </div>
+
+        <div id="composerAttachmentPanel" class="mt-4 hidden rounded-2xl border border-white/10 bg-black/30 p-3 text-sm">
+          <div id="composerTrackRow" class="flex items-start gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="text-xs uppercase tracking-wide text-white/50">Track attached</p>
+              <p id="composerTrackName" class="mt-1 truncate text-white/80"></p>
+              <label for="composerTrackTitle" class="mt-3 block text-xs uppercase tracking-wide text-white/50">Song title</label>
+              <input id="composerTrackTitle" type="text" placeholder="Give your track a title"
+                class="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+            <button id="composerTrackRemove" type="button"
+              class="h-8 shrink-0 rounded-lg bg-white/10 px-3 text-xs font-medium text-white/70 hover:bg-white/15">Remove</button>
+          </div>
+          <div id="composerCoverRow" class="mt-3 hidden items-center gap-3">
+            <img id="composerCoverThumb" src="" alt="Cover preview"
+              class="h-12 w-12 shrink-0 rounded-lg border border-white/10 object-cover" />
+            <div class="min-w-0 flex-1">
+              <p class="text-xs uppercase tracking-wide text-white/50">Cover art</p>
+              <p id="composerCoverName" class="mt-1 truncate text-white/80"></p>
+            </div>
+            <button id="composerCoverRemove" type="button"
+              class="h-8 shrink-0 rounded-lg bg-white/10 px-3 text-xs font-medium text-white/70 hover:bg-white/15">Remove</button>
+          </div>
+        </div>
       </article>
 
       <!-- Mobile right-rail (stacked) -->
@@ -3802,6 +3826,29 @@
       }
     }
 
+
+    async function renameTrackRemote(trackId, title) {
+      if (!trackId) throw new Error('Track ID required')
+      const trimmed = typeof title === 'string' ? title.trim() : ''
+      if (!trimmed) throw new Error('Title is required')
+      const apiBase = getActiveApiBase()
+      const response = await fetch(`${apiBase}/api/tracks/${encodeURIComponent(trackId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...AUTH.hdr() },
+        body: JSON.stringify({ title: trimmed })
+      })
+      let payload = {}
+      try { payload = await response.json().catch(() => ({})) } catch (_) { payload = {} }
+      if (!response.ok) {
+        const detail = payload && (payload.error || payload.message)
+        const message = detail ? String(detail).trim() : `HTTP ${response.status}`
+        const error = new Error(message)
+        error.status = response.status
+        throw error
+      }
+      return payload
+    }
+
     function normalizeComment(raw) {
       if (!raw || typeof raw !== 'object') return null
       const likesValue = Number(
@@ -4093,6 +4140,15 @@ let sessionsCard = null;
     const composerPostBtn = document.getElementById('composerPost')
     const uploadTrackInput = document.getElementById('uploadTrack')
     const uploadCoverInput = document.getElementById('uploadCover')
+    const composerAttachmentPanel = document.getElementById('composerAttachmentPanel')
+    const composerTrackRow = document.getElementById('composerTrackRow')
+    const composerTrackNameEl = document.getElementById('composerTrackName')
+    const composerTrackTitleInput = document.getElementById('composerTrackTitle')
+    const composerTrackRemoveBtn = document.getElementById('composerTrackRemove')
+    const composerCoverRow = document.getElementById('composerCoverRow')
+    const composerCoverThumb = document.getElementById('composerCoverThumb')
+    const composerCoverNameEl = document.getElementById('composerCoverName')
+    const composerCoverRemoveBtn = document.getElementById('composerCoverRemove')
     const trackCoverUpdateInput = document.createElement('input')
     trackCoverUpdateInput.type = 'file'
     trackCoverUpdateInput.accept = 'image/*'
@@ -4383,6 +4439,69 @@ let sessionsCard = null;
     let pendingMeta = null          // lightweight meta for last uploaded/recorded track
     let pendingCoverUpdate = null   // { track, coverImg }
     let pendingCoverKey = null      // IDB key for optional cover
+    let pendingDraft = null         // { file, fileName, title }
+    let pendingCoverPreviewUrl = ''
+    let pendingCoverFilename = ''
+
+    function updateComposerAttachments() {
+      const hasTrack = Boolean(pendingDraft)
+      const hasCover = Boolean(pendingCoverPreviewUrl)
+      if (composerAttachmentPanel) {
+        if (hasTrack || hasCover) composerAttachmentPanel.classList.remove('hidden')
+        else composerAttachmentPanel.classList.add('hidden')
+      }
+      if (composerTrackRow) {
+        if (hasTrack) {
+          composerTrackRow.classList.remove('hidden')
+          if (composerTrackNameEl) composerTrackNameEl.textContent = pendingDraft.fileName || 'Attached track'
+          if (composerTrackTitleInput && composerTrackTitleInput !== document.activeElement) {
+            composerTrackTitleInput.value = pendingDraft.title || ''
+          } else if (composerTrackTitleInput && !composerTrackTitleInput.value) {
+            composerTrackTitleInput.value = pendingDraft.title || ''
+          }
+        } else {
+          composerTrackRow.classList.add('hidden')
+          if (composerTrackNameEl) composerTrackNameEl.textContent = ''
+          if (composerTrackTitleInput && composerTrackTitleInput !== document.activeElement) {
+            composerTrackTitleInput.value = ''
+          }
+        }
+      }
+      if (composerCoverRow) {
+        if (hasCover) {
+          composerCoverRow.classList.remove('hidden')
+          if (composerCoverThumb) composerCoverThumb.src = pendingCoverPreviewUrl
+          if (composerCoverNameEl) composerCoverNameEl.textContent = pendingCoverFilename || 'Cover attached'
+        } else {
+          composerCoverRow.classList.add('hidden')
+          if (composerCoverThumb) composerCoverThumb.src = ''
+          if (composerCoverNameEl) composerCoverNameEl.textContent = ''
+        }
+      }
+    }
+
+    function clearPendingDraft() {
+      pendingDraft = null
+      if (composerTrackTitleInput && composerTrackTitleInput !== document.activeElement) {
+        composerTrackTitleInput.value = ''
+      }
+      updateComposerAttachments()
+    }
+
+    async function clearPendingCover({ deleteStored = true } = {}) {
+      const key = pendingCoverKey
+      const previewUrl = pendingCoverPreviewUrl
+      pendingCoverKey = null
+      pendingCoverPreviewUrl = ''
+      pendingCoverFilename = ''
+      if (previewUrl) {
+        try { URL.revokeObjectURL(previewUrl) } catch (_) {}
+      }
+      if (deleteStored && key) {
+        try { await deleteBlob('covers', key) } catch (err) { console.warn('Failed to remove cover blob', err) }
+      }
+      updateComposerAttachments()
+    }
 
     // ---------- Render comments & pins
     function renderComments(trackId, listContainer, pinsContainer, duration, comments) {
@@ -5240,8 +5359,62 @@ function createPost(track, { prepend = false } = {}) {
       }
       let deleteInFlight = false
       if (normalized.isOwner) {
+        const renameBtn = document.createElement('button')
+        renameBtn.type = 'button'
+        renameBtn.className = 'ml-auto text-white/70 hover:text-white'
+        renameBtn.textContent = '✏️ Rename'
+        actions.appendChild(renameBtn)
+        renameBtn.addEventListener('click', async (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          if (renameBtn.dataset.loading === '1') return
+          const currentTitle = String(normalized.title || 'Untitled').trim() || 'Untitled'
+          const next = window.prompt('Rename track', currentTitle)
+          if (next === null) return
+          const trimmed = next.trim()
+          if (!trimmed) {
+            alert('Title cannot be empty.')
+            return
+          }
+          if (trimmed === currentTitle) return
+          renameBtn.dataset.loading = '1'
+          const originalText = renameBtn.textContent
+          renameBtn.textContent = 'Renaming…'
+          renameBtn.disabled = true
+          try {
+            let finalTitle = trimmed
+            if (normalized.db) {
+              customMeta = (customMeta || []).map(meta => {
+                if (!meta || meta.id !== normalized.id) return meta
+                const updated = { ...meta, title: trimmed }
+                finalTitle = updated.title
+                return updated
+              })
+              setJSON('custom_tracks', customMeta)
+            } else {
+              const response = await renameTrackRemote(normalized.id, trimmed)
+              if (response && typeof response.title === 'string' && response.title.trim()) {
+                finalTitle = response.title.trim()
+              }
+            }
+            normalized.title = finalTitle
+            if (titleEl) titleEl.textContent = finalTitle || 'Untitled'
+            if (pendingMeta && pendingMeta.id === normalized.id) {
+              pendingMeta.title = finalTitle
+            }
+            registerLeaderboardTrack({ ...normalized, title: finalTitle }, { ownerId: normalized.ownerId, userOverride: normalized.user })
+            scheduleLeaderboardRefresh()
+          } catch (err) {
+            console.warn('Track rename failed', err)
+            alert('Rename failed: ' + (err?.message || err))
+          } finally {
+            renameBtn.disabled = false
+            renameBtn.dataset.loading = '0'
+            renameBtn.textContent = originalText
+          }
+        })
         const deleteBtn = document.createElement('button')
-        deleteBtn.className = 'ml-auto text-red-400 hover:text-red-300'
+        deleteBtn.className = 'text-red-400 hover:text-red-300 ml-2'
         deleteBtn.dataset.act = 'delete'
         deleteBtn.dataset.id = normalized.id
         deleteBtn.textContent = '🗑️ Delete'
@@ -6428,96 +6601,79 @@ async function updateLeaderboard() {
       return payload || {}
     }
 
-    // ---------- Upload track -> IDB blob + meta in localStorage
-    uploadTrackInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0]
+    // ---------- Upload track -> staged draft
+    uploadTrackInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0]
+      e.target.value = ''
       if (!file) return
-      const idLocal = 'custom-' + Date.now()
 
-      // Build a tiny meta now so we can still post locally if API fails
-      const metaLocal = {
-        id: idLocal,
-        title: file.name.replace(/\.[^/.]+$/, ''),
-        artist: (currentUser?.name || currentUser?.email || 'me'),
-        bpm: 0, db: true, coverKey: pendingCoverKey || null, createdAt: Date.now()
+      const baseName = file.name ? file.name.replace(/\.[^/.]+$/, '') : ''
+      const defaultTitle = (baseName && baseName.trim()) || 'Untitled'
+      pendingDraft = {
+        file,
+        fileName: file.name || 'track',
+        title: defaultTitle
       }
-
-      let savedRemote = null
-      try {
-        savedRemote = await uploadTrackBlobToApi({
-          blob: file,
-          title: metaLocal.title,
-          bpm: metaLocal.bpm,
-          coverKey: pendingCoverKey,
-          filename: file.name,
-          errorPrefix: 'Track upload failed'
-        })
-      } catch (err) {
-        const isApiFailure = err && typeof err === 'object' && err.isApiFailure
-        if (isApiFailure) {
-          alert(err.message || 'Track upload failed.')
-          pendingMeta = null
-          e.target.value = ''
-          return
-        }
-        console.warn('Track upload failed remotely, falling back to local save', err)
+      if (composerTrackTitleInput && composerTrackTitleInput !== document.activeElement) {
+        composerTrackTitleInput.value = defaultTitle
       }
-
-      if (savedRemote) {
-        savedRemote.caption = savedRemote.caption || (composerTextEl ? composerTextEl.value.trim() : '')
-        createPost(savedRemote, { prepend: true })
-        scheduleLeaderboardRefresh()
-        const titleForNotification = String(savedRemote.title || metaLocal.title || 'Untitled').trim() || 'Untitled'
-        recordNotification('upload', `Uploaded “${titleForNotification}”`, 'Your track is live on Beatloop.', {
-          trackId: savedRemote.id || metaLocal.id,
-          trackTitle: titleForNotification,
-          timestamp: Date.now(),
-          storage: 'cloud'
-        })
-        pendingMeta = null
-        pendingCoverKey = null
-        e.target.value = ''
-        return
-      }
-
-      try {
-        await putBlob('tracks', idLocal, file)
-        customMeta.push(metaLocal)
-        if (customMeta.length > 30) customMeta.shift()
-        setJSON('custom_tracks', customMeta)
-
-        const coverUrl = metaLocal.coverKey ? (await getBlobUrl('covers', metaLocal.coverKey)) : DEFAULT_TRACK_COVER
-        const url = URL.createObjectURL(file)
-        createPost({ ...metaLocal, url, cover: coverUrl }, { prepend: true })
-        scheduleLeaderboardRefresh()
-        const titleForNotification = String(metaLocal.title || 'Untitled').trim() || 'Untitled'
-        recordNotification('upload', `Added “${titleForNotification}”`, 'Saved locally to your library.', {
-          trackId: metaLocal.id,
-          trackTitle: titleForNotification,
-          timestamp: Date.now(),
-          storage: 'local'
-        })
-        pendingMeta = metaLocal
-      } catch (saveErr) {
-        alert('Save failed: ' + (saveErr?.message || saveErr))
-      } finally {
-        e.target.value = ''
-      }
+      if (pendingMeta) pendingMeta = null
+      updateComposerAttachments()
     })
 
+    if (composerTrackTitleInput) {
+      composerTrackTitleInput.addEventListener('input', (event) => {
+        if (pendingDraft) {
+          pendingDraft.title = event.target.value
+        }
+      })
+    }
+    if (composerTrackRemoveBtn) {
+      composerTrackRemoveBtn.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        clearPendingDraft()
+      })
+    }
+    if (composerCoverRemoveBtn) {
+      composerCoverRemoveBtn.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        clearPendingCover().catch(() => {})
+      })
+    }
 
     // ---------- Optional cover upload -> IDB
-    uploadCoverInput.addEventListener('change', async (e)=>{
-      const file = e.target.files[0]
-      if(!file) return
+    uploadCoverInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0]
+      e.target.value = ''
+      if (!file) return
+
+      const previousKey = pendingCoverKey
+      const previousPreview = pendingCoverPreviewUrl
+      const previousName = pendingCoverFilename
       const key = 'cover-' + Date.now()
       try {
-        await putBlob('covers', key, file)
-        pendingCoverKey = key || null
+        const optimized = await compressAvatarImage(file, { maxDimension: 1024, quality: 0.85 })
+        await putBlob('covers', key, optimized)
+        const previewUrl = await getBlobUrl('covers', key)
+        pendingCoverKey = key
+        pendingCoverFilename = file.name || optimized.name || 'cover'
+        if (previousPreview && previousPreview !== previewUrl) {
+          try { URL.revokeObjectURL(previousPreview) } catch (_) {}
+        }
+        pendingCoverPreviewUrl = previewUrl || ''
+        if (previousKey && previousKey !== key) {
+          try { await deleteBlob('covers', previousKey) } catch (err) { console.warn('Failed to clean previous cover blob', err) }
+        }
+        updateComposerAttachments()
       } catch (err) {
-        alert('Cover save failed: ' + err.message)
-      } finally {
-        e.target.value = ''
+        console.warn('Failed to save cover', err)
+        alert('Cover save failed: ' + (err?.message || err))
+        pendingCoverKey = previousKey
+        pendingCoverPreviewUrl = previousPreview || ''
+        pendingCoverFilename = previousName
+        updateComposerAttachments()
       }
     })
 
@@ -6604,6 +6760,9 @@ async function updateLeaderboard() {
     let recordedChunks = []
     recordBtn.addEventListener('click', async () => {
       if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        if (pendingDraft) {
+          clearPendingDraft()
+        }
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
           recordedChunks = []
@@ -6655,7 +6814,7 @@ async function updateLeaderboard() {
                   storage: 'cloud'
                 })
                 pendingMeta = null
-                pendingCoverKey = null
+                await clearPendingCover({ deleteStored: true })
                 return
               }
 
@@ -6673,6 +6832,7 @@ async function updateLeaderboard() {
                 timestamp: createdAt,
                 storage: 'recording'
               })
+              await clearPendingCover({ deleteStored: false })
               pendingMeta = meta
             } catch (err) {
               alert('Recording save failed: ' + (err?.message || err))
@@ -6695,17 +6855,126 @@ async function updateLeaderboard() {
     if (composerPostBtn) {
       composerPostBtn.addEventListener('click', async () => {
         const textVal = composerTextEl ? composerTextEl.value.trim() : ''
-        if (!pendingMeta) {
-          alert('Please upload or record a track before posting.')
+
+        if (pendingDraft) {
+          const originalLabel = composerPostBtn.textContent
+          composerPostBtn.disabled = true
+          composerPostBtn.textContent = 'Posting…'
+          composerPostBtn.setAttribute('aria-busy', 'true')
+          let shouldResetDraft = false
+          let deleteCoverOnReset = false
+          try {
+            const file = pendingDraft.file
+            const titleInput = composerTrackTitleInput ? composerTrackTitleInput.value : pendingDraft.title
+            const resolvedTitle = (titleInput && titleInput.trim()) || (pendingDraft.title && pendingDraft.title.trim()) || 'Untitled'
+            let savedRemote = null
+            try {
+              savedRemote = await uploadTrackBlobToApi({
+                blob: file,
+                title: resolvedTitle,
+                bpm: 0,
+                coverKey: pendingCoverKey,
+                filename: file && file.name,
+                errorPrefix: 'Track upload failed'
+              })
+            } catch (err) {
+              if (err && err.isApiFailure) {
+                alert(err.message || 'Track upload failed.')
+                return
+              }
+              console.warn('Track upload failed remotely, saving locally instead', err)
+            }
+
+            if (savedRemote) {
+              savedRemote.caption = textVal
+              createPost(savedRemote, { prepend: true })
+              scheduleLeaderboardRefresh()
+              const titleForNotification = String(savedRemote.title || resolvedTitle || 'Untitled').trim() || 'Untitled'
+              recordNotification('upload', `Uploaded “${titleForNotification}”`, 'Your track is live on Beatloop.', {
+                trackId: savedRemote.id || null,
+                trackTitle: titleForNotification,
+                timestamp: Date.now(),
+                storage: 'cloud'
+              })
+              shouldResetDraft = true
+              deleteCoverOnReset = true
+              pendingMeta = null
+              return
+            }
+
+            const idLocal = 'custom-' + Date.now()
+            const createdAt = Date.now()
+            const metaLocal = {
+              id: idLocal,
+              title: resolvedTitle,
+              artist: (currentUser?.name || currentUser?.email || 'me'),
+              bpm: 0,
+              db: true,
+              coverKey: pendingCoverKey || null,
+              caption: textVal,
+              createdAt
+            }
+            await putBlob('tracks', idLocal, file)
+            customMeta.push(metaLocal)
+            if (customMeta.length > 30) customMeta.shift()
+            setJSON('custom_tracks', customMeta)
+            const coverUrl = metaLocal.coverKey ? (await getBlobUrl('covers', metaLocal.coverKey)) : DEFAULT_TRACK_COVER
+            const url = await getBlobUrl('tracks', idLocal)
+            createPost({ ...metaLocal, url, cover: coverUrl }, { prepend: true })
+            scheduleLeaderboardRefresh()
+            const titleForNotification = String(metaLocal.title || 'Untitled').trim() || 'Untitled'
+            recordNotification('upload', `Added “${titleForNotification}”`, 'Saved locally to your library.', {
+              trackId: metaLocal.id,
+              trackTitle: titleForNotification,
+              timestamp: createdAt,
+              storage: 'local'
+            })
+            shouldResetDraft = true
+            deleteCoverOnReset = false
+            pendingMeta = null
+            return
+          } catch (err) {
+            alert('Save failed: ' + (err?.message || err))
+          } finally {
+            composerPostBtn.disabled = false
+            composerPostBtn.textContent = originalLabel
+            composerPostBtn.removeAttribute('aria-busy')
+            if (shouldResetDraft) {
+              pendingDraft = null
+              if (composerTextEl) composerTextEl.value = ''
+              await clearPendingCover({ deleteStored: deleteCoverOnReset })
+              updateComposerAttachments()
+            }
+          }
           return
         }
-        const playable = await materialize(pendingMeta)
-        if (textVal) playable.caption = textVal
-        playable.createdAt = Date.now()
-        createPost(playable, { prepend: true })
-        scheduleLeaderboardRefresh()
-        if (composerTextEl) composerTextEl.value = ''
-        pendingMeta = null
+
+        if (pendingMeta) {
+          const originalLabel = composerPostBtn.textContent
+          composerPostBtn.disabled = true
+          composerPostBtn.textContent = 'Posting…'
+          composerPostBtn.setAttribute('aria-busy', 'true')
+          try {
+            const playable = await materialize(pendingMeta)
+            if (!playable) throw new Error('Track unavailable')
+            if (textVal) playable.caption = textVal
+            playable.createdAt = Date.now()
+            createPost(playable, { prepend: true })
+            scheduleLeaderboardRefresh()
+            if (composerTextEl) composerTextEl.value = ''
+            pendingMeta = null
+            updateComposerAttachments()
+          } catch (err) {
+            alert('Unable to publish this track right now: ' + (err?.message || err))
+          } finally {
+            composerPostBtn.disabled = false
+            composerPostBtn.textContent = originalLabel
+            composerPostBtn.removeAttribute('aria-busy')
+          }
+          return
+        }
+
+        alert('Please upload or record a track before posting.')
       })
     }
 
