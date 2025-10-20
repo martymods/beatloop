@@ -8739,8 +8739,17 @@ async function updateLeaderboard() {
       if (!coverUrl) return
       try {
         const response = await fetch(coverUrl)
+        if (!response || !response.ok) {
+          console.warn('Skipping cover attachment, blob fetch failed', { status: response?.status })
+          return
+        }
         const coverBlob = await response.blob()
-        fd.append('cover', coverBlob, 'cover.png')
+        if (!coverBlob || (coverBlob.type && !coverBlob.type.toLowerCase().startsWith('image/'))) {
+          console.warn('Skipping cover attachment, blob type is not an image', coverBlob?.type)
+          return
+        }
+        const filename = pendingCoverFilename || 'cover.png'
+        fd.append('cover', coverBlob, filename)
       } catch (err) {
         console.warn('Failed to attach cover art to upload', err)
       } finally {
