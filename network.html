@@ -2117,6 +2117,37 @@
     .bl-who-contact:hover{background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.45)}
     .bl-who-tag-audio{width:100%;border-radius:.75rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);padding:.5rem}
     .bl-who-tag-audio.hidden{display:none}
+    .profile-library{margin-top:2rem;display:flex;flex-direction:column;gap:1.5rem}
+    .profile-library__heading{margin:0;font-size:.95rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.65)}
+    .profile-empty{margin:0;font-size:.85rem;color:rgba(255,255,255,.45)}
+    .profile-empty.hidden{display:none}
+    .profile-track-list,.profile-album-list{display:flex;flex-direction:column;gap:1rem}
+    .profile-track-list.hidden,.profile-album-list.hidden{display:none}
+    .profile-track-item,.profile-album-summary{display:flex;align-items:center;gap:1rem;padding:.75rem 1rem;border-radius:.85rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}
+    .profile-track-cover,.profile-album-cover{width:56px;height:56px;border-radius:.75rem;object-fit:cover;border:1px solid rgba(255,255,255,.08);box-shadow:0 10px 25px rgba(5,5,12,.35)}
+    .profile-track-meta{flex:1;min-width:0}
+    .profile-track-title{margin:0;font-weight:600;font-size:.95rem;color:#fff}
+    .profile-track-caption{margin:.15rem 0 0;font-size:.8rem;color:rgba(255,255,255,.55)}
+    .profile-track-audio{width:100%;margin-top:.5rem}
+    .profile-album-entry{border-radius:1rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);overflow:hidden;display:block}
+    .profile-album-entry[open] .profile-album-summary{border-bottom:1px solid rgba(255,255,255,.05);border-radius:1rem 1rem 0 0}
+    .profile-album-tracks{padding:1rem;display:flex;flex-direction:column;gap:.75rem;background:rgba(12,12,20,.65)}
+    .profile-album-track{display:flex;flex-direction:column;gap:.35rem;padding:.5rem .75rem;border-radius:.75rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
+    .profile-album-track h5{margin:0;font-size:.9rem;color:#fff}
+    .profile-album-track audio{width:100%}
+    .cover-score-wrapper{width:100%;border-radius:1.25rem;background:rgba(12,12,20,.7);border:1px solid rgba(255,255,255,.05);padding:1.25rem;overflow:hidden}
+    .cover-score-wrapper.hidden{display:none}
+    .cover-score{display:grid;gap:30px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));justify-items:center}
+    .cover-score .cover{position:relative;width:120px}
+    .cover-score .cover .cover-img{position:relative;width:100%;height:120px;border-radius:1rem;overflow:hidden;transform:perspective(730px) rotateX(14deg) rotateY(-1deg);box-shadow:rgba(16,26,64,0.1) -4px 1px 3px,rgba(16,26,64,0.1) -11px 4px 6px,rgba(16,26,64,0.1) -22px 8px 10px,rgba(16,26,64,0.1) -37px 14px 15px,rgba(16,26,64,0.1) -57px 21px 21px}
+    .cover-score .cover .cover-img .plastic{position:absolute;top:0;left:0;width:calc(100% + 2px);height:calc(100% - 1px);background:url(https://pudding.cool/2021/10/judge-my-music/assets/images/plastic-small.jpg);background-size:cover;mix-blend-mode:screen;opacity:.35}
+    .cover-score .cover .cover-img .img-fake{position:absolute;inset:-1px;border-radius:inherit;background-size:cover;background-position:center;filter:brightness(.94) blur(.2px) saturate(.9);z-index:-1}
+    .cover-score .cover .cover-img .image-card{position:absolute;inset:0;border-radius:inherit;overflow:hidden}
+    .cover-score .cover .cover-img .image-card img,.cover-score .cover .cover-img .image-card video{width:100%;height:100%;object-fit:cover;display:block}
+    .cover-score .cover .cd{position:absolute;top:18px;left:58px;width:120px;height:120px;background:url(https://accord.dk/cdn/shop/t/9/assets/cd.png?v=42367682729110643861600767949);background-size:cover;z-index:-2;opacity:.85}
+    .cover-score .cover .shelf{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);width:140px;height:18px;background:url("https://pudding.cool/2021/10/judge-my-music/assets/images/shelf-3.png");background-size:cover;background-repeat:no-repeat;opacity:.9}
+    .cover-score .cover .shelf-shadow{display:none}
+    @media (max-width:720px){.cover-score{gap:20px;grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}.cover-score .cover{width:100px}.cover-score .cover .cover-img{height:100px}.cover-score .cover .cd{width:100px;height:100px;left:44px}}
     .bl-who-suggestion{display:flex;align-items:center;gap:.75rem;width:100%;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.05);border-radius:.85rem;padding:.75rem;cursor:pointer;transition:background .18s ease,transform .18s ease,border-color .18s ease;text-align:left;color:inherit}
     .bl-who-suggestion:hover{background:rgba(255,255,255,.08);transform:translateY(-1px)}
     .bl-who-suggestion:focus-visible{outline:2px solid rgba(124,58,237,.55);outline-offset:2px}
@@ -2249,6 +2280,9 @@
           <input id="uploadTrack" type="file" accept="audio/*" class="hidden" />
           <label for="uploadTrack" class="cursor-pointer rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Upload Track</label>
 
+          <input id="uploadAlbum" type="file" accept="audio/*" multiple class="hidden" />
+          <label for="uploadAlbum" class="cursor-pointer rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Upload Album</label>
+
           <!-- NEW: optional cover image -->
           <input id="uploadCover" type="file" accept="image/*" class="hidden" />
           <label for="uploadCover" class="cursor-pointer rounded-xl bg-white/10 px-3 py-2 hover:bg-white/15">Add Cover</label>
@@ -2283,6 +2317,19 @@
             </div>
             <button id="composerCoverRemove" type="button"
               class="h-8 shrink-0 rounded-lg bg-white/10 px-3 text-xs font-medium text-white/70 hover:bg-white/15">Remove</button>
+          </div>
+          <div id="composerAlbumRow" class="mt-4 hidden rounded-xl border border-white/10 bg-black/40 p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex-1">
+                <p class="text-xs uppercase tracking-wide text-white/50">Album attached</p>
+                <label for="composerAlbumTitle" class="mt-2 block text-xs uppercase tracking-wide text-white/50">Album title</label>
+                <input id="composerAlbumTitle" type="text" placeholder="Name your album"
+                  class="mt-1 w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+              <button id="composerAlbumRemove" type="button"
+                class="h-8 shrink-0 rounded-lg bg-white/10 px-3 text-xs font-medium text-white/70 hover:bg-white/15">Remove</button>
+            </div>
+            <div class="mt-4 space-y-3" id="composerAlbumTrackList"></div>
           </div>
         </div>
       </article>
@@ -3719,6 +3766,7 @@
 
     // ---------- Load / migrate custom tracks metadata (no big data URLs)
     let customMeta = [] // [{id,title,artist,bpm,db:true,coverKey?:string}]
+    let customAlbums = [] // [{id,title,coverKey,createdAt,trackIds:[{id,title,order}],caption?,user?:{...}}]
 
     async function migrateLegacyIfNeeded() {
       const raw = getJSON('custom_tracks', '[]')
@@ -4150,6 +4198,7 @@ let sessionsCard = null;
     const composerTextEl = document.getElementById('composerText')
     const composerPostBtn = document.getElementById('composerPost')
     const uploadTrackInput = document.getElementById('uploadTrack')
+    const uploadAlbumInput = document.getElementById('uploadAlbum')
     const uploadCoverInput = document.getElementById('uploadCover')
     const composerAttachmentPanel = document.getElementById('composerAttachmentPanel')
     const composerTrackRow = document.getElementById('composerTrackRow')
@@ -4160,6 +4209,10 @@ let sessionsCard = null;
     const composerCoverThumb = document.getElementById('composerCoverThumb')
     const composerCoverNameEl = document.getElementById('composerCoverName')
     const composerCoverRemoveBtn = document.getElementById('composerCoverRemove')
+    const composerAlbumRow = document.getElementById('composerAlbumRow')
+    const composerAlbumTitleInput = document.getElementById('composerAlbumTitle')
+    const composerAlbumTrackList = document.getElementById('composerAlbumTrackList')
+    const composerAlbumRemoveBtn = document.getElementById('composerAlbumRemove')
     const trackCoverUpdateInput = document.createElement('input')
     trackCoverUpdateInput.type = 'file'
     trackCoverUpdateInput.accept = 'image/*'
@@ -4175,12 +4228,15 @@ let sessionsCard = null;
     const trendsMEl = document.getElementById('trendsM')
 
     const renderedTrackIds = new Set()
+    const renderedAlbumIds = new Set()
     let remoteCursor = null
     let remoteHasMore = true
     let remoteLoading = false
     let staticTrackIndex = 0
     let customTrackIndex = 0
+    let customAlbumIndex = 0
     let feedIsLoading = false
+    const userLibrary = new Map()
 
     const profileRefs = {
       overlay: null,
@@ -4200,7 +4256,15 @@ let sessionsCard = null;
       onlineDetail: null,
       tagDetail: null,
       contactLink: null,
-      tagAudio: null
+      tagAudio: null,
+      albumsWrapper: null,
+      albumGallery: null,
+      albumList: null,
+      albumsEmpty: null,
+      trackGalleryWrapper: null,
+      trackGallery: null,
+      trackList: null,
+      tracksEmpty: null
     }
     let activeProfileUser = null
     let previousBodyOverflow = ''
@@ -4226,6 +4290,14 @@ let sessionsCard = null;
       profileRefs.tagDetail = document.getElementById('whoProfileTagDetail')
       profileRefs.contactLink = document.getElementById('whoProfileContactLink')
       profileRefs.tagAudio = document.getElementById('whoProfileTagAudio')
+      profileRefs.albumsWrapper = document.getElementById('profileAlbumGalleryWrapper')
+      profileRefs.albumGallery = document.getElementById('profileAlbumGallery')
+      profileRefs.albumList = document.getElementById('profileAlbumList')
+      profileRefs.albumsEmpty = document.getElementById('profileAlbumsEmpty')
+      profileRefs.trackGalleryWrapper = document.getElementById('profileTrackGalleryWrapper')
+      profileRefs.trackGallery = document.getElementById('profileTrackGallery')
+      profileRefs.trackList = document.getElementById('profileTrackList')
+      profileRefs.tracksEmpty = document.getElementById('profileTracksEmpty')
 
       if (profileRefs.closeBtn && !profileRefs.closeBtn.dataset.bound) {
         profileRefs.closeBtn.addEventListener('click', closeWhoProfile)
@@ -4245,6 +4317,185 @@ let sessionsCard = null;
         profileRefs.followBtn.dataset.bound = '1'
       }
       return true
+    }
+
+    function resetProfileLibrary() {
+      if (!ensureProfileRefs()) return
+      if (profileRefs.albumGallery) profileRefs.albumGallery.innerHTML = ''
+      if (profileRefs.albumsWrapper) profileRefs.albumsWrapper.classList.add('hidden')
+      if (profileRefs.albumList) {
+        profileRefs.albumList.innerHTML = ''
+        profileRefs.albumList.classList.add('hidden')
+      }
+      if (profileRefs.albumsEmpty) profileRefs.albumsEmpty.classList.remove('hidden')
+      if (profileRefs.trackGallery) profileRefs.trackGallery.innerHTML = ''
+      if (profileRefs.trackGalleryWrapper) profileRefs.trackGalleryWrapper.classList.add('hidden')
+      if (profileRefs.trackList) {
+        profileRefs.trackList.innerHTML = ''
+        profileRefs.trackList.classList.add('hidden')
+      }
+      if (profileRefs.tracksEmpty) profileRefs.tracksEmpty.classList.remove('hidden')
+    }
+
+    function buildCoverElement(imageUrl, title) {
+      const cover = document.createElement('div')
+      cover.className = 'cover'
+      const shelf = document.createElement('div')
+      shelf.className = 'shelf'
+      cover.appendChild(shelf)
+      const shelfShadow = document.createElement('div')
+      shelfShadow.className = 'shelf-shadow'
+      cover.appendChild(shelfShadow)
+      const coverImg = document.createElement('div')
+      coverImg.className = 'cover-img cover-img-active'
+      coverImg.dataset.shadowColor = '16,26,64'
+      const plastic = document.createElement('div')
+      plastic.className = 'plastic'
+      coverImg.appendChild(plastic)
+      const imageCard = document.createElement('div')
+      imageCard.className = 'image-card'
+      const img = document.createElement('img')
+      img.src = imageUrl || DEFAULT_TRACK_COVER
+      img.alt = title || 'Cover art'
+      imageCard.appendChild(img)
+      coverImg.appendChild(imageCard)
+      const imgFake = document.createElement('div')
+      imgFake.className = 'img-fake'
+      imgFake.style.backgroundImage = `url('${imageUrl || DEFAULT_TRACK_COVER}')`
+      coverImg.appendChild(imgFake)
+      const cd = document.createElement('div')
+      cd.className = 'cd'
+      coverImg.appendChild(cd)
+      cover.appendChild(coverImg)
+      return cover
+    }
+
+    function renderProfileLibrary(user) {
+      if (!ensureProfileRefs()) return
+      resetProfileLibrary()
+      if (!user) return
+      const key = normalizeLibraryKeyFromUser(user, user?.id || user?._id || '')
+      if (!key) return
+      const entry = userLibrary.get(key)
+      if (!entry) return
+
+      const albums = Array.isArray(entry.albums)
+        ? entry.albums.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        : []
+      const singles = Array.isArray(entry.tracks)
+        ? entry.tracks.filter(track => !track.albumId).slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        : []
+
+      if (albums.length) {
+        if (profileRefs.albumsEmpty) profileRefs.albumsEmpty.classList.add('hidden')
+        if (profileRefs.albumsWrapper) profileRefs.albumsWrapper.classList.remove('hidden')
+        if (profileRefs.albumGallery) {
+          const maxCovers = Math.min(albums.length, 15)
+          for (let i = 0; i < maxCovers; i += 1) {
+            const album = albums[i]
+            const coverEl = buildCoverElement(album.cover || DEFAULT_TRACK_COVER, album.title)
+            profileRefs.albumGallery.appendChild(coverEl)
+          }
+        }
+        if (profileRefs.albumList) {
+          profileRefs.albumList.classList.remove('hidden')
+          albums.forEach(album => {
+            const details = document.createElement('details')
+            details.className = 'profile-album-entry'
+            const summary = document.createElement('summary')
+            summary.className = 'profile-album-summary'
+            const coverThumb = document.createElement('img')
+            coverThumb.className = 'profile-album-cover'
+            coverThumb.src = album.cover || DEFAULT_TRACK_COVER
+            coverThumb.onerror = () => { coverThumb.src = DEFAULT_TRACK_COVER }
+            coverThumb.alt = album.title || 'Album art'
+            const summaryText = document.createElement('div')
+            summaryText.className = 'min-w-0 flex-1'
+            const titleEl = document.createElement('p')
+            titleEl.className = 'm-0 font-semibold text-white'
+            titleEl.textContent = album.title || 'Untitled Album'
+            const countEl = document.createElement('p')
+            countEl.className = 'm-0 text-sm text-white/60'
+            const trackCount = Array.isArray(album.tracks) ? album.tracks.length : 0
+            countEl.textContent = trackCount === 1 ? '1 track' : `${trackCount} tracks`
+            summaryText.appendChild(titleEl)
+            summaryText.appendChild(countEl)
+            summary.appendChild(coverThumb)
+            summary.appendChild(summaryText)
+            details.appendChild(summary)
+
+            if (Array.isArray(album.tracks) && album.tracks.length) {
+              const tracksWrap = document.createElement('div')
+              tracksWrap.className = 'profile-album-tracks'
+              album.tracks
+                .slice()
+                .sort((a, b) => (a.order || 0) - (b.order || 0))
+                .forEach((track, index) => {
+                  const trackRow = document.createElement('div')
+                  trackRow.className = 'profile-album-track'
+                  const heading = document.createElement('h5')
+                  heading.textContent = `${index + 1}. ${track.title || 'Untitled'}`
+                  const audio = document.createElement('audio')
+                  audio.controls = true
+                  audio.preload = 'none'
+                  audio.src = track.url
+                  trackRow.appendChild(heading)
+                  trackRow.appendChild(audio)
+                  tracksWrap.appendChild(trackRow)
+                })
+              details.appendChild(tracksWrap)
+            }
+
+            profileRefs.albumList.appendChild(details)
+          })
+        }
+      }
+
+      if (singles.length) {
+        if (profileRefs.tracksEmpty) profileRefs.tracksEmpty.classList.add('hidden')
+        if (profileRefs.trackGalleryWrapper) profileRefs.trackGalleryWrapper.classList.remove('hidden')
+        if (profileRefs.trackGallery) {
+          const maxSingles = Math.min(singles.length, 20)
+          for (let i = 0; i < maxSingles; i += 1) {
+            const track = singles[i]
+            const coverEl = buildCoverElement(track.cover || DEFAULT_TRACK_COVER, track.title)
+            profileRefs.trackGallery.appendChild(coverEl)
+          }
+        }
+        if (profileRefs.trackList) {
+          profileRefs.trackList.classList.remove('hidden')
+          singles.forEach(track => {
+            const row = document.createElement('div')
+            row.className = 'profile-track-item'
+            const coverThumb = document.createElement('img')
+            coverThumb.className = 'profile-track-cover'
+            coverThumb.src = track.cover || DEFAULT_TRACK_COVER
+            coverThumb.onerror = () => { coverThumb.src = DEFAULT_TRACK_COVER }
+            coverThumb.alt = track.title || 'Track cover'
+            const meta = document.createElement('div')
+            meta.className = 'profile-track-meta'
+            const title = document.createElement('p')
+            title.className = 'profile-track-title'
+            title.textContent = track.title || 'Untitled'
+            meta.appendChild(title)
+            if (track.caption) {
+              const caption = document.createElement('p')
+              caption.className = 'profile-track-caption'
+              caption.textContent = track.caption
+              meta.appendChild(caption)
+            }
+            const audio = document.createElement('audio')
+            audio.controls = true
+            audio.preload = 'none'
+            audio.className = 'profile-track-audio'
+            audio.src = track.url
+            row.appendChild(coverThumb)
+            row.appendChild(meta)
+            row.appendChild(audio)
+            profileRefs.trackList.appendChild(row)
+          })
+        }
+      }
     }
 
     document.addEventListener('keydown', (event) => {
@@ -4332,6 +4583,7 @@ let sessionsCard = null;
         try { profileRefs.tagAudio.pause() } catch {}
         try { profileRefs.tagAudio.currentTime = 0 } catch {}
       }
+      resetProfileLibrary()
       document.body.style.overflow = previousBodyOverflow || ''
       activeProfileUser = null
     }
@@ -4414,6 +4666,7 @@ let sessionsCard = null;
         }
       }
 
+      renderProfileLibrary(activeProfileUser)
       updateFollowButtonState(activeProfileUser)
     }
 
@@ -4451,18 +4704,48 @@ let sessionsCard = null;
     let pendingCoverUpdate = null   // { track, coverImg }
     let pendingCoverKey = null      // IDB key for optional cover
     let pendingDraft = null         // { file, fileName, title }
+    let pendingAlbum = null         // { id, title, tracks: [{file,fileName,title}], createdAt }
     let pendingCoverPreviewUrl = ''
     let pendingCoverFilename = ''
 
+    function renderComposerAlbumTracks() {
+      if (!composerAlbumTrackList) return
+      composerAlbumTrackList.innerHTML = ''
+      if (!pendingAlbum || !Array.isArray(pendingAlbum.tracks)) return
+      pendingAlbum.tracks.forEach((track, index) => {
+        const row = document.createElement('div')
+        row.className = 'rounded-lg border border-white/15 bg-black/30 p-3'
+        const label = document.createElement('label')
+        label.className = 'block text-xs uppercase tracking-wide text-white/50'
+        label.textContent = `Track ${index + 1}`
+        const subtitle = document.createElement('p')
+        subtitle.className = 'mt-1 text-xs text-white/40 truncate'
+        subtitle.textContent = track.fileName || 'Audio file'
+        const input = document.createElement('input')
+        input.type = 'text'
+        input.placeholder = 'Track title'
+        input.value = track.title || ''
+        input.className = 'mt-2 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary'
+        input.addEventListener('input', (event) => {
+          track.title = event.target.value
+        })
+        row.appendChild(label)
+        row.appendChild(subtitle)
+        row.appendChild(input)
+        composerAlbumTrackList.appendChild(row)
+      })
+    }
+
     function updateComposerAttachments() {
       const hasTrack = Boolean(pendingDraft)
+      const hasAlbum = Boolean(pendingAlbum && Array.isArray(pendingAlbum.tracks) && pendingAlbum.tracks.length)
       const hasCover = Boolean(pendingCoverPreviewUrl)
       if (composerAttachmentPanel) {
-        if (hasTrack || hasCover) composerAttachmentPanel.classList.remove('hidden')
+        if (hasTrack || hasAlbum || hasCover) composerAttachmentPanel.classList.remove('hidden')
         else composerAttachmentPanel.classList.add('hidden')
       }
       if (composerTrackRow) {
-        if (hasTrack) {
+        if (hasTrack && !hasAlbum) {
           composerTrackRow.classList.remove('hidden')
           if (composerTrackNameEl) composerTrackNameEl.textContent = pendingDraft.fileName || 'Attached track'
           if (composerTrackTitleInput && composerTrackTitleInput !== document.activeElement) {
@@ -4476,6 +4759,21 @@ let sessionsCard = null;
           if (composerTrackTitleInput && composerTrackTitleInput !== document.activeElement) {
             composerTrackTitleInput.value = ''
           }
+        }
+      }
+      if (composerAlbumRow) {
+        if (hasAlbum) {
+          composerAlbumRow.classList.remove('hidden')
+          if (composerAlbumTitleInput && composerAlbumTitleInput !== document.activeElement) {
+            composerAlbumTitleInput.value = pendingAlbum.title || ''
+          }
+          renderComposerAlbumTracks()
+        } else {
+          composerAlbumRow.classList.add('hidden')
+          if (composerAlbumTitleInput && composerAlbumTitleInput !== document.activeElement) {
+            composerAlbumTitleInput.value = ''
+          }
+          if (composerAlbumTrackList) composerAlbumTrackList.innerHTML = ''
         }
       }
       if (composerCoverRow) {
@@ -4495,6 +4793,15 @@ let sessionsCard = null;
       pendingDraft = null
       if (composerTrackTitleInput && composerTrackTitleInput !== document.activeElement) {
         composerTrackTitleInput.value = ''
+      }
+      updateComposerAttachments()
+    }
+
+    function clearPendingAlbum() {
+      pendingAlbum = null
+      if (composerAlbumTrackList) composerAlbumTrackList.innerHTML = ''
+      if (composerAlbumTitleInput && composerAlbumTitleInput !== document.activeElement) {
+        composerAlbumTitleInput.value = ''
       }
       updateComposerAttachments()
     }
@@ -4850,6 +5157,118 @@ function markLeaderboardTracks(tracks = []) {
 let hoverTagPreviewAudio = null
 let hoverTagPreviewKey = ''
 let hoverTagPreviewTimeout = null
+
+function normalizeLibraryKeyFromUser(user, fallbackId = '') {
+  if (user && typeof user === 'object') {
+    const rawEmail = typeof user.normalizedEmail === 'string' && user.normalizedEmail
+      ? user.normalizedEmail
+      : (typeof user.email === 'string' ? user.email : '')
+    const normalizedEmail = rawEmail ? rawEmail.trim().toLowerCase() : ''
+    if (normalizedEmail) return normalizedEmail
+    const candidateId = user.id || user._id || user.userId || user.ownerId || fallbackId || ''
+    if (candidateId) return 'id:' + String(candidateId).trim().toLowerCase()
+    return ''
+  }
+  if (typeof user === 'string') {
+    const normalized = user.trim().toLowerCase()
+    if (normalized) return normalized
+  }
+  if (fallbackId) return 'id:' + String(fallbackId).trim().toLowerCase()
+  return ''
+}
+
+function sanitizeLibraryUserData(user, key) {
+  if (user && typeof user === 'object') {
+    const displayName = user.displayName || user.name || (user.email ? String(user.email).split('@')[0] : 'Beatloop creator')
+    const normalizedKey = key || normalizeLibraryKeyFromUser(user)
+    const normalizedEmail = normalizedKey.startsWith('id:')
+      ? (typeof user.normalizedEmail === 'string' ? user.normalizedEmail : '')
+      : normalizedKey
+    const emailValue = user.email || (!normalizedKey.startsWith('id:') ? normalizedKey : '')
+    return {
+      ...user,
+      displayName,
+      name: user.name || displayName,
+      email: emailValue,
+      normalizedEmail,
+      avatar: sanitizeAvatar(user.avatar || user.avatarUrl)
+    }
+  }
+  const normalizedKey = key || normalizeLibraryKeyFromUser(user)
+  const label = typeof user === 'string' && user.trim() ? user.trim() : 'Beatloop creator'
+  const emailValue = normalizedKey && !normalizedKey.startsWith('id:') ? normalizedKey : ''
+  return {
+    displayName: label,
+    name: label,
+    email: emailValue,
+    normalizedEmail: normalizedKey && !normalizedKey.startsWith('id:') ? normalizedKey : '',
+    avatar: fallbackAvatar
+  }
+}
+
+function ensureLibraryEntryForUser(user, fallbackId = '') {
+  const key = normalizeLibraryKeyFromUser(user, fallbackId)
+  if (!key) return null
+  const sanitized = sanitizeLibraryUserData(user, key)
+  let entry = userLibrary.get(key)
+  if (!entry) {
+    entry = { key, user: sanitized, tracks: [], albums: [] }
+    userLibrary.set(key, entry)
+  } else {
+    entry.user = { ...entry.user, ...sanitized }
+  }
+  return entry
+}
+
+function recordUserTrackEntry(track) {
+  if (!track || !track.id || !track.url) return
+  const entry = ensureLibraryEntryForUser(track.user || { email: track.userEmail, displayName: track.artist }, track.ownerId || track.owner || '')
+  if (!entry) return
+  const record = {
+    id: track.id,
+    title: track.title || 'Untitled',
+    cover: track.cover || DEFAULT_TRACK_COVER,
+    url: track.url,
+    caption: track.caption || '',
+    createdAt: resolveTrackCreatedAt(track),
+    albumId: track.albumId || null
+  }
+  const existingIndex = entry.tracks.findIndex(item => item.id === record.id)
+  if (existingIndex >= 0) {
+    entry.tracks[existingIndex] = { ...entry.tracks[existingIndex], ...record }
+  } else {
+    entry.tracks.push(record)
+  }
+  entry.tracks.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+}
+
+function recordUserAlbumEntry(album) {
+  if (!album || !album.id || !Array.isArray(album.tracks) || !album.tracks.length) return
+  const entry = ensureLibraryEntryForUser(album.user || { email: album.userEmail, displayName: album.artist }, album.ownerId || '')
+  if (!entry) return
+  const sanitizedTracks = album.tracks.map(track => ({
+    id: track.id,
+    title: track.title || 'Untitled',
+    order: Number.isFinite(track.order) ? track.order : 0,
+    url: track.url,
+    duration: track.duration || null
+  }))
+  const record = {
+    id: album.id,
+    title: album.title || 'Untitled Album',
+    cover: album.cover || DEFAULT_TRACK_COVER,
+    caption: album.caption || '',
+    createdAt: resolveTrackCreatedAt(album),
+    tracks: sanitizedTracks
+  }
+  const existingIndex = entry.albums.findIndex(item => item.id === record.id)
+  if (existingIndex >= 0) {
+    entry.albums[existingIndex] = { ...entry.albums[existingIndex], ...record }
+  } else {
+    entry.albums.push(record)
+  }
+  entry.albums.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+}
 
 function stopHoverTagPreview() {
   if (hoverTagPreviewTimeout) {
@@ -5925,8 +6344,156 @@ function createPost(track, { prepend = false } = {}) {
         }
       })()
 
+      recordUserTrackEntry(normalized)
+
       return card
     }
+
+function createAlbumPost(album, { prepend = false } = {}) {
+  if (!album || typeof album !== 'object') return null
+  const normalized = album
+  const albumId = normalized.id || `album-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+  if (renderedAlbumIds.has(albumId)) return null
+  if (!Array.isArray(normalized.tracks) || !normalized.tracks.length) return null
+
+  const author = normalized.user || null
+  const artistLabel = normalized.artist || (author && (author.displayName || author.name || author.email)) || 'Beatloop creator'
+  const avatarSrc = sanitizeAvatar(author?.avatar || fallbackAvatar)
+
+  const card = document.createElement('article')
+  card.className = 'rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10 p-4'
+  card.dataset.albumId = albumId
+
+  const header = document.createElement('div')
+  header.className = 'flex gap-3'
+
+  const avatar = document.createElement('img')
+  avatar.src = avatarSrc
+  avatar.onerror = () => { avatar.src = fallbackAvatar }
+  avatar.alt = 'avatar'
+  avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
+  avatar.classList.add('cursor-pointer')
+  avatar.tabIndex = 0
+  const profileLabel = artistLabel || 'Beatloop creator'
+  avatar.setAttribute('aria-label', 'View profile for ' + profileLabel)
+  const authorProfile = author ? { ...author } : null
+  const handleAvatarActivate = (event) => {
+    if (event) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    stopHoverTagPreview()
+    if (authorProfile && typeof openWhoProfile === 'function') {
+      openWhoProfile({ ...authorProfile })
+    }
+  }
+  avatar.addEventListener('click', handleAvatarActivate)
+  avatar.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      handleAvatarActivate(event)
+    }
+  })
+  if (authorProfile && authorProfile.tagUrl) {
+    avatar.addEventListener('mouseenter', () => playHoverTagPreview(authorProfile))
+    avatar.addEventListener('focus', () => playHoverTagPreview(authorProfile))
+    avatar.addEventListener('mouseleave', stopHoverTagPreview)
+    avatar.addEventListener('blur', stopHoverTagPreview)
+  }
+  header.appendChild(avatar)
+
+  const info = document.createElement('div')
+  info.className = 'min-w-0 flex-1'
+  const topRow = document.createElement('div')
+  topRow.className = 'flex flex-wrap items-center gap-2 text-sm'
+  const nameEl = document.createElement('span')
+  nameEl.className = 'font-semibold truncate'
+  nameEl.textContent = artistLabel
+  const handleEl = document.createElement('span')
+  handleEl.className = 'text-white/50 truncate'
+  const handle = buildHandle(author) || '@beatloop'
+  handleEl.textContent = handle
+  const timeEl = document.createElement('span')
+  timeEl.className = 'text-white/40'
+  timeEl.textContent = '· ' + timeAgo(normalized.createdAt || Date.now())
+  const badgeEl = document.createElement('span')
+  badgeEl.className = 'rounded-full bg-primary/20 px-2 py-0.5 text-xs font-semibold text-primary/80'
+  badgeEl.textContent = 'Album'
+  topRow.appendChild(nameEl)
+  topRow.appendChild(handleEl)
+  topRow.appendChild(timeEl)
+  topRow.appendChild(badgeEl)
+  info.appendChild(topRow)
+
+  if (normalized.caption) {
+    const captionEl = document.createElement('p')
+    captionEl.className = 'mt-1 text-sm text-white/80 whitespace-pre-line break-words'
+    captionEl.textContent = normalized.caption
+    info.appendChild(captionEl)
+  }
+
+  header.appendChild(info)
+  card.appendChild(header)
+
+  const albumWrapper = document.createElement('div')
+  albumWrapper.className = 'mt-3 rounded-2xl bg-black/30 p-4 ring-1 ring-white/10'
+
+  const albumTop = document.createElement('div')
+  albumTop.className = 'flex flex-col gap-3 md:flex-row md:items-start'
+  const coverImg = document.createElement('img')
+  coverImg.src = normalized.cover || DEFAULT_TRACK_COVER
+  coverImg.onerror = () => { coverImg.src = DEFAULT_TRACK_COVER }
+  coverImg.alt = 'Album cover'
+  coverImg.className = 'h-32 w-32 rounded-xl object-cover ring-1 ring-white/10'
+  albumTop.appendChild(coverImg)
+
+  const albumMeta = document.createElement('div')
+  albumMeta.className = 'flex-1 min-w-0'
+  const titleEl = document.createElement('h3')
+  titleEl.className = 'text-lg font-semibold text-white'
+  titleEl.textContent = normalized.title || 'Untitled Album'
+  const countEl = document.createElement('p')
+  countEl.className = 'mt-1 text-sm text-white/60'
+  countEl.textContent = normalized.tracks.length === 1
+    ? '1 track'
+    : `${normalized.tracks.length} tracks`
+  albumMeta.appendChild(titleEl)
+  albumMeta.appendChild(countEl)
+  albumTop.appendChild(albumMeta)
+  albumWrapper.appendChild(albumTop)
+
+  const trackList = document.createElement('ol')
+  trackList.className = 'mt-4 space-y-3'
+  normalized.tracks.forEach((track, index) => {
+    const item = document.createElement('li')
+    item.className = 'rounded-xl bg-white/5 p-3 ring-1 ring-white/10'
+    const titleRow = document.createElement('div')
+    titleRow.className = 'flex items-center justify-between gap-3'
+    const trackTitle = document.createElement('span')
+    trackTitle.className = 'font-medium text-white truncate'
+    trackTitle.textContent = `${index + 1}. ${track.title || 'Untitled'}`
+    titleRow.appendChild(trackTitle)
+    item.appendChild(titleRow)
+    const audio = document.createElement('audio')
+    audio.controls = true
+    audio.preload = 'none'
+    audio.className = 'mt-2 w-full'
+    audio.src = track.url
+    item.appendChild(audio)
+    trackList.appendChild(item)
+  })
+  albumWrapper.appendChild(trackList)
+  card.appendChild(albumWrapper)
+
+  if (feedEl) {
+    if (prepend && feedEl.firstChild) feedEl.insertBefore(card, feedEl.firstChild)
+    else feedEl.appendChild(card)
+  }
+
+  renderedAlbumIds.add(albumId)
+  recordUserAlbumEntry({ ...normalized, id: albumId })
+
+  return card
+}
 
     // ---------- Materialize meta -> playable track (resolve IDB blob URLs)
     async function materialize(meta) {
@@ -5942,6 +6509,73 @@ function createPost(track, { prepend = false } = {}) {
           return { ...meta, url: normalizedUrl, cover: normalizedCover, createdAt: resolveTrackCreatedAt(meta) }
         }
       }
+
+    async function materializeAlbum(meta) {
+      if (!meta || typeof meta !== 'object') return null
+      const id = meta.id || `album-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+      const createdAt = resolveTrackCreatedAt(meta)
+      let cover = DEFAULT_TRACK_COVER
+      if (meta.coverKey) {
+        try {
+          const coverUrl = await getBlobUrl('covers', meta.coverKey)
+          if (coverUrl) cover = coverUrl
+        } catch {}
+      } else if (meta.cover) {
+        cover = resolveTrackMediaUrl(meta.cover) || DEFAULT_TRACK_COVER
+      }
+
+      const tracksRaw = Array.isArray(meta.tracks) && meta.tracks.length ? meta.tracks : (Array.isArray(meta.trackIds) ? meta.trackIds : [])
+      const tracks = []
+      for (let i = 0; i < tracksRaw.length; i += 1) {
+        const entry = tracksRaw[i]
+        if (!entry) continue
+        const trackId = entry.id || entry.trackId || entry.metaId
+        if (!trackId) continue
+        let url = entry.url || entry.audioUrl || ''
+        if (!url && meta.db !== false) {
+          try { url = await getBlobUrl('tracks', trackId) } catch {}
+        }
+        url = url ? resolveTrackMediaUrl(url) : ''
+        if (!url) continue
+        const orderRaw = Number.isFinite(entry.order) ? entry.order : i
+        tracks.push({
+          id: trackId,
+          title: entry.title || entry.name || 'Untitled',
+          order: orderRaw,
+          url,
+          duration: entry.duration || null,
+          albumId: id
+        })
+      }
+      if (!tracks.length) return null
+      tracks.sort((a, b) => {
+        const orderDiff = (a.order || 0) - (b.order || 0)
+        if (orderDiff !== 0) return orderDiff
+        return a.title.localeCompare(b.title)
+      })
+
+      const ownerId = meta.ownerId || meta.owner || meta.userId || null
+      const userInfo = meta.user && typeof meta.user === 'object'
+        ? sanitizeLibraryUserData(meta.user, normalizeLibraryKeyFromUser(meta.user, ownerId || ''))
+        : (currentUser ? sanitizeLibraryUserData(currentUser, normalizeLibraryKeyFromUser(currentUser, ownerId || '')) : null)
+      const artist = meta.artist
+        || (userInfo && (userInfo.displayName || userInfo.name || userInfo.email))
+        || 'Beatloop creator'
+      const caption = typeof meta.caption === 'string' ? meta.caption : ''
+
+      return {
+        ...meta,
+        id,
+        title: meta.title || 'Untitled Album',
+        cover,
+        createdAt,
+        tracks,
+        caption,
+        artist,
+        user: userInfo,
+        ownerId
+      }
+    }
 
     // ---------- Infinite feed
     const BATCH_SIZE = 4
@@ -5981,8 +6615,10 @@ function createPost(track, { prepend = false } = {}) {
       remoteLoading = false
       staticTrackIndex = 0
       customTrackIndex = 0
+      customAlbumIndex = 0
       feedIsLoading = false
       renderedTrackIds.clear()
+      renderedAlbumIds.clear()
       if (clearDom && feedEl) {
         feedEl.innerHTML = ''
         if (sessionsCard) {
@@ -6022,11 +6658,33 @@ function createPost(track, { prepend = false } = {}) {
         }
       }
 
-      while (remaining > 0 && customTrackIndex < customMeta.length) {
-        const customTrack = customMeta[customTrackIndex++] || null
-        const materialized = await materialize(customTrack)
-        if (materialized && materialized.url) {
-          createPost(materialized)
+      while (remaining > 0) {
+        const nextTrack = customTrackIndex < customMeta.length ? customMeta[customTrackIndex] : null
+        const nextAlbum = customAlbumIndex < customAlbums.length ? customAlbums[customAlbumIndex] : null
+        if (!nextTrack && !nextAlbum) break
+        let useAlbum = false
+        if (nextAlbum && nextTrack) {
+          useAlbum = resolveTrackCreatedAt(nextAlbum) >= resolveTrackCreatedAt(nextTrack)
+        } else if (nextAlbum) {
+          useAlbum = true
+        }
+
+        if (useAlbum) {
+          const albumMeta = nextAlbum
+          customAlbumIndex += 1
+          const materializedAlbum = await materializeAlbum(albumMeta)
+          if (materializedAlbum && Array.isArray(materializedAlbum.tracks) && materializedAlbum.tracks.length) {
+            createAlbumPost(materializedAlbum)
+            remaining -= 1
+          }
+          continue
+        }
+
+        const trackMeta = nextTrack
+        customTrackIndex += 1
+        const materializedTrack = await materialize(trackMeta)
+        if (materializedTrack && materializedTrack.url) {
+          createPost(materializedTrack)
           remaining -= 1
         }
       }
@@ -6659,6 +7317,7 @@ async function updateLeaderboard() {
 
       const baseName = file.name ? file.name.replace(/\.[^/.]+$/, '') : ''
       const defaultTitle = (baseName && baseName.trim()) || 'Untitled'
+      pendingAlbum = null
       pendingDraft = {
         file,
         fileName: file.name || 'track',
@@ -6668,6 +7327,36 @@ async function updateLeaderboard() {
         composerTrackTitleInput.value = defaultTitle
       }
       if (pendingMeta) pendingMeta = null
+      updateComposerAttachments()
+    })
+
+    uploadAlbumInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files || []).filter(file => file && file.size > 0 && (!file.type || file.type.startsWith('audio')))
+      e.target.value = ''
+      if (!files.length) return
+      if (files.length < 2) {
+        alert('Please select at least two audio files to create an album.')
+        return
+      }
+
+      pendingDraft = null
+      const baseNames = files
+        .map(file => (file.name ? file.name.replace(/\.[^/.]+$/, '').trim() : ''))
+        .filter(Boolean)
+      const defaultAlbumTitle = baseNames.length ? baseNames[0] : 'New Album'
+      const createdAt = Date.now()
+      pendingAlbum = {
+        id: 'album-' + createdAt,
+        title: defaultAlbumTitle,
+        createdAt,
+        tracks: files.map((file, index) => ({
+          file,
+          fileName: file.name || `Track ${index + 1}`,
+          title: baseNames[index] || `Track ${index + 1}`,
+          order: index
+        }))
+      }
+      pendingMeta = null
       updateComposerAttachments()
     })
 
@@ -6683,6 +7372,20 @@ async function updateLeaderboard() {
         event.preventDefault()
         event.stopPropagation()
         clearPendingDraft()
+      })
+    }
+    if (composerAlbumTitleInput) {
+      composerAlbumTitleInput.addEventListener('input', (event) => {
+        if (pendingAlbum) {
+          pendingAlbum.title = event.target.value
+        }
+      })
+    }
+    if (composerAlbumRemoveBtn) {
+      composerAlbumRemoveBtn.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        clearPendingAlbum()
       })
     }
     if (composerCoverRemoveBtn) {
@@ -6813,6 +7516,9 @@ async function updateLeaderboard() {
         if (pendingDraft) {
           clearPendingDraft()
         }
+        if (pendingAlbum) {
+          clearPendingAlbum()
+        }
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
           recordedChunks = []
@@ -6905,6 +7611,106 @@ async function updateLeaderboard() {
     if (composerPostBtn) {
       composerPostBtn.addEventListener('click', async () => {
         const textVal = composerTextEl ? composerTextEl.value.trim() : ''
+
+        if (pendingAlbum && Array.isArray(pendingAlbum.tracks) && pendingAlbum.tracks.length) {
+          const originalLabel = composerPostBtn.textContent
+          composerPostBtn.disabled = true
+          composerPostBtn.textContent = 'Posting…'
+          composerPostBtn.setAttribute('aria-busy', 'true')
+          let shouldResetAlbum = false
+          try {
+            const albumTitleInput = composerAlbumTitleInput ? composerAlbumTitleInput.value : pendingAlbum.title
+            const resolvedAlbumTitle = (albumTitleInput && albumTitleInput.trim()) || (pendingAlbum.title && pendingAlbum.title.trim()) || 'Untitled Album'
+            const createdAt = Date.now()
+            const albumId = pendingAlbum.id || 'album-' + createdAt
+            const ownerId = normalizeUserId(currentUserId || currentUser?.id || currentUser?._id)
+            const artistName = currentUser?.name || currentUser?.displayName || currentUser?.email || 'Beatloop creator'
+
+            const trackMetas = []
+            for (let i = 0; i < pendingAlbum.tracks.length; i += 1) {
+              const entry = pendingAlbum.tracks[i]
+              if (!entry || !entry.file) continue
+              const trackId = `${albumId}-track-${i + 1}-${Math.random().toString(36).slice(2,8)}`
+              const title = (entry.title && entry.title.trim()) || (entry.fileName && entry.fileName.replace(/\.[^/.]+$/, '').trim()) || `Track ${i + 1}`
+              await putBlob('tracks', trackId, entry.file)
+              trackMetas.push({
+                id: trackId,
+                title,
+                order: i,
+                coverKey: pendingCoverKey || null,
+                db: true,
+                createdAt: createdAt + i
+              })
+            }
+
+            if (!trackMetas.length) {
+              throw new Error('Album has no usable tracks.')
+            }
+
+            const albumUser = currentUser ? { ...currentUser, avatar: sanitizeAvatar(currentUser.avatar) } : null
+            const albumMeta = {
+              id: albumId,
+              title: resolvedAlbumTitle,
+              coverKey: pendingCoverKey || null,
+              createdAt,
+              caption: textVal,
+              tracks: trackMetas.map(t => ({ id: t.id, title: t.title, order: t.order })),
+              db: true,
+              artist: artistName,
+              user: albumUser,
+              ownerId
+            }
+
+            customAlbums.push(albumMeta)
+            if (customAlbums.length > 20) customAlbums.shift()
+            setJSON('custom_albums', customAlbums)
+
+            const coverUrl = pendingCoverKey ? (await getBlobUrl('covers', pendingCoverKey)) : DEFAULT_TRACK_COVER
+            const trackPayloads = []
+            for (const meta of trackMetas) {
+              const url = await getBlobUrl('tracks', meta.id)
+              if (url) {
+                trackPayloads.push({
+                  id: meta.id,
+                  title: meta.title,
+                  order: meta.order,
+                  url,
+                  duration: null,
+                  albumId
+                })
+              }
+            }
+
+            createAlbumPost({
+              ...albumMeta,
+              cover: coverUrl || DEFAULT_TRACK_COVER,
+              tracks: trackPayloads
+            }, { prepend: true })
+
+            recordNotification('upload', `Uploaded album “${resolvedAlbumTitle}”`, 'Saved locally to your library.', {
+              trackId: albumMeta.id,
+              trackTitle: resolvedAlbumTitle,
+              timestamp: createdAt,
+              storage: 'local'
+            })
+
+            shouldResetAlbum = true
+            pendingMeta = null
+          } catch (err) {
+            alert('Album save failed: ' + (err?.message || err))
+          } finally {
+            composerPostBtn.disabled = false
+            composerPostBtn.textContent = originalLabel
+            composerPostBtn.removeAttribute('aria-busy')
+            if (shouldResetAlbum) {
+              pendingAlbum = null
+              if (composerTextEl) composerTextEl.value = ''
+              await clearPendingCover({ deleteStored: false })
+              updateComposerAttachments()
+            }
+          }
+          return
+        }
 
         if (pendingDraft) {
           const originalLabel = composerPostBtn.textContent
@@ -7058,6 +7864,35 @@ async function updateLeaderboard() {
         return { ...meta, url: withUrl, cover: withCover || DEFAULT_TRACK_COVER }
       })
 
+      customAlbums = getJSON('custom_albums', '[]')
+      if (!Array.isArray(customAlbums)) customAlbums = []
+      else customAlbums = customAlbums
+        .map(album => {
+          if (!album || typeof album !== 'object') return null
+          const trackIds = Array.isArray(album.trackIds)
+            ? album.trackIds
+                .map(entry => ({
+                  id: entry?.id || entry?.trackId || null,
+                  title: entry?.title || entry?.name || 'Untitled',
+                  order: Number.isFinite(entry?.order) ? entry.order : 0
+                }))
+                .filter(entry => entry.id)
+            : []
+          const normalizedUser = album.user && typeof album.user === 'object'
+            ? {
+                ...album.user,
+                avatar: sanitizeAvatar(album.user.avatar || album.user.avatarUrl)
+              }
+            : null
+          return {
+            ...album,
+            trackIds,
+            user: normalizedUser,
+            createdAt: resolveTrackCreatedAt(album)
+          }
+        })
+        .filter(Boolean)
+
       // Set composer avatar
       if (composerAvatarEl) {
         composerAvatarEl.src = sanitizeAvatar(currentUser && currentUser.avatar)
@@ -7118,6 +7953,21 @@ async function updateLeaderboard() {
         </dl>
         <div class="bl-who-actions">
           <a id="whoProfileContactLink" class="bl-who-contact" href="#">Connect via email</a>
+        </div>
+        <div class="profile-library">
+          <h4 class="profile-library__heading">Albums</h4>
+          <p id="profileAlbumsEmpty" class="profile-empty">No albums yet.</p>
+          <div id="profileAlbumGalleryWrapper" class="cover-score-wrapper hidden">
+            <div id="profileAlbumGallery" class="cover-score"></div>
+          </div>
+          <div id="profileAlbumList" class="profile-album-list hidden"></div>
+
+          <h4 class="profile-library__heading mt-6">Tracks</h4>
+          <p id="profileTracksEmpty" class="profile-empty">No tracks yet.</p>
+          <div id="profileTrackGalleryWrapper" class="cover-score-wrapper hidden">
+            <div id="profileTrackGallery" class="cover-score"></div>
+          </div>
+          <div id="profileTrackList" class="profile-track-list hidden"></div>
         </div>
         <audio id="whoProfileTagAudio" class="bl-who-tag-audio hidden" controls preload="none"></audio>
       </div>
