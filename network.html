@@ -4592,7 +4592,21 @@ let sessionsCard = null;
         if (!entry) return;
         try { entry.audio?.pause?.(); } catch {}
         if (typeof entry.cleanup === 'function') {
-          try { entry.cleanup(); } catch {}
+          let cleanupResult;
+          try {
+            cleanupResult = entry.cleanup();
+          } catch (error) {
+            if (!error || error.name !== 'AbortError') {
+              console.warn('Profile track cleanup threw', error);
+            }
+            return;
+          }
+          if (cleanupResult && typeof cleanupResult.catch === 'function') {
+            cleanupResult.catch(error => {
+              if (error && error.name === 'AbortError') return;
+              console.warn('Profile track cleanup rejected', error);
+            });
+          }
         } else if (entry.wave && typeof entry.wave.destroy === 'function') {
           try { entry.wave.destroy(); } catch {}
         }
@@ -4661,9 +4675,19 @@ let sessionsCard = null;
           if (wave && waveInteractionHandler && typeof wave.un === 'function') {
             try { wave.un('interaction', waveInteractionHandler); } catch {}
           }
+          let destroyPromise;
           if (wave && typeof wave.destroy === 'function') {
-            try { wave.destroy(); } catch {}
+            try {
+              destroyPromise = Promise.resolve(wave.destroy()).catch((error) => {
+                if (error && error.name === 'AbortError') return;
+                console.warn('WaveSurfer destroy failed during cleanup', error);
+              });
+            } catch (error) {
+              if (error && error.name === 'AbortError') return;
+              console.warn('WaveSurfer destroy threw during cleanup', error);
+            }
           }
+          return destroyPromise;
         }
       });
     }
