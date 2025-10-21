@@ -2074,6 +2074,7 @@
   .pr-key.hover,.pr-key:hover{background:rgba(124,58,237,.32);color:#fff}
   .pr-key.playing::after{content:'';position:absolute;right:8px;width:6px;height:6px;border-radius:999px;background:#f97316;box-shadow:0 0 8px rgba(249,115,22,.45)}
   .pr-grid-wrap{position:relative;border-radius:.75rem;background:rgba(255,255,255,.06);padding:6px;overflow:auto}
+  .pr-grid-stage{position:relative;display:inline-block;min-width:620px}
   .pr-grid{position:relative;display:grid;gap:2px;min-width:620px}
   .pr-cell{height:22px;border-radius:.25rem;background:rgba(255,255,255,.06);transition:background .12s,box-shadow .12s}
   .pr-cell.alt{background:rgba(255,255,255,.1)}
@@ -2081,9 +2082,21 @@
   .pr-cell.root{box-shadow:inset 0 0 0 1px rgba(124,58,237,.35)}
   .pr-cell.hover{background:rgba(14,165,233,.35)!important;box-shadow:0 0 0 1px rgba(14,165,233,.45)}
   .pr-cell.on{background:rgba(124,58,237,.8);box-shadow:0 0 0 1px rgba(124,58,237,.5),0 6px 18px rgba(124,58,237,.35)}
-  .pr-toolbar{display:flex;gap:.5rem;align-items:center;margin:.5rem 0}
+  .pr-toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.5rem 0}
   .pr-toolbar .dial{max-width:120px}
   .pr-badge{font-size:.7rem;color:#bbb;background:#1f1f28;border:1px solid #2b2b34;padding:.15rem .4rem;border-radius:.4rem}
+  .pr-loop-ui{display:flex;flex-direction:column;gap:.25rem;margin-left:auto;min-width:240px;max-width:360px}
+  .pr-loop-status{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}
+  .pr-loop-range{display:flex;gap:.25rem;align-items:center}
+  .pr-loop-pill{display:inline-flex;align-items:center;gap:.25rem;font-size:.65rem;font-weight:600;padding:.15rem .5rem;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#dbeafe;text-transform:uppercase;letter-spacing:.04em}
+  .pr-loop-pill.is-active{background:rgba(14,165,233,.2);border-color:rgba(14,165,233,.45);color:#f0f9ff}
+  .pr-loop-pill.is-off{background:rgba(30,41,59,.85);border-color:rgba(148,163,184,.3);color:#cbd5f5}
+  .pr-loop-pill--ghost{background:rgba(15,15,23,.85);border-color:rgba(148,163,184,.25);color:#cbd5f5}
+  .pr-loop-hint{font-size:.65rem;color:rgba(226,232,240,.7)}
+  .pr-loop-overlay{position:absolute;inset:0;border-radius:.5rem;pointer-events:none;opacity:0;transition:opacity .15s ease;z-index:5}
+  .pr-loop-overlay.is-active{opacity:1}
+  .pr-loop-fill{fill:rgba(34,211,238,.16);stroke:rgba(124,58,237,.55);stroke-width:.02}
+  .pr-loop-handle{stroke:rgba(129,140,248,.8);stroke-width:.035;stroke-linecap:round}
 
   /* Piano Roll playline & preview row */
   .pr-playline{grid-row:1 / -1;width:2px;background:rgba(255,255,255,.85);border-radius:1px;box-shadow:0 0 8px rgba(255,255,255,.5);pointer-events:none}
@@ -10657,6 +10670,7 @@ const AI_MELODY_SCALES = {
         }
         entry.notes[p] = line;
       }
+      recalcLoopSliceFromNotes(entry, cols);
     });
   }
 
@@ -10684,7 +10698,7 @@ const AI_MELODY_SCALES = {
   // ---- Piano Roll state (per bank, per row)
   let SUBDIV = 4;              // 4 = 64th notes; try 8 or 16 for finer
   const PITCH_ROWS = 16;       // 0 (low) .. 15 (high)
-  // pianoRoll[bank][row] = { notes: PITCH_ROWS x (steps*SUBDIV), loopSlice:{start,end} }
+  // pianoRoll[bank][row] = { notes: PITCH_ROWS x (steps*SUBDIV), loopSlice:{start,end,enabled} }
   let pianoRoll = Array.from({ length: getMaxBankCount() }, () => []);
 
   function ensurePR(bank, row){
@@ -10692,11 +10706,11 @@ const AI_MELODY_SCALES = {
     if (!pianoRoll[bank][row]) {
       const cols = getStepCount(bank) * SUBDIV;
       const grid = Array.from({ length: PITCH_ROWS }, () => Array(cols).fill(null));
-      pianoRoll[bank][row] = { notes: grid, loopSlice: { start: 0, end: 1 } };
+      pianoRoll[bank][row] = { notes: grid, loopSlice: { start: 0, end: 1, enabled: false } };
     } else {
       resizePianoRollForBank(bank);
     }
-    return pianoRoll[bank][row];
+    return sanitizeLoopSlice(pianoRoll[bank][row]);
   }
 
 
@@ -11035,6 +11049,7 @@ const AI_MELODY_SCALES = {
   }
   // --- Piano Roll UI refs (lazy) ---
   let prOverlay, prGridEl, prClose, prTitle, prSubdiv, prVol, prPan, prWaveEl, prKeysEl;
+  let prLoopStatusEl, prLoopStartEl, prLoopEndEl, prLoopOverlayEl, prLoopOverlayFillEl, prLoopOverlayStartEl, prLoopOverlayEndEl;
   let prPlayline = null;
   let prWS = null;
   let prRow = null; // track the piano roll row currently being edited
@@ -11088,6 +11103,86 @@ const AI_MELODY_SCALES = {
     if (!prPlayline.parentNode) prGridEl.appendChild(prPlayline);
   }
 
+  function sanitizeLoopSlice(entry){
+    if (!entry) return { start: 0, end: 1, enabled: false };
+    const slice = (entry.loopSlice && typeof entry.loopSlice === 'object') ? entry.loopSlice : {};
+    let start = Number.isFinite(slice.start) ? slice.start : 0;
+    let end = Number.isFinite(slice.end) ? slice.end : 1;
+    start = clampNumber(start, 0, 1);
+    end = clampNumber(end, 0, 1);
+    if (end < start) end = start;
+    const enabled = !!slice.enabled && end > start;
+    const normalized = enabled ? { start, end, enabled } : { start: 0, end: 1, enabled: false };
+    entry.loopSlice = normalized;
+    return normalized;
+  }
+
+  function cloneLoopSlice(slice){
+    const temp = { loopSlice: slice ? { ...slice } : undefined };
+    return sanitizeLoopSlice(temp);
+  }
+
+  function recalcLoopSliceFromNotes(entry, totalCols){
+    if (!entry) return { start: 0, end: 1, enabled: false };
+    const cols = Math.max(1, totalCols || 0);
+    let minIdx = Infinity;
+    let maxIdx = -1;
+    for (let p = 0; p < PITCH_ROWS; p++){
+      const row = entry.notes?.[p];
+      if (!Array.isArray(row)) continue;
+      const limit = Math.min(row.length, cols);
+      for (let i = 0; i < limit; i++){
+        if (row[i]) {
+          if (i < minIdx) minIdx = i;
+          if (i > maxIdx) maxIdx = i;
+        }
+      }
+    }
+    if (!Number.isFinite(minIdx) || !Number.isFinite(maxIdx) || minIdx === Infinity || maxIdx < 0){
+      entry.loopSlice = { start: 0, end: 1, enabled: false };
+    } else {
+      const denom = Math.max(1, cols);
+      const start = clampNumber(minIdx / denom, 0, 1);
+      const end = clampNumber((maxIdx + 1) / denom, start, 1);
+      entry.loopSlice = { start, end, enabled: true };
+    }
+    return sanitizeLoopSlice(entry);
+  }
+
+  function updatePRLoopUI(entry, totalCols){
+    if (!entry) return;
+    const slice = sanitizeLoopSlice(entry);
+    const startPct = Math.round(slice.start * 100);
+    const endPct = Math.round(slice.end * 100);
+    if (prLoopStatusEl){
+      prLoopStatusEl.textContent = slice.enabled ? 'Loop On' : 'Loop Off';
+      prLoopStatusEl.classList.toggle('is-active', slice.enabled);
+      prLoopStatusEl.classList.toggle('is-off', !slice.enabled);
+    }
+    if (prLoopStartEl) prLoopStartEl.textContent = `Start ${startPct}%`;
+    if (prLoopEndEl) prLoopEndEl.textContent = `End ${endPct}%`;
+    if (prLoopOverlayEl && prLoopOverlayFillEl && prLoopOverlayStartEl && prLoopOverlayEndEl){
+      if (slice.enabled){
+        const start = clampNumber(slice.start, 0, 1);
+        const end = clampNumber(slice.end, start, 1);
+        prLoopOverlayEl.classList.add('is-active');
+        prLoopOverlayFillEl.setAttribute('x', start.toFixed(4));
+        prLoopOverlayFillEl.setAttribute('width', Math.max(0, end - start).toFixed(4));
+        prLoopOverlayStartEl.setAttribute('x1', start.toFixed(4));
+        prLoopOverlayStartEl.setAttribute('x2', start.toFixed(4));
+        prLoopOverlayEndEl.setAttribute('x1', end.toFixed(4));
+        prLoopOverlayEndEl.setAttribute('x2', end.toFixed(4));
+      } else {
+        prLoopOverlayEl.classList.remove('is-active');
+        prLoopOverlayFillEl.setAttribute('width', '0');
+        prLoopOverlayStartEl.setAttribute('x1', '0');
+        prLoopOverlayStartEl.setAttribute('x2', '0');
+        prLoopOverlayEndEl.setAttribute('x1', '1');
+        prLoopOverlayEndEl.setAttribute('x2', '1');
+      }
+    }
+  }
+
   function drawPianoRoll(){
     _ensurePRRefs();
     if (prRow == null || !prGridEl) return;
@@ -11096,6 +11191,7 @@ const AI_MELODY_SCALES = {
     const cols = steps * SUBDIV;
     const entry = ensurePR(bank, prRow);
     const roll = entry.notes;
+    recalcLoopSliceFromNotes(entry, cols);
     prGridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(16px, 1fr))`;
     prGridEl.style.gridTemplateRows = `repeat(${PITCH_ROWS}, 22px)`;
     prGridEl.innerHTML = '';
@@ -11135,6 +11231,7 @@ const AI_MELODY_SCALES = {
       }
     }
     prEnsurePlayline();
+    updatePRLoopUI(entry, cols);
   }
   // --- Robust setter for Piano Roll cells that updates the main grid preview ---
   function setPR(p, i, on){
@@ -11205,6 +11302,13 @@ const AI_MELODY_SCALES = {
     prVol     = document.getElementById('prVol');
     prPan     = document.getElementById('prPan');
     prKeysEl  = document.getElementById('prKeys');
+    prLoopStatusEl = document.getElementById('prLoopStatus');
+    prLoopStartEl  = document.getElementById('prLoopStart');
+    prLoopEndEl    = document.getElementById('prLoopEnd');
+    prLoopOverlayEl        = document.getElementById('prLoopOverlay');
+    prLoopOverlayFillEl    = document.getElementById('prLoopOverlayFill');
+    prLoopOverlayStartEl   = document.getElementById('prLoopOverlayStart');
+    prLoopOverlayEndEl     = document.getElementById('prLoopOverlayEnd');
     if (prClose) prClose.addEventListener('click', closePianoRoll);
     if (prSubdiv) prSubdiv.addEventListener('change', ()=>{
       SUBDIV = +prSubdiv.value || 4;
@@ -11737,7 +11841,7 @@ const AI_MELODY_SCALES = {
     pianoRoll[target] = srcPR.map(entry => {
       if (!entry) return undefined;
       const clone = {
-        loopSlice: { ...(entry.loopSlice || { start: 0, end: 1 }) },
+        loopSlice: cloneLoopSlice(entry.loopSlice),
         notes: []
       };
       const cols = targetSteps * SUBDIV;
@@ -11751,6 +11855,7 @@ const AI_MELODY_SCALES = {
           clone.notes[p] = slice;
         }
       }
+      recalcLoopSliceFromNotes(clone, cols);
       return clone;
     });
   }
@@ -11891,6 +11996,11 @@ const AI_MELODY_SCALES = {
     const entry = (pianoRoll[currentBank] || [])[rowIdx];
     if (entry && Array.isArray(entry.notes)) {
       entry.notes.forEach(line => line && line.fill(null));
+      entry.loopSlice = { start: 0, end: 1, enabled: false };
+      if (prOverlay && prOverlay.style.display !== 'none' && prRow === rowIdx) {
+        const cols = getStepCount(currentBank) * SUBDIV;
+        updatePRLoopUI(entry, cols);
+      }
     }
   }
 
@@ -11997,6 +12107,24 @@ const AI_MELODY_SCALES = {
     if (!prGridEl || prGridEl._dragBound) return;
     let prIsPainting = false;
     let loopDrag = null; // { mode: 'new'|'resizeLeft'|'resizeRight', p, start, end }
+    let loopUpdatePending = false;
+
+    const queueLoopUpdate = () => {
+      if (prRow == null) return;
+      if (loopUpdatePending) return;
+      loopUpdatePending = true;
+      const scheduler = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : (cb) => setTimeout(cb, 0);
+      scheduler(() => {
+        loopUpdatePending = false;
+        if (prRow == null) return;
+        const bank = (typeof currentBank!=='undefined'?currentBank:0);
+        const steps = getStepCount(bank);
+        const cols = steps * SUBDIV;
+        const entry = ensurePR(bank, prRow);
+        recalcLoopSliceFromNotes(entry, cols);
+        updatePRLoopUI(entry, cols);
+      });
+    };
 
     const getCell = (target) => {
       const cell = target && target.closest ? target.closest('.pr-cell') : null;
@@ -12028,6 +12156,7 @@ const AI_MELODY_SCALES = {
       const a = Math.max(0, Math.min(i0, i1));
       const b = Math.min(notes.length-1, Math.max(i0, i1));
       for (let i=a;i<=b;i++) setPR(p, i, on);
+      queueLoopUpdate();
     };
 
     const startDragAtMeta = (meta) => {
@@ -12047,6 +12176,7 @@ const AI_MELODY_SCALES = {
       } else {
         loopDrag = { mode:'new', p:meta.p, start:meta.i, end:meta.i };
         setPR(meta.p, meta.i, true);
+        queueLoopUpdate();
       }
       prIsPainting = true;
     };
@@ -12062,6 +12192,7 @@ const AI_MELODY_SCALES = {
       const meta = getCell(target); if (!meta) return;
       if (loopDrag && loopDrag.mode === 'eraseDrag') {
         setPR(meta.p, meta.i, false);
+        queueLoopUpdate();
         return;
       }
       if (!loopDrag || meta.p !== loopDrag.p) {
@@ -12071,14 +12202,17 @@ const AI_MELODY_SCALES = {
       if (loopDrag.mode === 'new'){
         setRange(loopDrag.p, loopDrag.start, meta.i, true);
         loopDrag.end = meta.i;
+        queueLoopUpdate();
       } else if (loopDrag.mode === 'resizeLeft'){
         setRange(loopDrag.p, loopDrag.start, loopDrag.end, false);
         loopDrag.start = Math.min(meta.i, loopDrag.end);
         setRange(loopDrag.p, loopDrag.start, loopDrag.end, true);
+        queueLoopUpdate();
       } else if (loopDrag.mode === 'resizeRight'){
         setRange(loopDrag.p, loopDrag.start, loopDrag.end, false);
         loopDrag.end = Math.max(meta.i, loopDrag.start);
         setRange(loopDrag.p, loopDrag.start, loopDrag.end, true);
+        queueLoopUpdate();
       }
     };
 
@@ -12101,6 +12235,7 @@ const AI_MELODY_SCALES = {
             setPR(meta.p, meta.i, false);
           }
           loopDrag = { mode:'eraseDrag', p: meta.p };
+          queueLoopUpdate();
         } else {
           loopDrag = { mode:'eraseDrag', p: null };
         }
@@ -12110,7 +12245,7 @@ const AI_MELODY_SCALES = {
     });
     prGridEl.addEventListener('mouseover', (e) => { dragOver(e.target); });
     prGridEl.addEventListener('contextmenu', (e) => { e.preventDefault(); });
-    window.addEventListener('mouseup', () => { prIsPainting = false; loopDrag = null; }, { passive: true });
+    window.addEventListener('mouseup', () => { prIsPainting = false; loopDrag = null; queueLoopUpdate(); }, { passive: true });
     prGridEl._dragBound = true;
   }
 
@@ -12185,7 +12320,7 @@ const AI_MELODY_SCALES = {
       const player = Array.isArray(loopPlayers) ? loopPlayers[idx] : null;
       if (player && player.buffer && player.buffer.loaded){
         const entry = ensurePR((typeof currentBank!=='undefined'?currentBank:0), prRow);
-        const slice = entry.loopSlice || { start:0, end:1 };
+        const slice = sanitizeLoopSlice(entry);
         const dur = player.buffer.duration || 1;
         const sliceStart = Math.min(slice.start||0, 0.99) * dur;
         const sliceEnd   = Math.max(slice.end||1, sliceStart + 0.05) * dur;
@@ -13672,7 +13807,7 @@ if (mode === 'song' && currentStep === 0) {
             const prEntry = (pianoRoll[(typeof currentBank!=='undefined'?currentBank:0)]||[])[r];
             if (!prEntry) continue;
             const rowPR = prEntry.notes;
-            const slice = prEntry.loopSlice || { start:0, end:1 };
+            const slice = sanitizeLoopSlice(prEntry);
             for (let s = 0; s < SUBDIV; s++){
               // update PR playline if overlay is open
               try {
@@ -14405,12 +14540,30 @@ void main()
       <label class="dial"><b>Vol</b><input id="prVol" type="range" min="-10" max="10" step="1" value="0"></label>
       <label class="dial"><b>Pan</b><input id="prPan" type="range" min="-10" max="10" step="1" value="0"></label>
       <span class="text-xs text-white/60">Click cells to toggle; drag across to paint</span>
+      <div class="pr-loop-ui">
+        <div class="pr-loop-status">
+          <span class="pr-badge">Loop Slice</span>
+          <span id="prLoopStatus" class="pr-loop-pill is-off">Loop Off</span>
+          <span class="pr-loop-range">
+            <span id="prLoopStart" class="pr-loop-pill pr-loop-pill--ghost">Start 0%</span>
+            <span id="prLoopEnd" class="pr-loop-pill pr-loop-pill--ghost">End 100%</span>
+          </span>
+        </div>
+        <p id="prLoopHint" class="pr-loop-hint">Drag across notes to set the loop window. Right-click to clear the slice.</p>
+      </div>
     </div>
     <div id="prWave" class="mt-2 h-16 w-full rounded bg-white/5 ring-1 ring-white/10"></div>
     <div class="pr-roll">
       <div id="prKeys" class="pr-keys" aria-hidden="false"></div>
       <div class="pr-grid-wrap">
-        <div id="prGrid" class="pr-grid"></div>
+        <div class="pr-grid-stage">
+          <svg id="prLoopOverlay" class="pr-loop-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+            <rect id="prLoopOverlayFill" class="pr-loop-fill" x="0" y="0.05" width="0" height="0.9" rx="0.08"></rect>
+            <line id="prLoopOverlayStart" class="pr-loop-handle" x1="0" y1="0" x2="0" y2="1"></line>
+            <line id="prLoopOverlayEnd" class="pr-loop-handle" x1="1" y1="0" x2="1" y2="1"></line>
+          </svg>
+          <div id="prGrid" class="pr-grid"></div>
+        </div>
       </div>
     </div>
   </div>
