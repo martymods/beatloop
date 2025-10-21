@@ -1,0 +1,14 @@
+# Node modules across workspaces
+node_modules/
+*/node_modules/
+
+# Next.js build artifacts
+.next/
+web/.next/
+web/out/
+
+# Logs and caches
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
