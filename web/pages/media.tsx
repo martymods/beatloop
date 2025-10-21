@@ -118,6 +118,21 @@ function formatDate(value?: string | null): string {
   });
 }
 
+function storyTimestamp(story?: MediaStory | null): number {
+  if (!story) return 0;
+  const candidates = [story.publishedAt, story.createdAt, story.updatedAt];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const time = Date.parse(candidate);
+    if (!Number.isNaN(time)) return time;
+  }
+  return 0;
+}
+
+function sortStories(stories: MediaStory[]): MediaStory[] {
+  return [...stories].sort((a, b) => storyTimestamp(b) - storyTimestamp(a));
+}
+
 async function blobFromArrayBuffer(buffer: ArrayBuffer, mimeType: string): Promise<Blob> {
   return new Blob([buffer], { type: mimeType });
 }
@@ -216,6 +231,7 @@ export default function MediaPage(): JSX.Element {
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [storiesById, setStoriesById] = useState<StoriesMap>({});
   const [storiesByUrl, setStoriesByUrl] = useState<StoriesMap>({});
+  const [storyList, setStoryList] = useState<MediaStory[]>([]);
   const [loadingStories, setLoadingStories] = useState(true);
   const [token, setToken] = useState('');
   const tokenRef = useRef('');
@@ -282,6 +298,32 @@ export default function MediaPage(): JSX.Element {
       setBanner({ message: error.message, tone: 'error' });
     });
   }, [token]);
+
+  const fallbackFeed = useMemo(() => {
+    return storyList
+      .filter((story) => Boolean(story?.url))
+      .slice(0, 12)
+      .map((story) => ({
+        title: story.title,
+        url: story.url,
+        excerpt: story.summary || story.excerpt || '',
+        image: story.watermarkedImageUrl || story.imageUrl,
+        publishedAt: story.publishedAt || story.createdAt || story.updatedAt || null
+      }));
+  }, [storyList]);
+
+  useEffect(() => {
+    if (loadingFeed) return;
+    if (feed.length) {
+      console.info('[MediaPage] Loaded TMZ feed', { count: feed.length });
+    } else if (storyList.length) {
+      console.warn('[MediaPage] TMZ feed returned no items; using fallback stories', {
+        fallbackCount: Math.min(12, storyList.length)
+      });
+    } else {
+      console.warn('[MediaPage] No TMZ feed items or stored stories available.');
+    }
+  }, [feed, loadingFeed, storyList.length]);
 
   useEffect(() => {
     if (!highlightSlug) return;
@@ -353,6 +395,9 @@ export default function MediaPage(): JSX.Element {
     setLoadingFeed(true);
     try {
       const data = await apiFetch<{ items?: FeedItem[] }>('/api/media/hiphop');
+      if (!Array.isArray(data.items)) {
+        console.warn('[MediaPage] Feed response missing items array');
+      }
       setFeed(Array.isArray(data.items) ? data.items : []);
     } finally {
       setLoadingFeed(false);
@@ -364,17 +409,21 @@ export default function MediaPage(): JSX.Element {
     try {
       const data = await apiFetch<{ stories?: MediaStory[] }>('/api/media/stories');
       if (Array.isArray(data.stories)) {
+        console.info('[MediaPage] Loaded stories archive', { count: data.stories.length });
         const byId: StoriesMap = {};
         const byUrl: StoriesMap = {};
-        for (const story of data.stories) {
+        const sortedStories = sortStories(data.stories);
+        for (const story of sortedStories) {
           if (story.id) byId[story.id] = story;
           if (story.url) byUrl[story.url] = story;
         }
         setStoriesById(byId);
         setStoriesByUrl(byUrl);
+        setStoryList(sortedStories);
       } else {
         setStoriesById({});
         setStoriesByUrl({});
+        setStoryList([]);
       }
     } finally {
       setLoadingStories(false);
@@ -383,7 +432,19 @@ export default function MediaPage(): JSX.Element {
 
   function storeStory(story: MediaStory) {
     setStoriesById((prev) => ({ ...prev, [story.id]: story }));
-    setStoriesByUrl((prev) => ({ ...prev, [story.url]: story }));
+    if (story.url) {
+      setStoriesByUrl((prev) => ({ ...prev, [story.url]: story }));
+    }
+    setStoryList((prev) => {
+      const existingIndex = prev.findIndex((item) => item.id === story.id);
+      const updated = existingIndex >= 0 ? [...prev] : [...prev, story];
+      if (existingIndex >= 0) {
+        updated[existingIndex] = story;
+      } else {
+        updated[updated.length - 1] = story;
+      }
+      return sortStories(updated);
+    });
   }
 
   async function handleSummarize(item: FeedItem) {
@@ -586,17 +647,16 @@ function showBannerMessage(
   }
 
   const renderedCards = useMemo(() => {
-    if (loadingFeed) {
-      return (
-        <div className="loading-copy">Loading TMZ Hip-Hop feed…</div>
-      );
+    const hasFeedItems = feed.length > 0;
+    const itemsToRender = hasFeedItems ? feed : fallbackFeed;
+    const showingFallback = !hasFeedItems && itemsToRender.length > 0;
+    if (loadingFeed && !itemsToRender.length) {
+      return <div className="loading-copy">Loading TMZ Hip-Hop feed…</div>;
     }
-    if (!feed.length) {
-      return (
-        <div className="loading-copy">No fresh TMZ Hip-Hop headlines right now. Check back soon.</div>
-      );
+    if (!itemsToRender.length) {
+      return <div className="loading-copy">No Beatloop stories yet. Summarize a headline to get started.</div>;
     }
-    return feed.map((item) => {
+    const cards = itemsToRender.map((item) => {
       const story = item.url ? storiesByUrl[item.url] : undefined;
       const isActive = story && story.id === activeStoryId;
       const isPending = pendingSummary === item.url;
@@ -727,6 +787,15 @@ function showBannerMessage(
         </div>
       );
     });
+    if (showingFallback) {
+      return [
+        <div key="fallback-notice" className="loading-copy">
+          Showing archived Beatloop stories while we refresh the latest TMZ Hip-Hop feed.
+        </div>,
+        ...cards
+      ];
+    }
+    return cards;
   }, [
     feed,
     pendingSummary,
@@ -736,7 +805,8 @@ function showBannerMessage(
     commentState,
     commentDrafts,
     pendingComment,
-    loadingFeed
+    loadingFeed,
+    fallbackFeed
   ]);
 
   return (
