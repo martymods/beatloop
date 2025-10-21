@@ -4583,6 +4583,7 @@ let sessionsCard = null;
     let customAlbumIndex = 0
     let feedIsLoading = false
     const userLibrary = new Map()
+    const profileLibraryRequests = new Map()
 
     const profileTrackPlayers = new Map();
 
@@ -5300,7 +5301,27 @@ let sessionsCard = null;
         }
       }
 
+      const profileKey = normalizeLibraryKeyFromUser(activeProfileUser, activeProfileUser?.id || activeProfileUser?._id || '')
+      if (profileKey) {
+        const sanitizedLibraryUser = sanitizeLibraryUserData(activeProfileUser, profileKey)
+        ensureLibraryEntryForUser(sanitizedLibraryUser, sanitizedLibraryUser.id || sanitizedLibraryUser._id || activeProfileUser.id || activeProfileUser._id || '')
+      }
+
       renderProfileLibrary(activeProfileUser)
+      if (profileKey) {
+        hydrateProfileLibraryForUser(activeProfileUser)
+          .then((result) => {
+            if (!result) return
+            if (!activeProfileUser) return
+            const currentKey = normalizeLibraryKeyFromUser(activeProfileUser, activeProfileUser?.id || activeProfileUser?._id || '')
+            if (currentKey === result.key) {
+              renderProfileLibrary(activeProfileUser)
+            }
+          })
+          .catch((err) => {
+            console.warn('Failed to load profile library', err)
+          })
+      }
       if (hasTag) {
         const tagSrc = toAssetUrl(activeProfileUser.tagUrl)
         setupProfileTagPlayer(tagSrc)
@@ -5964,6 +5985,98 @@ function recordUserAlbumEntry(album) {
     entry.albums.push(record)
   }
   entry.albums.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+}
+
+function buildProfileLibraryParams(user) {
+  const params = new URLSearchParams()
+  if (!user || typeof user !== 'object') return params
+  const idCandidates = [user.id, user._id, user.userId, user.ownerId]
+  for (const candidate of idCandidates) {
+    if (candidate == null) continue
+    const value = String(candidate).trim()
+    if (value) {
+      params.set('userId', value)
+      return params
+    }
+  }
+  const emailCandidate = (user.normalizedEmail || user.email || '').trim().toLowerCase()
+  if (emailCandidate) params.set('email', emailCandidate)
+  return params
+}
+
+async function fetchProfileLibraryRemote(user) {
+  const key = normalizeLibraryKeyFromUser(user, user?.id || user?._id || '')
+  if (!key) return null
+  if (profileLibraryRequests.has(key)) return profileLibraryRequests.get(key)
+  const promise = (async () => {
+    const params = buildProfileLibraryParams(user)
+    const queryString = params.toString()
+    if (!queryString) return null
+    const apiBase = resolveTrackApiBase()
+    const headers = typeof AUTH?.hdr === 'function' ? { ...AUTH.hdr() } : {}
+    const response = await fetch(`${apiBase}/api/users/library?${queryString}`, { headers })
+    if (!response.ok) {
+      const error = new Error('library request failed')
+      error.status = response.status
+      throw error
+    }
+    const payload = await response.json().catch(() => ({}))
+    return payload || {}
+  })().finally(() => {
+    profileLibraryRequests.delete(key)
+  })
+  profileLibraryRequests.set(key, promise)
+  return promise
+}
+
+async function hydrateProfileLibraryForUser(user) {
+  if (!user) return null
+  const key = normalizeLibraryKeyFromUser(user, user?.id || user?._id || '')
+  if (!key) return null
+  const payload = await fetchProfileLibraryRemote(user)
+  if (!payload) return null
+
+  const libraryUser = sanitizeLibraryUserData(payload.user || user, key)
+  ensureLibraryEntryForUser(libraryUser, libraryUser.id || libraryUser._id || user.id || user._id || '')
+
+  if (Array.isArray(payload.tracks)) {
+    payload.tracks.forEach((track) => {
+      if (!track || !track.id) return
+      const resolvedUrl = track.url ? resolveTrackMediaUrl(track.url) : ''
+      if (!resolvedUrl) return
+      const resolvedCover = track.cover ? resolveTrackMediaUrl(track.cover) : ''
+      recordUserTrackEntry({
+        ...track,
+        url: resolvedUrl,
+        cover: resolvedCover || DEFAULT_TRACK_COVER,
+        user: libraryUser,
+        ownerId: track.ownerId || libraryUser.id || libraryUser._id || user.id || user._id || ''
+      })
+    })
+  }
+
+  if (Array.isArray(payload.albums)) {
+    payload.albums.forEach((album) => {
+      if (!album || !album.id) return
+      const coverUrl = album.cover ? resolveTrackMediaUrl(album.cover) : ''
+      const normalizedTracks = Array.isArray(album.tracks)
+        ? album.tracks.map((entry, index) => ({
+            ...entry,
+            order: Number.isFinite(entry?.order) ? entry.order : index,
+            url: entry?.url ? resolveTrackMediaUrl(entry.url) : ''
+          }))
+        : []
+      recordUserAlbumEntry({
+        ...album,
+        cover: coverUrl || DEFAULT_TRACK_COVER,
+        tracks: normalizedTracks,
+        user: album.user ? sanitizeLibraryUserData(album.user, key) : libraryUser,
+        ownerId: album.ownerId || libraryUser.id || libraryUser._id || user.id || user._id || ''
+      })
+    })
+  }
+
+  return { key, user: libraryUser }
 }
 
 function stopHoverTagPreview() {

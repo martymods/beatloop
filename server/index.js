@@ -1552,6 +1552,105 @@ app.get('/api/users/directory', async (req, res) => {
   }
 });
 
+app.get('/api/users/library', async (req, res) => {
+  try {
+    const query = req.query || {};
+    const rawUserId = typeof query.userId === 'string' ? query.userId.trim() : '';
+    const normalizedUserId = rawUserId.startsWith('id:') ? rawUserId.slice(3).trim() : rawUserId;
+    const emailParam = typeof query.email === 'string' ? query.email.trim() : '';
+
+    let userDoc = null;
+    if (normalizedUserId) {
+      const objectId = asObjectId(normalizedUserId);
+      if (objectId) {
+        userDoc = await User.findById(objectId);
+      }
+    }
+
+    if (!userDoc && emailParam) {
+      const normalizedEmail = normalizeEmail(emailParam);
+      if (normalizedEmail) {
+        userDoc = await User.findOne({ email: normalizedEmail });
+      }
+    }
+
+    if (!userDoc) {
+      return res.status(404).json({ error: 'user not found' });
+    }
+
+    const ownerSummary = await userSummary(req, userDoc);
+
+    const trackDocs = await Track.find({ userId: userDoc._id }).sort({ createdAt: -1 }).lean();
+    const tracks = trackDocs
+      .map((doc) => {
+        const url = presentStoredUploadUrl(req, doc.audioUrl, doc.audioUrl);
+        if (!url) return null;
+        return {
+          id: doc._id,
+          title: doc.title || 'Untitled',
+          caption: doc.caption || '',
+          url,
+          cover: presentStoredUploadUrl(req, doc.coverUrl, doc.coverUrl) || '',
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt || null,
+          albumId: doc.albumId || null,
+          albumTrackOrder: Number.isFinite(doc.albumTrackOrder) ? doc.albumTrackOrder : null,
+          duration: Number.isFinite(doc.audioDurationSec) ? doc.audioDurationSec : null,
+          ownerId: idToString(doc.userId),
+          user: ownerSummary
+        };
+      })
+      .filter(Boolean);
+
+    const albumDocs = await Album.find({ userId: userDoc._id })
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+      .lean();
+
+    const albumTrackIdStrings = [];
+    for (const albumDoc of albumDocs) {
+      if (!Array.isArray(albumDoc.trackIds)) continue;
+      for (const ref of albumDoc.trackIds) {
+        const id = toIdString(ref?.trackId);
+        if (id) albumTrackIdStrings.push(id);
+      }
+    }
+
+    let albumTrackMap = new Map();
+    if (albumTrackIdStrings.length) {
+      const uniqueIds = Array.from(new Set(albumTrackIdStrings));
+      const objectIds = uniqueIds
+        .map((value) => {
+          try {
+            return new mongoose.Types.ObjectId(value);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      if (objectIds.length) {
+        const docs = await Track.find({ _id: { $in: objectIds } }).lean();
+        albumTrackMap = new Map(docs.map((entry) => [toIdString(entry?._id), entry]));
+      }
+    }
+
+    const albums = albumDocs
+      .map((albumDoc) => {
+        const trackDocsForAlbum = Array.isArray(albumDoc.trackIds)
+          ? albumDoc.trackIds
+              .map((ref) => albumTrackMap.get(toIdString(ref?.trackId)))
+              .filter(Boolean)
+          : [];
+        return presentAlbum(req, albumDoc, { ownerSummary, trackDocs: trackDocsForAlbum });
+      })
+      .filter(Boolean);
+
+    res.json({ user: ownerSummary, tracks, albums });
+  } catch (error) {
+    console.error('User library fetch failed', error);
+    res.status(500).json({ error: 'could not load user library' });
+  }
+});
+
 /* ======================= Presence / Time grind ======================= */
 app.post('/api/presence/ping', auth, async (req, res) => {
   const now = new Date();
