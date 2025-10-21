@@ -328,7 +328,7 @@
 
     async function getNews(base) {
       window.API_BASE = base || window.API_BASE;
-      const target = apiUrl('/api/media/hiphop-news');
+      const target = apiUrl('/api/media/hiphop');
       const res = await fetch(target, {
         method: 'GET',
         mode: 'cors',
