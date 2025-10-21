@@ -10710,7 +10710,9 @@ const AI_MELODY_SCALES = {
     } else {
       resizePianoRollForBank(bank);
     }
-    return sanitizeLoopSlice(pianoRoll[bank][row]);
+    const entry = pianoRoll[bank][row];
+    sanitizeLoopSlice(entry);
+    return entry;
   }
 
 
