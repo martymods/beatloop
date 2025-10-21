@@ -4114,27 +4114,134 @@
     let customMeta = [] // [{id,title,artist,bpm,db:true,coverKey?:string}]
     let customAlbums = [] // [{id,title,coverKey,createdAt,trackIds:[{id,title,order}],caption?,user?:{...}}]
 
-    async function migrateLegacyIfNeeded() {
+    function loadStoredCustomTracks() {
+      const stored = getJSON('custom_tracks', '[]')
+      if (!Array.isArray(stored)) return []
+      return stored
+        .map(meta => {
+          if (!meta || typeof meta !== 'object') return null
+          const withUrl = meta.url ? toAssetUrl(meta.url) : meta.url
+          const withCover = meta.cover ? toAssetUrl(meta.cover) : meta.cover
+          return { ...meta, url: withUrl, cover: withCover || DEFAULT_TRACK_COVER }
+        })
+        .filter(Boolean)
+    }
+
+    function loadStoredCustomAlbums() {
+      const stored = getJSON('custom_albums', '[]')
+      if (!Array.isArray(stored)) return []
+      return stored
+        .map(album => {
+          if (!album || typeof album !== 'object') return null
+          const tracksFromTracks = Array.isArray(album.tracks)
+            ? album.tracks
+                .map((entry, index) => normalizeAlbumTrackMeta(entry, index))
+                .filter(Boolean)
+            : []
+          const tracksFromIds = Array.isArray(album.trackIds)
+            ? album.trackIds
+                .map((entry, index) => normalizeAlbumTrackMeta(entry, index))
+                .filter(Boolean)
+            : []
+          const combinedTracks = tracksFromTracks.length ? tracksFromTracks : tracksFromIds
+          const trackIds = tracksFromIds.length ? tracksFromIds : combinedTracks
+          const normalizedUser = album.user && typeof album.user === 'object'
+            ? {
+                ...album.user,
+                avatar: sanitizeAvatar(album.user.avatar || album.user.avatarUrl)
+              }
+            : null
+          return {
+            ...album,
+            tracks: combinedTracks,
+            trackIds,
+            user: normalizedUser,
+            createdAt: resolveTrackCreatedAt(album)
+          }
+        })
+        .filter(Boolean)
+    }
+
+    async function migrateLegacyIfNeeded({ concurrency = 3 } = {}) {
       const raw = getJSON('custom_tracks', '[]')
-      if (!Array.isArray(raw) || raw.length === 0) return
+      if (!Array.isArray(raw) || raw.length === 0) {
+        return { changed: false, metas: [] }
+      }
+
+      const metas = new Array(raw.length).fill(null)
+      const legacyEntries = []
+
+      raw.forEach((entry, index) => {
+        if (!entry || typeof entry !== 'object') return
+        if (typeof entry.url === 'string' && entry.url.startsWith('data:')) {
+          legacyEntries.push({ entry, index })
+          return
+        }
+        if (typeof entry.url === 'string') {
+          metas[index] = {
+            id: entry.id,
+            title: entry.title,
+            artist: entry.artist,
+            bpm: entry.bpm || 0,
+            db: false,
+            url: resolveTrackMediaUrl(entry.url),
+            cover: entry.cover ? resolveTrackMediaUrl(entry.cover) : DEFAULT_TRACK_COVER
+          }
+        } else {
+          metas[index] = {
+            id: entry.id,
+            title: entry.title,
+            artist: entry.artist,
+            bpm: entry.bpm || 0,
+            db: Boolean(entry.db),
+            coverKey: entry.coverKey || null,
+            cover: entry.cover ? resolveTrackMediaUrl(entry.cover) : DEFAULT_TRACK_COVER,
+            createdAt: entry.createdAt || Date.now()
+          }
+        }
+      })
+
+      if (!legacyEntries.length) {
+        return { changed: false, metas: metas.filter(Boolean) }
+      }
+
+      const maxConcurrency = Math.max(1, Math.min(concurrency || 1, legacyEntries.length))
+      let nextIndex = 0
       let changed = false
-      const metas = []
-      for (const t of raw) {
-        if (t && typeof t.url === 'string' && t.url.startsWith('data:')) {
-          // migrate data URL -> IDB blob, store tiny meta
+
+      const worker = async () => {
+        while (nextIndex < legacyEntries.length) {
+          const current = legacyEntries[nextIndex++]
+          const legacy = current.entry
           try {
-            const blob = await fetch(t.url).then(r => r.blob())
-            const id = t.id || ('custom-' + Date.now() + Math.random().toString(36).slice(2,8))
+            const blob = await fetch(legacy.url).then(r => r.blob())
+            const id = legacy.id || ('custom-' + Date.now() + Math.random().toString(36).slice(2, 8))
             await putBlob('tracks', id, blob)
-            metas.push({ id, title: t.title || 'Untitled', artist: t.artist || 'me', bpm: t.bpm || 0, db: true, coverKey: null, createdAt: Date.now() })
+            metas[current.index] = {
+              id,
+              title: legacy.title || 'Untitled',
+              artist: legacy.artist || 'me',
+              bpm: legacy.bpm || 0,
+              db: true,
+              coverKey: null,
+              createdAt: Date.now()
+            }
             changed = true
-          } catch {}
-        } else if (t && typeof t.url === 'string') {
-          // keep light http/file references as-is (not blobs)
-          metas.push({ id: t.id, title: t.title, artist: t.artist, bpm: t.bpm || 0, db: false, url: resolveTrackMediaUrl(t.url), cover: t.cover ? resolveTrackMediaUrl(t.cover) : DEFAULT_TRACK_COVER })
+          } catch (err) {
+            console.warn('Failed to migrate legacy track', err)
+          }
         }
       }
-      if (changed) setJSON('custom_tracks', metas)
+
+      const workers = Array.from({ length: maxConcurrency }, () => worker())
+      await Promise.all(workers)
+
+      const filteredMetas = metas.filter(Boolean)
+      if (changed) {
+        setJSON('custom_tracks', filteredMetas)
+      }
+
+      return { changed, metas: filteredMetas }
     }
 
     // ---------- Stats
@@ -9681,93 +9788,72 @@ async function updateLeaderboard() {
 
       ensureLoggedIn()
       ensureProfileRefs()
-      await refreshUserDirectory()
 
-      // migrate any legacy data: URLs out of localStorage
-      await migrateLegacyIfNeeded()
-      customMeta = getJSON('custom_tracks', '[]')
-      if (!Array.isArray(customMeta)) customMeta = []
-      else customMeta = customMeta.map(meta => {
-        if (!meta || typeof meta !== 'object') return meta
-        const withUrl = meta.url ? toAssetUrl(meta.url) : meta.url
-        const withCover = meta.cover ? toAssetUrl(meta.cover) : meta.cover
-        return { ...meta, url: withUrl, cover: withCover || DEFAULT_TRACK_COVER }
-      })
-
-      customAlbums = getJSON('custom_albums', '[]')
-      if (!Array.isArray(customAlbums)) customAlbums = []
-      else customAlbums = customAlbums
-        .map(album => {
-          if (!album || typeof album !== 'object') return null
-          const tracksFromTracks = Array.isArray(album.tracks)
-            ? album.tracks
-                .map((entry, index) => normalizeAlbumTrackMeta(entry, index))
-                .filter(Boolean)
-            : []
-          const tracksFromIds = Array.isArray(album.trackIds)
-            ? album.trackIds
-                .map((entry, index) => normalizeAlbumTrackMeta(entry, index))
-                .filter(Boolean)
-            : []
-          const combinedTracks = tracksFromTracks.length ? tracksFromTracks : tracksFromIds
-          const trackIds = tracksFromIds.length ? tracksFromIds : combinedTracks
-          const normalizedUser = album.user && typeof album.user === 'object'
-            ? {
-                ...album.user,
-                avatar: sanitizeAvatar(album.user.avatar || album.user.avatarUrl)
-              }
-            : null
-          return {
-            ...album,
-            tracks: combinedTracks,
-            trackIds,
-            user: normalizedUser,
-            createdAt: resolveTrackCreatedAt(album)
+      refreshUserDirectory()
+        .then(result => {
+          if (result) {
+            renderWhoToFollowInto(whoToFollowEl)
+            renderWhoToFollowInto(whoToFollowMEl)
           }
         })
-        .filter(Boolean)
+        .catch(() => {})
 
-      try {
-        const remotePayload = await apiFetchAlbums({ limit: 20 })
-        const remoteAlbums = Array.isArray(remotePayload?.albums) ? remotePayload.albums : []
-        const normalizedRemote = remoteAlbums.map(album => {
-          if (!album || typeof album !== 'object') return null
-          const tracksMeta = Array.isArray(album.tracks)
-            ? album.tracks
-                .map((track, index) => normalizeAlbumTrackMeta(track, index))
-                .filter(Boolean)
-            : []
-          const normalizedUser = album.user && typeof album.user === 'object'
-            ? {
-                ...album.user,
-                avatar: sanitizeAvatar(album.user.avatar || album.user.avatarUrl)
-              }
-            : null
-          return {
-            id: album.id,
-            title: album.title || 'Untitled Album',
-            cover: album.cover || DEFAULT_TRACK_COVER,
-            coverKey: album.coverStorageKey || null,
-            caption: album.caption || '',
-            createdAt: resolveTrackCreatedAt(album),
-            trackIds: tracksMeta,
-            tracks: tracksMeta,
-            user: normalizedUser,
-            ownerId: album.ownerId || null,
-            db: true
+      migrateLegacyIfNeeded({ concurrency: 3 })
+        .then(result => {
+          if (result?.changed) {
+            customMeta = loadStoredCustomTracks()
+            markLeaderboardTracks([...TRACKS, ...customMeta])
+            scheduleLeaderboardRefresh()
           }
-        }).filter(Boolean)
-        if (normalizedRemote.length) {
-          const existingIds = new Set(customAlbums.map(entry => entry.id))
-          for (const album of normalizedRemote) {
-            if (existingIds.has(album.id)) continue
-            customAlbums.push(album)
+        })
+        .catch(err => console.warn('Legacy track migration failed', err))
+
+      customMeta = loadStoredCustomTracks()
+      customAlbums = loadStoredCustomAlbums()
+
+      ;(async () => {
+        try {
+          const remotePayload = await apiFetchAlbums({ limit: 20 })
+          const remoteAlbums = Array.isArray(remotePayload?.albums) ? remotePayload.albums : []
+          const normalizedRemote = remoteAlbums.map(album => {
+            if (!album || typeof album !== 'object') return null
+            const tracksMeta = Array.isArray(album.tracks)
+              ? album.tracks
+                  .map((track, index) => normalizeAlbumTrackMeta(track, index))
+                  .filter(Boolean)
+              : []
+            const normalizedUser = album.user && typeof album.user === 'object'
+              ? {
+                  ...album.user,
+                  avatar: sanitizeAvatar(album.user.avatar || album.user.avatarUrl)
+                }
+              : null
+            return {
+              id: album.id,
+              title: album.title || 'Untitled Album',
+              cover: album.cover || DEFAULT_TRACK_COVER,
+              coverKey: album.coverStorageKey || null,
+              caption: album.caption || '',
+              createdAt: resolveTrackCreatedAt(album),
+              trackIds: tracksMeta,
+              tracks: tracksMeta,
+              user: normalizedUser,
+              ownerId: album.ownerId || null,
+              db: true
+            }
+          }).filter(Boolean)
+          if (normalizedRemote.length) {
+            const existingIds = new Set(customAlbums.map(entry => entry.id))
+            for (const album of normalizedRemote) {
+              if (existingIds.has(album.id)) continue
+              customAlbums.push(album)
+            }
+            setJSON('custom_albums', customAlbums)
           }
-          setJSON('custom_albums', customAlbums)
+        } catch (err) {
+          console.warn('Failed to load remote albums', err)
         }
-      } catch (err) {
-        console.warn('Failed to load remote albums', err)
-      }
+      })()
 
       // Set composer avatar
       if (composerAvatarEl) {
