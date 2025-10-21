@@ -5372,7 +5372,10 @@ let sessionsCard = null;
       if (profileRefs.stat2Value) profileRefs.stat2Value.textContent = days != null ? String(days) : '—'
       if (profileRefs.stat2Label) profileRefs.stat2Label.textContent = 'days on beatloop'
 
-      const hasTag = Boolean(activeProfileUser.tagUrl)
+      const resolvedProfileTagUrl = activeProfileUser.tagUrl
+        ? resolveTrackMediaUrl(activeProfileUser.tagUrl)
+        : ''
+      const hasTag = Boolean(resolvedProfileTagUrl)
       if (profileRefs.stat3Value) profileRefs.stat3Value.textContent = hasTag ? 'Live' : 'Pending'
       if (profileRefs.stat3Label) profileRefs.stat3Label.textContent = 'sound tag'
 
@@ -5424,7 +5427,7 @@ let sessionsCard = null;
           })
       }
       if (hasTag) {
-        const tagSrc = toAssetUrl(activeProfileUser.tagUrl)
+        const tagSrc = resolvedProfileTagUrl
         setupProfileTagPlayer(tagSrc)
       } else if (profileRefs.tagCaption) {
         profileRefs.tagCaption.textContent = 'No sound tag uploaded yet.'
@@ -6195,7 +6198,7 @@ function stopHoverTagPreview() {
 
 function playHoverTagPreview(user) {
   if (!user || !user.tagUrl) return
-  const url = toAssetUrl(user.tagUrl)
+  const url = resolveTrackMediaUrl(user.tagUrl)
   if (!url) return
   if (hoverTagPreviewKey === url && hoverTagPreviewAudio && !hoverTagPreviewAudio.paused) {
     return
@@ -16196,7 +16199,8 @@ void main()
     if (profileUsernameInput) profileUsernameInput.value = user.name || '';
     if (profileEmailInput) profileEmailInput.value = user.email || '';
 
-    const hasTag = !!user.tagUrl;
+    const resolvedTagUrl = user.tagUrl ? resolveTrackMediaUrl(user.tagUrl) : '';
+    const hasTag = !!resolvedTagUrl;
     if (profileTagStatus) {
       if (profileState.pendingTag) {
         profileTagStatus.textContent = `New sound tag ready: ${profileState.pendingTag.name || 'selected file'}`;
@@ -16216,7 +16220,7 @@ void main()
         profileTagPreview.textContent = '▶️ Preview new tag';
         profileTagPreview.classList.remove('hidden');
       } else if (hasTag) {
-        profileTagPreview.dataset.url = user.tagUrl;
+        profileTagPreview.dataset.url = resolvedTagUrl;
         profileTagPreview.textContent = '▶️ Preview current tag';
         profileTagPreview.classList.remove('hidden');
       } else {
@@ -16227,7 +16231,7 @@ void main()
 
     const refsReady = typeof ensureProfileRefs === 'function' && ensureProfileRefs();
     if (hasTag) {
-      const resolvedTagSrc = toAssetUrl(user.tagUrl);
+      const resolvedTagSrc = resolvedTagUrl;
       if (refsReady) {
         resetProfileTagPlayer();
         queueProfileTagSetup(resolvedTagSrc);
