@@ -13823,29 +13823,40 @@ if (mode === 'song' && currentStep === 0) {
               const microIndex = stepBase + s;
               const when = (time||Tone.now()) + s * microDur;
               for (let p = 0; p < PITCH_ROWS; p++){
-                const note = rowPR?.[p]?.[microIndex];
+                const notesRow = rowPR?.[p];
+                if (!notesRow) continue;
+                const note = notesRow?.[microIndex];
                 if (!note) continue;
                 const semi = (p - 8);
+                const prevOn = microIndex > 0 ? !!notesRow?.[microIndex - 1] : false;
+                if (prevOn) continue;
+                let runLen = 1;
+                const maxIndex = stepsForBank * SUBDIV;
+                while ((microIndex + runLen) < maxIndex && !!notesRow?.[microIndex + runLen]) runLen++;
+                const holdSeconds = Math.max(microDur, runLen * microDur);
                 if (r < (typeof kitRowCount!=='undefined'?kitRowCount:0)){
                   const pitchName = (typeof noteFromC3==='function') ? noteFromC3(semi + (pitches?.[r]||0)) : 'C3';
+                  const sampler = kitSamplers?.[r];
+                  if (!sampler) continue;
                   try {
                     if (volumes?.[r]) volumes[r].volume.value = (note.vol||0)*1.2;
                     if (panners?.[r]) panners[r].pan.value    = (note.pan||0)/10;
-                    kitSamplers?.[r]?.triggerAttack?.(pitchName, when, 1);
+                    if (typeof sampler.triggerAttackRelease === 'function') {
+                      sampler.triggerAttackRelease(pitchName, holdSeconds, when, 1);
+                    } else {
+                      sampler.triggerAttack?.(pitchName, when, 1);
+                      if (typeof sampler.triggerRelease === 'function') {
+                        try { sampler.triggerRelease(pitchName, when + holdSeconds); } catch {}
+                      }
+                    }
                   } catch {}
                 } else {
                   const idxL = r - (typeof kitRowCount!=='undefined'?kitRowCount:0);
                   const player = loopPlayers?.[idxL];
                   if (!player || !player.buffer || !player.buffer.loaded) continue;
                   // Only trigger at the START of a contiguous run of ON cells.
-                  const notesRow = rowPR?.[p];
                   const isOn = !!notesRow?.[microIndex];
-                  const prevOn = microIndex > 0 ? !!notesRow?.[microIndex-1] : false;
-                  if (!isOn || prevOn) continue; // skip if not a start
-                  // Determine run length
-                  let runLen = 1;
-                  const maxIndex = stepsForBank*SUBDIV;
-                  while ((microIndex + runLen) < maxIndex && !!notesRow?.[microIndex + runLen]) runLen++;
+                  if (!isOn) continue; // skip if not a start
                   try {
                     // convert run length into seconds
                     const dur = player.buffer.duration||1;
