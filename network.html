@@ -4739,29 +4739,106 @@ let sessionsCard = null;
       tagAudio.controls = false;
       tagAudio.classList.remove('profile-track-audio--fallback');
 
-      let wave = null;
-      if (tagWave) {
-        tagWave.innerHTML = '';
-        wave = createWaveSurferForAudio(tagAudio, tagWave, { height: 80 });
-      }
-
-      if (wave && tagPlayBtn) {
-        tagPlayer.classList.remove('hidden');
-        tagPlayer.classList.remove('profile-tag-player--fallback');
-        tagPlayer.classList.remove('is-playing');
-        tagPlayBtn.disabled = false;
-        registerProfileTrackPlayer(tagPlayer, tagAudio, wave, tagPlayBtn, 'sound tag');
-      } else {
+      const showTagFallback = (message) => {
         if (tagWave) tagWave.innerHTML = '';
         tagPlayer.classList.remove('hidden');
         tagPlayer.classList.add('profile-tag-player--fallback');
         tagPlayer.classList.remove('is-playing');
         tagAudio.controls = true;
         tagAudio.classList.add('profile-track-audio--fallback');
+        if (tagCaption) {
+          tagCaption.textContent = message || 'Sound tag unavailable.';
+        }
         if (tagPlayBtn) {
           tagPlayBtn.disabled = true;
           setPlayButtonState(tagPlayBtn, false, 'sound tag');
         }
+        profileTrackPlayers.delete(tagPlayer);
+      };
+
+      const removeLoadingListeners = (() => {
+        let detachFns = [];
+        return {
+          add(fn) {
+            if (typeof fn === 'function') detachFns.push(fn);
+          },
+          run() {
+            detachFns.forEach((fn) => {
+              try { fn(); } catch {}
+            });
+            detachFns = [];
+          }
+        };
+      })();
+
+      const finalizeWaveSetup = () => {
+        removeLoadingListeners.run();
+        let wave = null;
+        if (tagWave) {
+          tagWave.innerHTML = '';
+          wave = createWaveSurferForAudio(tagAudio, tagWave, { height: 80 });
+        }
+        if (wave && tagPlayBtn) {
+          tagPlayer.classList.remove('hidden');
+          tagPlayer.classList.remove('profile-tag-player--fallback');
+          tagPlayer.classList.remove('is-playing');
+          tagAudio.controls = false;
+          tagAudio.classList.remove('profile-track-audio--fallback');
+          tagPlayBtn.disabled = false;
+          registerProfileTrackPlayer(tagPlayer, tagAudio, wave, tagPlayBtn, 'sound tag');
+        } else {
+          showTagFallback('Sound tag unavailable.');
+        }
+      };
+
+      const waitForMetadataAndSetup = () => {
+        if (!tagAudio) {
+          showTagFallback('Sound tag unavailable.');
+          return;
+        }
+
+        const onLoadedMetadata = () => {
+          removeLoadingListeners.run();
+          profileTrackPlayers.delete(tagPlayer);
+          finalizeWaveSetup();
+        };
+
+        const onAudioError = () => {
+          removeLoadingListeners.run();
+          showTagFallback('Sound tag unavailable.');
+        };
+
+        try { tagAudio.addEventListener('loadedmetadata', onLoadedMetadata); } catch {}
+        try { tagAudio.addEventListener('error', onAudioError); } catch {}
+
+        removeLoadingListeners.add(() => {
+          try { tagAudio.removeEventListener('loadedmetadata', onLoadedMetadata); } catch {}
+        });
+        removeLoadingListeners.add(() => {
+          try { tagAudio.removeEventListener('error', onAudioError); } catch {}
+        });
+
+        profileTrackPlayers.set(tagPlayer, {
+          audio: tagAudio,
+          wave: null,
+          playBtn: tagPlayBtn,
+          cleanup() {
+            removeLoadingListeners.run();
+          }
+        });
+      };
+
+      if (tagAudio.readyState >= (tagAudio.HAVE_METADATA || 1)) {
+        finalizeWaveSetup();
+      } else {
+        if (tagPlayBtn) {
+          tagPlayBtn.disabled = true;
+          setPlayButtonState(tagPlayBtn, false, 'sound tag');
+        }
+        tagPlayer.classList.remove('hidden');
+        tagPlayer.classList.remove('profile-tag-player--fallback');
+        tagPlayer.classList.remove('is-playing');
+        waitForMetadataAndSetup();
       }
     }
 
