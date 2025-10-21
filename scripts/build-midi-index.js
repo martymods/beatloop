@@ -21,6 +21,13 @@ function collectMidiFiles(root) {
       if (!entry.isFile()) continue;
       if (!/\.mid(i)?$/i.test(entry.name)) continue;
       const relativeFromMusic = path.relative(root, abs).split(path.sep).join('/');
+      const encodedRelativePath = relativeFromMusic
+        .split('/')
+        .map(part => {
+          if (!part) return part;
+          return encodeURIComponent(part);
+        })
+        .join('/');
       const decodedName = (() => {
         try { return decodeURIComponent(entry.name); }
         catch { return entry.name; }
@@ -34,7 +41,7 @@ function collectMidiFiles(root) {
           catch { return part; }
         });
       results.push({
-        path: `/audio/music/${relativeFromMusic}`,
+        path: `/audio/music/${encodedRelativePath}`,
         name: displayName || entry.name,
         file: entry.name,
         folders,
