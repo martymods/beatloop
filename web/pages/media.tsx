@@ -61,11 +61,36 @@ type CommentDraft = {
 };
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
+const API_FALLBACK_BASES = (process.env.NEXT_PUBLIC_API_FALLBACK_BASE_URLS ||
+  'https://beatloop-api.onrender.com')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
+  .map((value) => value.replace(/\/$/, ''));
 const WATERMARK_ASSET = '/img/350x350_LOGO.png';
 
+function normalizePath(path: string): string {
+  if (!path) return '/';
+  return path.startsWith('/') ? path : `/${path}`;
+}
+
+function resolveApiBase(): string | null {
+  if (API_BASE) return API_BASE;
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    if (/^https?:\/\/(localhost|127(?:\.\d+){3}|0\.0\.0\.0)(?::\d+)?$/i.test(origin)) {
+      return null;
+    }
+  }
+  return API_FALLBACK_BASES[0] || null;
+}
+
 function apiPath(path: string): string {
-  if (API_BASE) return `${API_BASE}${path}`;
-  return path;
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalized = normalizePath(path);
+  const base = resolveApiBase();
+  if (base) return `${base}${normalized}`;
+  return normalized;
 }
 
 function readStoredToken(): string {
