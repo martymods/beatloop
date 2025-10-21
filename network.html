@@ -14603,6 +14603,7 @@ void main()
     pendingTag: null,
     pendingTagUrl: null,
     pendingColor: null,
+    pendingTagSource: '',
     previousOverflow: ''
   };
   window.profileState = profileState;
@@ -14632,6 +14633,25 @@ void main()
   let profileActiveTab = 'details';
   let profileNavUnread = 0;
   let profileNavAnimationTimer = null;
+
+  function isProfileOverlayVisible() {
+    return Boolean(profileOverlayEl && !profileOverlayEl.classList.contains('hidden'));
+  }
+
+  function queueProfileTagSetup(sourceUrl) {
+    profileState.pendingTagSource = sourceUrl || '';
+    if (profileState.pendingTagSource && isProfileOverlayVisible()) {
+      setupProfileTagPlayer(profileState.pendingTagSource);
+      profileState.pendingTagSource = '';
+    }
+  }
+
+  function activatePendingProfileTag() {
+    if (!profileState.pendingTagSource) return;
+    const src = profileState.pendingTagSource;
+    profileState.pendingTagSource = '';
+    setupProfileTagPlayer(src);
+  }
 
   function applyProfileColorPreview(colorValue) {
     const sanitized = sanitizeProfileColorHex(colorValue);
@@ -16103,6 +16123,25 @@ void main()
         delete profileTagPreview.dataset.url;
       }
     }
+
+    const refsReady = typeof ensureProfileRefs === 'function' && ensureProfileRefs();
+    if (hasTag) {
+      const resolvedTagSrc = toAssetUrl(user.tagUrl);
+      if (refsReady) {
+        resetProfileTagPlayer();
+        queueProfileTagSetup(resolvedTagSrc);
+      } else {
+        profileState.pendingTagSource = resolvedTagSrc;
+      }
+    } else {
+      profileState.pendingTagSource = '';
+      if (refsReady) {
+        resetProfileTagPlayer();
+        if (profileRefs.tagCaption) {
+          profileRefs.tagCaption.textContent = 'No sound tag uploaded yet.';
+        }
+      }
+    }
   }
 
   function setProfileTab(tab, options = {}) {
@@ -16190,6 +16229,11 @@ void main()
       profileState.previousOverflow = document.body.style.overflow || '';
       document.body.style.overflow = 'hidden';
       profileOverlayEl.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          activatePendingProfileTag();
+        });
+      });
     }
   }
 
