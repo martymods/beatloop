@@ -198,8 +198,11 @@ async function loadWatermarkImage(): Promise<HTMLImageElement> {
   });
 }
 
-interface ApiFetchOptions extends RequestInit {
+type JsonRequestBody = Record<string, unknown> | Array<unknown> | null;
+
+interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   expect?: 'json' | 'arrayBuffer' | 'blob';
+  body?: RequestInit['body'] | JsonRequestBody;
 }
 
 type StoriesMap = Record<string, MediaStory>;
