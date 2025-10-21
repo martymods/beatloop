@@ -11996,7 +11996,6 @@ const AI_MELODY_SCALES = {
   function bindPRGridHandlers(){
     if (!prGridEl || prGridEl._dragBound) return;
     let prIsPainting = false;
-    let prPaintOn = true;
     let loopDrag = null; // { mode: 'new'|'resizeLeft'|'resizeRight', p, start, end }
 
     const getCell = (target) => {
@@ -12031,19 +12030,10 @@ const AI_MELODY_SCALES = {
       for (let i=a;i<=b;i++) setPR(p, i, on);
     };
 
-    const startFrom = (target, evt) => {
-      const meta = getCell(target); if (!meta) return;
+    const startDragAtMeta = (meta) => {
+      if (!meta) return;
       const bank = (typeof currentBank!=='undefined'?currentBank:0);
       const entry = ensurePR(bank, prRow);
-      const isLoopRow = (typeof kitRowCount!=='undefined' && typeof prRow!=='undefined') ? (prRow >= kitRowCount) : false;
-      if (!isLoopRow){
-        const exists = !!(entry.notes?.[meta.p]?.[meta.i]);
-        prPaintOn = !(evt && (evt.ctrlKey || evt.metaKey)) && !exists;
-        prIsPainting = true;
-        setPR(meta.p, meta.i, prPaintOn);
-        loopDrag = null;
-        return;
-      }
       const exists = !!(entry.notes?.[meta.p]?.[meta.i]);
       const run = findRun(entry, meta.p, meta.i);
       if (exists){
@@ -12061,18 +12051,23 @@ const AI_MELODY_SCALES = {
       prIsPainting = true;
     };
 
+    const startFrom = (target) => {
+      const meta = getCell(target);
+      if (!meta) return;
+      startDragAtMeta(meta);
+    };
+
     const dragOver = (target) => {
       if (!prIsPainting) return;
       const meta = getCell(target); if (!meta) return;
-      const bank = (typeof currentBank!=='undefined'?currentBank:0);
-      const entry = ensurePR(bank, prRow);
-      const isLoopRow = (typeof kitRowCount!=='undefined' && typeof prRow!=='undefined') ? (prRow >= kitRowCount) : false;
-      if (!isLoopRow){
-        setPR(meta.p, meta.i, prPaintOn);
+      if (loopDrag && loopDrag.mode === 'eraseDrag') {
+        setPR(meta.p, meta.i, false);
         return;
       }
-      if (!loopDrag) return;
-      if (loopDrag.mode === 'eraseDrag') { setPR(loopDrag.p, meta.i, false); return; }
+      if (!loopDrag || meta.p !== loopDrag.p) {
+        startDragAtMeta(meta);
+        return;
+      }
       if (loopDrag.mode === 'new'){
         setRange(loopDrag.p, loopDrag.start, meta.i, true);
         loopDrag.end = meta.i;
@@ -12092,31 +12087,25 @@ const AI_MELODY_SCALES = {
       const meta = getCell(e.target);
       const bank = (typeof currentBank!=='undefined'?currentBank:0);
       const entry = ensurePR(bank, prRow);
-      const isLoopRow = (typeof kitRowCount!=='undefined' && typeof prRow!=='undefined') ? (prRow >= kitRowCount) : false;
       const exists = meta ? !!(entry.notes?.[meta.p]?.[meta.i]) : false;
       if (e.button === 2 || e.ctrlKey || e.metaKey) {
-        if (!isLoopRow) {
-          prPaintOn = false;
-          prIsPainting = true;
-          if (meta) setPR(meta.p, meta.i, false);
-          loopDrag = null;
-        } else {
-          prIsPainting = true;
-          if (meta) {
-            const notes = entry.notes?.[meta.p];
-            if (exists) {
-              let L=meta.i, R=meta.i;
-              while (L-1>=0 && notes[L-1]) L--;
-              while (R+1<notes.length && notes[R+1]) R++;
-              for (let k=L;k<=R;k++) setPR(meta.p, k, false);
-            } else {
-              setPR(meta.p, meta.i, false);
-            }
-            loopDrag = { mode:'eraseDrag', p: meta.p };
+        prIsPainting = true;
+        if (meta) {
+          const notes = entry.notes?.[meta.p];
+          if (exists) {
+            let L=meta.i, R=meta.i;
+            while (L-1>=0 && notes[L-1]) L--;
+            while (R+1<notes.length && notes[R+1]) R++;
+            for (let k=L;k<=R;k++) setPR(meta.p, k, false);
+          } else {
+            setPR(meta.p, meta.i, false);
           }
+          loopDrag = { mode:'eraseDrag', p: meta.p };
+        } else {
+          loopDrag = { mode:'eraseDrag', p: null };
         }
       } else {
-        startFrom(e.target, e);
+        startFrom(e.target);
       }
     });
     prGridEl.addEventListener('mouseover', (e) => { dragOver(e.target); });
