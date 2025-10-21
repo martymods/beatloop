@@ -38,7 +38,10 @@ const {
   SOUNDCLOUD_CLIENT_SECRET = '',
   SOUNDCLOUD_REDIRECT_URI = '',
   SOUNDCLOUD_SUCCESS_REDIRECT = '',
-  SOUNDCLOUD_FAILURE_REDIRECT = ''
+  SOUNDCLOUD_FAILURE_REDIRECT = '',
+  OPENAI_API_KEY = '',
+  MEDIA_TMZ_FEED_URL = 'https://www.tmz.com/category/hip-hop/feed/',
+  MEDIA_CACHE_TTL_MS = '600000'
 } = process.env;
 
 const RENDER_ENV_MARKERS = [
@@ -69,6 +72,14 @@ if (!durableUploadsAvailable) {
 if (!MONGODB_URI) {
   console.warn('⚠️  MONGODB_URI not set. Add it in .env / Render Environment.');
 }
+
+const MEDIA_CACHE_TTL = Number.isFinite(Number(MEDIA_CACHE_TTL_MS))
+  ? Number(MEDIA_CACHE_TTL_MS)
+  : 10 * 60 * 1000;
+const MEDIA_SOURCE_NAME = 'TMZ Hip-Hop';
+const MEDIA_STORAGE_PREFIX = 'media';
+const MEDIA_SUMMARY_MODEL = 'gpt-4o-mini';
+const tmzFeedCache = { at: 0, items: [] };
 
 const SESSION_EMPTY_TTL_MS = 3 * 60 * 1000;
 const SESSION_MAX_LIFETIME_MS = 12 * 60 * 60 * 1000; // 12-hour hard cutoff for stale sessions
@@ -276,6 +287,49 @@ const TrackCommentSchema = new mongoose.Schema({
 
 TrackCommentSchema.index({ trackId: 1, clientId: 1 }, { unique: true, sparse: true });
 
+const MediaStorySchema = new mongoose.Schema({
+  url: { type: String, required: true, unique: true, index: true },
+  title: { type: String, default: '' },
+  excerpt: { type: String, default: '' },
+  imageUrl: { type: String, default: '' },
+  watermarkedImageKey: { type: String, default: '' },
+  summary: { type: String, default: '' },
+  summaryModel: { type: String, default: '' },
+  summaryError: { type: String, default: '' },
+  shareSlug: { type: String, default: '', unique: true, sparse: true },
+  likeUserIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'User', default: [] },
+  dislikeUserIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'User', default: [] },
+  commentCount: { type: Number, default: 0 },
+  publishedAt: { type: Date, default: null },
+  source: { type: String, default: MEDIA_SOURCE_NAME },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+MediaStorySchema.pre('save', function mediaStoryPreSave(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+const MediaCommentSchema = new mongoose.Schema({
+  storyId: { type: mongoose.Schema.Types.ObjectId, ref: 'MediaStory', required: true, index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  body: { type: String, default: '' },
+  imageStorageKey: { type: String, default: '' },
+  imageUrl: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+MediaCommentSchema.pre('save', function mediaCommentPreSave(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+MediaCommentSchema.index({ storyId: 1, createdAt: -1 });
+
 const MessageAttachmentSchema = new mongoose.Schema({
   fileName: { type: String, required: true },
   originalName: { type: String, default: '' },
@@ -339,6 +393,8 @@ const Track = mongoose.model('Track', TrackSchema);
 const TrackStat = mongoose.model('TrackStat', TrackStatsSchema);
 const TrackEvent = mongoose.model('TrackEvent', TrackEventSchema);
 const TrackComment = mongoose.model('TrackComment', TrackCommentSchema);
+const MediaStory = mongoose.model('MediaStory', MediaStorySchema);
+const MediaComment = mongoose.model('MediaComment', MediaCommentSchema);
 const DirectMessage = mongoose.model('DirectMessage', DirectMessageSchema);
 const StudioSound = mongoose.model('StudioSound', StudioSoundSchema);
 const AlbumTrackRefSchema = new mongoose.Schema({
@@ -455,8 +511,8 @@ const uploadsRoot = getUploadsRoot();
 const trackAudioDir = path.join(uploadsRoot, 'tracks');
 const trackCoverDir = path.join(uploadsRoot, 'covers');
 const messageAttachmentDir = path.join(uploadsRoot, 'messages');
-const PROXIED_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio']);
-const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio']);
+const PROXIED_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio', 'media']);
+const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio', 'media']);
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
 fs.mkdirSync(messageAttachmentDir, { recursive: true });
@@ -898,6 +954,566 @@ function resolveArtistFromUser(user) {
   if (typeof user.name === 'string' && user.name.trim()) return user.name.trim();
   return typeof user.email === 'string' ? user.email : '';
 }
+
+const MEDIA_ALLOWED_IMAGE_HOSTS = new Set([
+  'www.tmz.com',
+  'tmz.com',
+  'tmz.prod.cd.beachfrontcdn.com',
+  'tmz-prod.s3.amazonaws.com',
+  'tmz-prod.aws.hmn.md',
+  'tmz-prod.s3.amazonaws.com',
+  'tmz-prod.akamaized.net',
+  'tmz-prod.a.akamaihd.net',
+  'tmz-prod-tmznet.storage.googleapis.com'
+]);
+
+function decodeHtmlEntities(value) {
+  if (typeof value !== 'string' || !value.includes('&')) return value || '';
+  return value.replace(/&(#?(x)?[0-9a-zA-Z]+);/g, (_match, entity) => {
+    if (!entity) return '&';
+    if (entity[0] === '#') {
+      const base = entity[1] && entity[1].toLowerCase() === 'x' ? 16 : 10;
+      const numeric = entity.slice(base === 16 ? 2 : 1);
+      const codePoint = parseInt(numeric, base);
+      if (Number.isFinite(codePoint)) {
+        try {
+          return String.fromCodePoint(codePoint);
+        } catch {
+          return '';
+        }
+      }
+    }
+    const named = entity.toLowerCase();
+    switch (named) {
+      case 'amp':
+        return '&';
+      case 'lt':
+        return '<';
+      case 'gt':
+        return '>';
+      case 'quot':
+        return '"';
+      case 'apos':
+      case '#39':
+        return "'";
+      case 'nbsp':
+        return ' ';
+      default:
+        return '';
+    }
+  });
+}
+
+function stripHtmlTags(value) {
+  if (typeof value !== 'string') return '';
+  return decodeHtmlEntities(
+    value.replace(/<!\[CDATA\[([\s\S]*?)]]>/gi, '$1').replace(/<[^>]+>/g, ' ')
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractTagValue(block, tagName) {
+  if (!block) return '';
+  const pattern = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+  const match = pattern.exec(block);
+  if (!match) return '';
+  return stripHtmlTags(match[1]);
+}
+
+function extractFirstImageUrl(block) {
+  if (!block) return '';
+  const mediaMatch = block.match(/<media:content[^>]*url="([^"]+)"/i);
+  if (mediaMatch && mediaMatch[1]) return mediaMatch[1];
+  const enclosureMatch = block.match(/<enclosure[^>]*url="([^"]+)"/i);
+  if (enclosureMatch && enclosureMatch[1]) return enclosureMatch[1];
+  const imgMatch = block.match(/<img[^>]+src="([^"]+)"/i);
+  if (imgMatch && imgMatch[1]) return imgMatch[1];
+  return '';
+}
+
+function sanitizeMediaTitle(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, 240);
+}
+
+function sanitizeMediaExcerpt(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, 800);
+}
+
+function sanitizeMediaUrl(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed, MEDIA_TMZ_FEED_URL);
+    return parsed.href;
+  } catch {
+    return '';
+  }
+}
+
+function sanitizeMediaPublishedAt(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function sanitizeMediaCommentBody(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, 1200);
+}
+
+async function resolveViewerFromRequest(req) {
+  const hdr = req.headers.authorization || '';
+  const token = hdr.startsWith('Bearer ') ? hdr.slice(7) : null;
+  if (!token) return null;
+  try {
+    const { uid } = jwt.verify(token, JWT_SECRET);
+    if (!uid) return null;
+    return await User.findById(uid);
+  } catch {
+    return null;
+  }
+}
+
+async function ensureMediaShareSlug(doc) {
+  if (!doc) return '';
+  if (doc.shareSlug) return doc.shareSlug;
+  const base = sanitizeMediaTitle(doc.title || 'story')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'story';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = attempt === 0 ? base : `${base}-${crypto.randomBytes(2).toString('hex')}`;
+    // eslint-disable-next-line no-await-in-loop
+    const exists = await MediaStory.exists({ shareSlug: candidate });
+    if (!exists) {
+      doc.shareSlug = candidate;
+      return candidate;
+    }
+  }
+  const fallback = crypto.randomBytes(6).toString('hex');
+  doc.shareSlug = fallback;
+  return fallback;
+}
+
+function parseTmzFeed(xml) {
+  if (typeof xml !== 'string' || !xml) return [];
+  const items = [];
+  const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+  let match;
+  while ((match = itemRegex.exec(xml))) {
+    const block = match[1] || '';
+    const title = sanitizeMediaTitle(extractTagValue(block, 'title'));
+    const url = sanitizeMediaUrl(extractTagValue(block, 'link'));
+    if (!url) continue;
+    const description = sanitizeMediaExcerpt(extractTagValue(block, 'description'));
+    const published = sanitizeMediaPublishedAt(extractTagValue(block, 'pubDate'));
+    const image = sanitizeMediaUrl(extractFirstImageUrl(block));
+    items.push({
+      title,
+      url,
+      excerpt: description,
+      image,
+      publishedAt: published ? published.toISOString() : null
+    });
+    if (items.length >= 32) break;
+  }
+  return items;
+}
+
+async function fetchTmzHipHopFeed() {
+  const nowTs = Date.now();
+  if (tmzFeedCache.items.length && nowTs - tmzFeedCache.at < MEDIA_CACHE_TTL) {
+    return tmzFeedCache.items;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000).unref();
+    const response = await fetch(MEDIA_TMZ_FEED_URL, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      throw new Error(`TMZ feed ${response.status}`);
+    }
+    const text = await response.text();
+    const parsed = parseTmzFeed(text);
+    tmzFeedCache.at = Date.now();
+    tmzFeedCache.items = parsed;
+    return parsed;
+  } catch (error) {
+    console.warn('Failed to refresh TMZ feed', error);
+    return tmzFeedCache.items.length ? tmzFeedCache.items : [];
+  }
+}
+
+async function summarizeMediaStory({ title, excerpt, url }) {
+  if (!OPENAI_API_KEY) {
+    return { text: '', model: '', error: 'missing_api_key' };
+  }
+
+  const payload = {
+    model: MEDIA_SUMMARY_MODEL,
+    temperature: 0.4,
+    max_tokens: 220,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are Beatloop Media. Summarize hip-hop news into 2-3 neutral sentences in our own words. Mention verified facts only.'
+      },
+      {
+        role: 'user',
+        content: [
+          `Title: ${title || 'Untitled'}`,
+          `Source: ${url || 'unknown'}`,
+          excerpt ? `Snippet: ${excerpt}` : 'Snippet: (not provided)'
+        ].join('\n')
+      }
+    ]
+  };
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      return { text: '', model: payload.model, error: `openai_${response.status}:${errText.slice(0, 200)}` };
+    }
+    const data = await response.json();
+    const text = data?.choices?.[0]?.message?.content?.trim() || '';
+    return { text, model: data?.model || payload.model, error: '' };
+  } catch (error) {
+    console.warn('OpenAI summary failed', error);
+    return { text: '', model: MEDIA_SUMMARY_MODEL, error: error.message || 'openai_error' };
+  }
+}
+
+function presentMediaStory(req, doc, viewer) {
+  if (!doc) return null;
+  const viewerId = viewer?._id ? viewer._id.toString() : '';
+  const likeIds = Array.isArray(doc.likeUserIds) ? doc.likeUserIds.map((id) => id.toString()) : [];
+  const dislikeIds = Array.isArray(doc.dislikeUserIds) ? doc.dislikeUserIds.map((id) => id.toString()) : [];
+  const key = doc.watermarkedImageKey || '';
+  const watermarked = key ? publicUploadUrl(req, key) : '';
+  const shareBase = effectivePublicBase(req);
+  const slug = doc.shareSlug || doc._id?.toString();
+  const shareUrl = slug ? `${shareBase}/media?story=${encodeURIComponent(slug)}` : `${shareBase}/media`;
+  return {
+    id: doc._id,
+    url: doc.url,
+    title: doc.title || '',
+    excerpt: doc.excerpt || '',
+    summary: doc.summary || '',
+    summaryModel: doc.summaryModel || '',
+    summaryError: doc.summaryError || '',
+    imageUrl: doc.imageUrl || '',
+    watermarkedImageUrl: watermarked,
+    likeCount: likeIds.length,
+    dislikeCount: dislikeIds.length,
+    commentCount: Number(doc.commentCount) || 0,
+    liked: Boolean(viewerId && likeIds.includes(viewerId)),
+    disliked: Boolean(viewerId && dislikeIds.includes(viewerId)),
+    shareSlug: slug,
+    shareUrl,
+    source: doc.source || MEDIA_SOURCE_NAME,
+    publishedAt: doc.publishedAt || null,
+    createdAt: doc.createdAt || null,
+    updatedAt: doc.updatedAt || null
+  };
+}
+
+async function presentMediaComment(req, commentDoc, userCache = new Map()) {
+  if (!commentDoc) return null;
+  let author = null;
+  const userId = commentDoc.userId;
+  if (userId) {
+    const key = userId.toString();
+    if (userCache.has(key)) {
+      author = userCache.get(key);
+    } else {
+      // eslint-disable-next-line no-await-in-loop
+      const user = await User.findById(userId);
+      if (user) {
+        author = {
+          id: user._id,
+          name: resolveArtistFromUser(user),
+          avatarUrl: presentStoredUploadUrl(req, user.avatarUrl, user.avatarStorageKey)
+        };
+        userCache.set(key, author);
+      }
+    }
+  }
+  const imageKey = commentDoc.imageStorageKey || '';
+  return {
+    id: commentDoc._id,
+    storyId: commentDoc.storyId,
+    body: commentDoc.body || '',
+    imageUrl: imageKey ? publicUploadUrl(req, imageKey) : commentDoc.imageUrl || '',
+    createdAt: commentDoc.createdAt || null,
+    author
+  };
+}
+
+async function fetchRemoteImage(url) {
+  const normalized = sanitizeMediaUrl(url);
+  if (!normalized) throw new Error('invalid_url');
+  const parsed = new URL(normalized);
+  const hostname = (parsed.hostname || '').toLowerCase();
+  const allowed = [...MEDIA_ALLOWED_IMAGE_HOSTS].some(
+    (candidate) => hostname === candidate || hostname.endsWith(`.${candidate.replace(/^\./, '')}`)
+  );
+  if (!allowed && !hostname.includes('tmz')) {
+    throw new Error('host_not_allowed');
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000).unref();
+  const response = await fetch(normalized, { signal: controller.signal });
+  clearTimeout(timeout);
+  if (!response.ok) {
+    throw new Error(`image_${response.status}`);
+  }
+  const contentType = response.headers.get('content-type') || 'application/octet-stream';
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return { buffer, contentType };
+}
+
+/* ============================ MEDIA ============================ */
+const mediaRouter = express.Router();
+
+const mediaImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 6 * 1024 * 1024 }
+});
+
+const mediaCommentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 }
+});
+
+mediaRouter.get('/hiphop', async (req, res) => {
+  const items = await fetchTmzHipHopFeed();
+  res.json({ items });
+});
+
+mediaRouter.get('/stories', async (req, res) => {
+  const viewer = await resolveViewerFromRequest(req);
+  const docs = await MediaStory.find({}).sort({ updatedAt: -1 }).limit(120);
+  const stories = docs.map((doc) => presentMediaStory(req, doc, viewer));
+  res.json({ stories });
+});
+
+mediaRouter.get('/story', async (req, res) => {
+  const { url, id, slug } = req.query || {};
+  const viewer = await resolveViewerFromRequest(req);
+  let storyDoc = null;
+  if (id) {
+    storyDoc = await MediaStory.findById(id);
+  } else if (slug) {
+    storyDoc = await MediaStory.findOne({ shareSlug: String(slug) });
+  } else if (url) {
+    storyDoc = await MediaStory.findOne({ url: sanitizeMediaUrl(String(url)) });
+  }
+  if (!storyDoc) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+  res.json({ story: presentMediaStory(req, storyDoc, viewer) });
+});
+
+mediaRouter.post('/summarize', auth, async (req, res) => {
+  const { url, title, excerpt, image, publishedAt } = req.body || {};
+  const normalizedUrl = sanitizeMediaUrl(url);
+  if (!normalizedUrl) {
+    return res.status(400).json({ error: 'url_required' });
+  }
+
+  let story = await MediaStory.findOne({ url: normalizedUrl });
+  if (!story) {
+    story = new MediaStory({ url: normalizedUrl, createdBy: req.user._id });
+  }
+
+  story.title = sanitizeMediaTitle(title) || story.title || 'Untitled';
+  story.excerpt = sanitizeMediaExcerpt(excerpt) || story.excerpt || '';
+  const sanitizedImage = sanitizeMediaUrl(image);
+  if (sanitizedImage) {
+    story.imageUrl = sanitizedImage;
+  }
+  const published = sanitizeMediaPublishedAt(publishedAt);
+  if (published) {
+    story.publishedAt = published;
+  }
+  story.updatedBy = req.user._id;
+
+  const summaryResult = await summarizeMediaStory({
+    title: story.title,
+    excerpt: story.excerpt,
+    url: story.url
+  });
+
+  if (summaryResult.text) {
+    story.summary = summaryResult.text;
+    story.summaryModel = summaryResult.model;
+    story.summaryError = '';
+  } else if (summaryResult.error) {
+    story.summaryError = summaryResult.error;
+  }
+
+  await ensureMediaShareSlug(story);
+  await story.save();
+
+  res.json({
+    story: presentMediaStory(req, story, req.user),
+    summaryGenerated: Boolean(summaryResult.text),
+    summaryError: summaryResult.error || ''
+  });
+});
+
+mediaRouter.post('/stories/:id/image', auth, mediaImageUpload.single('image'), async (req, res) => {
+  const { id } = req.params;
+  const story = await MediaStory.findById(id);
+  if (!story) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ error: 'image_required' });
+  }
+
+  const mimeType = normalizeMime(req.file.mimetype || '');
+  if (!IMAGE_MIME_EXT[mimeType]) {
+    return res.status(400).json({ error: 'unsupported_type' });
+  }
+
+  const ext = IMAGE_MIME_EXT[mimeType] || '.jpg';
+  const key = `${MEDIA_STORAGE_PREFIX}/stories/${story._id}-${Date.now()}${ext}`;
+
+  await writeBufferToUploads({ key, buffer: req.file.buffer, contentType: mimeType });
+
+  story.watermarkedImageKey = key;
+  const sourceUrl = sanitizeMediaUrl(req.body?.sourceUrl);
+  if (sourceUrl && !story.imageUrl) {
+    story.imageUrl = sourceUrl;
+  }
+  story.updatedBy = req.user._id;
+  await story.save();
+
+  res.json({ story: presentMediaStory(req, story, req.user) });
+});
+
+async function updateMediaReaction(req, res, type) {
+  const { id } = req.params;
+  const story = await MediaStory.findById(id);
+  if (!story) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+  const userId = req.user._id.toString();
+  const likes = new Set((story.likeUserIds || []).map((value) => value.toString()));
+  const dislikes = new Set((story.dislikeUserIds || []).map((value) => value.toString()));
+
+  if (type === 'like') {
+    if (likes.has(userId)) {
+      likes.delete(userId);
+    } else {
+      likes.add(userId);
+      dislikes.delete(userId);
+    }
+  } else if (type === 'dislike') {
+    if (dislikes.has(userId)) {
+      dislikes.delete(userId);
+    } else {
+      dislikes.add(userId);
+      likes.delete(userId);
+    }
+  }
+
+  story.likeUserIds = Array.from(likes).map((value) => new mongoose.Types.ObjectId(value));
+  story.dislikeUserIds = Array.from(dislikes).map((value) => new mongoose.Types.ObjectId(value));
+  story.updatedBy = req.user._id;
+  await story.save();
+
+  res.json({ story: presentMediaStory(req, story, req.user) });
+}
+
+mediaRouter.post('/stories/:id/like', auth, (req, res) => updateMediaReaction(req, res, 'like'));
+mediaRouter.post('/stories/:id/dislike', auth, (req, res) => updateMediaReaction(req, res, 'dislike'));
+
+mediaRouter.get('/stories/:id/comments', async (req, res) => {
+  const { id } = req.params;
+  const story = await MediaStory.findById(id);
+  if (!story) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+  const docs = await MediaComment.find({ storyId: story._id }).sort({ createdAt: -1 }).limit(200);
+  const cache = new Map();
+  const comments = [];
+  for (const doc of docs) {
+    // eslint-disable-next-line no-await-in-loop
+    const payload = await presentMediaComment(req, doc, cache);
+    if (payload) comments.push(payload);
+  }
+  res.json({ comments });
+});
+
+mediaRouter.post('/stories/:id/comments', auth, mediaCommentUpload.single('image'), async (req, res) => {
+  const { id } = req.params;
+  const story = await MediaStory.findById(id);
+  if (!story) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+
+  const body = sanitizeMediaCommentBody(req.body?.body || '');
+  if (!body && !req.file) {
+    return res.status(400).json({ error: 'comment_required' });
+  }
+
+  let imageKey = '';
+  if (req.file && req.file.buffer) {
+    const mimeType = normalizeMime(req.file.mimetype || '');
+    if (!IMAGE_MIME_EXT[mimeType]) {
+      return res.status(400).json({ error: 'unsupported_type' });
+    }
+    const ext = IMAGE_MIME_EXT[mimeType] || '.jpg';
+    imageKey = `${MEDIA_STORAGE_PREFIX}/comments/${story._id}/${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+    await writeBufferToUploads({ key: imageKey, buffer: req.file.buffer, contentType: mimeType });
+  }
+
+  const comment = new MediaComment({
+    storyId: story._id,
+    userId: req.user._id,
+    body,
+    imageStorageKey: imageKey
+  });
+  await comment.save();
+
+  story.commentCount = Number(story.commentCount || 0) + 1;
+  story.updatedBy = req.user._id;
+  await story.save();
+
+  const payload = await presentMediaComment(req, comment);
+  res.status(201).json({ comment: payload });
+});
+
+mediaRouter.post('/proxy-image', auth, async (req, res) => {
+  const { url } = req.body || {};
+  try {
+    const { buffer, contentType } = await fetchRemoteImage(url);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'proxy_failed' });
+  }
+});
+
+app.use('/api/media', mediaRouter);
 
 function presentAlbumTrack(req, trackDoc, albumDoc) {
   if (!trackDoc) return null;
