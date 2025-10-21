@@ -221,8 +221,120 @@
     <div id="newsList" class="grid"></div>
   </div>
   <script>
-    async function getNews() {
-      const res = await fetch('/api/media/hiphop-news');
+    const API_FALLBACKS = [
+      'https://api.beatloop.co',
+      'https://beatloop-api.onrender.com'
+    ];
+
+    function normalizeBase(url) {
+      return typeof url === 'string' ? url.replace(/\/$/, '') : null;
+    }
+
+    function buildApiCandidates() {
+      const candidates = new Set();
+
+      const stored = (() => {
+        try { return localStorage.getItem('beatloop_api'); } catch { return null; }
+      })();
+      const meta = document.querySelector('meta[name="beatloop-api-base"]')?.content;
+      const origin = window.location.origin;
+      const host = window.location.hostname || '';
+
+      if (stored) candidates.add(normalizeBase(stored));
+      if (meta) candidates.add(normalizeBase(meta));
+
+      if (/\.beatloop\.co$/i.test(host)) {
+        candidates.add('https://api.beatloop.co');
+        candidates.add('https://beatloop-api.onrender.com');
+      }
+
+      if (!/\.beatloop\.co$/i.test(host) && origin && origin.startsWith('http')) {
+        candidates.add(normalizeBase(origin));
+      }
+
+      API_FALLBACKS.forEach(url => { if (url) candidates.add(normalizeBase(url)); });
+
+      return Array.from(candidates).filter(Boolean);
+    }
+
+    async function discoverApiBase() {
+      const candidates = buildApiCandidates();
+      let fallback = null;
+
+      for (const base of candidates) {
+        if (!fallback) fallback = base;
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+
+        try {
+          const res = await fetch(base + '/api/health', {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-store',
+            signal: controller.signal,
+          });
+
+          if (res.ok) {
+            window.API_BASE = base;
+            try { localStorage.setItem('beatloop_api', base); } catch {}
+            return base;
+          }
+
+          if (res.status === 404) {
+            const altController = new AbortController();
+            const altTimeout = setTimeout(() => altController.abort(), 4000);
+            try {
+              const altRes = await fetch(base + '/health', {
+                method: 'GET',
+                mode: 'cors',
+                cache: 'no-store',
+                signal: altController.signal,
+              });
+
+              if (altRes.ok) {
+                window.API_BASE = base;
+                try { localStorage.setItem('beatloop_api', base); } catch {}
+                return base;
+              }
+            } catch (altError) {
+              // ignore and try the next candidate
+            } finally {
+              clearTimeout(altTimeout);
+            }
+          }
+        } catch (err) {
+          // ignore and try the next candidate
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+
+      if (fallback) {
+        window.API_BASE = fallback;
+        return fallback;
+      }
+
+      return null;
+    }
+
+    function apiUrl(path) {
+      const base = window.API_BASE || '';
+      if (!base) throw new Error('API unavailable');
+      const normalizedBase = base.replace(/\/$/, '');
+      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      return normalizedBase + normalizedPath;
+    }
+
+    async function getNews(base) {
+      window.API_BASE = base || window.API_BASE;
+      const target = apiUrl('/api/media/hiphop-news');
+      const res = await fetch(target, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'include',
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error('Failed to load feed');
       return res.json();
     }
@@ -283,7 +395,7 @@
         const originalText = button.textContent;
         button.textContent = 'Working…';
         try {
-          const response = await fetch('/api/media/summarize', {
+          const response = await fetch(apiUrl('/api/media/summarize'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -291,7 +403,10 @@
               title: item.title,
               image: item.image,
               excerpt: item.excerpt
-            })
+            }),
+            credentials: 'include',
+            mode: 'cors',
+            cache: 'no-store',
           });
           const payload = await response.json();
           if (!response.ok) {
@@ -323,7 +438,9 @@
 
     (async () => {
       try {
-        const feed = await getNews();
+        const base = await discoverApiBase();
+        if (!base) throw new Error('No API base available');
+        const feed = await getNews(base);
         const list = document.getElementById('newsList');
         const status = document.getElementById('status');
         if (status) status.remove();
