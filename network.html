@@ -12476,18 +12476,30 @@ let lastBar = -1;             // arranger playhead column
     wrap.title = 'This row is driven by Piano Roll';
     wrap.addEventListener('click', ()=>openPianoRoll(row, rowLabels[row]||'Row'));
     if (pr && pr.notes){
+      let spanStart = -1;
+      const denom = cols || 1;
+      const addSpan = (start, end) => {
+        if (start < 0 || end <= start) return;
+        const d=document.createElement('div');
+        d.className='mini';
+        const left = (start/denom)*100.0;
+        const width = ((end-start)/denom)*100.0;
+        d.style.left = left + '%';
+        d.style.width = width + '%';
+        wrap.appendChild(d);
+      };
       for (let i=0;i<cols;i++){
         let on=false;
         for (let p=0;p<PITCH_ROWS;p++){ if (pr.notes[p][i]) { on=true; break; } }
         if (on){
-          const d=document.createElement('div');
-          d.className='mini';
-          const left = (i/cols)*100.0;
-          const width = (1/cols)*100.0;
-          d.style.left = left + '%';
-          d.style.width = width + '%';
-          wrap.appendChild(d);
+          if (spanStart === -1) spanStart = i;
+        } else if (spanStart !== -1){
+          addSpan(spanStart, i);
+          spanStart = -1;
         }
+      }
+      if (spanStart !== -1){
+        addSpan(spanStart, cols);
       }
     }
     container.appendChild(wrap);
