@@ -10749,6 +10749,9 @@ const AI_MELODY_SCALES = {
   let aiDensityValue = null;
   let aiStatusEl = null;
   let aiMidiContextEl = null;
+  let aiMidiSegmentSelect = null;
+  let aiMidiSegmentWrap = null;
+  let currentMidiSegmentId = 'all';
   const STUDIO_PANEL_STORAGE_KEY = 'beatloop_studio_panel_sizes_v1';
   const STUDIO_PANEL_LIMITS = (typeof window !== 'undefined' && window.STUDIO_PANEL_LIMITS && typeof window.STUDIO_PANEL_LIMITS === 'object')
     ? { ...window.STUDIO_PANEL_LIMITS }
@@ -11693,6 +11696,10 @@ const AI_MELODY_SCALES = {
       </header>
       <p id="aiMidiContext" class="text-xs text-white/50">Load a MIDI file from the left column to seed melodic ideas.</p>
       <div class="mt-4 space-y-3">
+        <div id="aiMidiSegmentWrap" class="hidden">
+          <label class="text-xs uppercase tracking-wide text-white/50">MIDI segment</label>
+          <select id="aiMidiSegmentSelect" class="mt-1 w-full rounded-lg bl-select px-2 py-2 text-sm"></select>
+        </div>
         <div>
           <label class="text-xs uppercase tracking-wide text-white/50">Target row</label>
           <select id="aiRowSelect" class="mt-1 w-full rounded-lg bl-select px-2 py-2 text-sm"></select>
@@ -11741,6 +11748,15 @@ const AI_MELODY_SCALES = {
     aiDensityValue = aiPanelEl.querySelector('#aiDensityVal');
     aiStatusEl = aiPanelEl.querySelector('#aiStatus');
     aiMidiContextEl = aiPanelEl.querySelector('#aiMidiContext');
+    aiMidiSegmentSelect = aiPanelEl.querySelector('#aiMidiSegmentSelect');
+    aiMidiSegmentWrap = aiPanelEl.querySelector('#aiMidiSegmentWrap');
+
+    if (aiMidiSegmentSelect) {
+      aiMidiSegmentSelect.addEventListener('change', () => {
+        currentMidiSegmentId = aiMidiSegmentSelect.value;
+        updateAIMidiContext();
+      });
+    }
 
     bindEqualizerUI(aiPanelEl);
 
@@ -11765,14 +11781,52 @@ const AI_MELODY_SCALES = {
     if (aiStatusEl) aiStatusEl.textContent = message;
   }
 
+  function refreshAIMidiSegments() {
+    if (!aiMidiSegmentSelect) return null;
+    const segments = Array.isArray(currentMidiProfile?.segments) ? currentMidiProfile.segments : [];
+    if (!segments.length) {
+      aiMidiSegmentSelect.innerHTML = '';
+      if (aiMidiSegmentWrap) aiMidiSegmentWrap.classList.add('hidden');
+      currentMidiSegmentId = 'all';
+      return null;
+    }
+
+    const hasSelection = segments.some(seg => seg && seg.id === currentMidiSegmentId);
+    if (!hasSelection) {
+      currentMidiSegmentId = segments[0].id;
+    }
+
+    const options = segments.map(seg => `<option value="${seg.id}">${seg.label}</option>`).join('');
+    aiMidiSegmentSelect.innerHTML = options;
+    aiMidiSegmentSelect.value = currentMidiSegmentId;
+    if (aiMidiSegmentWrap) aiMidiSegmentWrap.classList.remove('hidden');
+    return segments.find(seg => seg.id === currentMidiSegmentId) || segments[0];
+  }
+
+  function getActiveMidiSeed() {
+    if (!currentMidiProfile) return null;
+    const segments = Array.isArray(currentMidiProfile.segments) ? currentMidiProfile.segments : [];
+    if (segments.length) {
+      return segments.find(seg => seg.id === currentMidiSegmentId) || segments[0];
+    }
+    return currentMidiProfile;
+  }
+
   function updateAIMidiContext() {
+    const activeSegment = refreshAIMidiSegments();
     if (!aiMidiContextEl) return;
     if (currentMidiProfile) {
-      const noteCount = (currentMidiProfile.pattern && currentMidiProfile.pattern.length) || (currentMidiProfile.events && currentMidiProfile.events.length) || 0;
+      const noteCount = activeSegment?.noteCount
+        || (currentMidiProfile.pattern && currentMidiProfile.pattern.length)
+        || (currentMidiProfile.events && currentMidiProfile.events.length)
+        || 0;
       const folders = Array.isArray(currentMidiProfile.meta?.folders) && currentMidiProfile.meta.folders.length
         ? ` · ${currentMidiProfile.meta.folders.join(' / ')}`
         : '';
-      aiMidiContextEl.textContent = `Inspiration: ${currentMidiProfile.displayName || currentMidiProfile.meta?.name || 'MIDI'} (${noteCount} notes${folders}).`;
+      const segmentLabel = activeSegment && activeSegment.label
+        ? ` · Segment: ${activeSegment.label}`
+        : '';
+      aiMidiContextEl.textContent = `Inspiration: ${currentMidiProfile.displayName || currentMidiProfile.meta?.name || 'MIDI'} (${noteCount} notes${folders}${segmentLabel}).`;
     } else {
       aiMidiContextEl.textContent = 'Load a MIDI file from the left column to guide melodic ideas.';
     }
@@ -11933,11 +11987,12 @@ const AI_MELODY_SCALES = {
       entry.notes[p].fill(null);
     }
 
+    const midiSeed = getActiveMidiSeed();
     let seededFromMidi = false;
-    if (currentMidiProfile && Array.isArray(currentMidiProfile.pattern) && currentMidiProfile.pattern.length) {
+    if (midiSeed && Array.isArray(midiSeed.pattern) && midiSeed.pattern.length) {
       const keepChance = Math.min(1, dens + 0.25);
       const jitter = Math.max(0, Math.round(SUBDIV * 0.5));
-      currentMidiProfile.pattern.forEach(note => {
+      midiSeed.pattern.forEach(note => {
         if (!note) return;
         if (Math.random() > keepChance) return;
         const pitchJitter = Math.random() < 0.2 ? (Math.random() < 0.5 ? -1 : 1) : 0;
@@ -11964,12 +12019,14 @@ const AI_MELODY_SCALES = {
       }
     }
 
-    const scaleSource = (currentMidiProfile && Array.isArray(currentMidiProfile.scale) && currentMidiProfile.scale.length)
-      ? currentMidiProfile.scale
+    const scaleSource = (midiSeed && Array.isArray(midiSeed.scale) && midiSeed.scale.length)
+      ? midiSeed.scale
+      : (currentMidiProfile && Array.isArray(currentMidiProfile.scale) && currentMidiProfile.scale.length)
+        ? currentMidiProfile.scale
       : null;
     const scales = scaleSource ? [scaleSource] : Object.values(AI_MELODY_SCALES);
     const scale = scaleSource || (scales[Math.floor(Math.random() * scales.length)] || AI_MELODY_SCALES.minor);
-    const baseIndex = 8 + (currentMidiProfile?.shift || 0);
+    const baseIndex = 8 + ((midiSeed?.shift ?? currentMidiProfile?.shift) || 0);
 
     let step = 0;
     while (step < cols) {
@@ -12072,7 +12129,14 @@ const AI_MELODY_SCALES = {
       case 'melody':
         aiGenerateMelody(rowIdx, density);
         drawGrid(rowLabels);
-        setAIStatus('Melodic idea written into the piano roll.');
+        {
+          const seedInfo = getActiveMidiSeed();
+          if (seedInfo && seedInfo.label) {
+            setAIStatus(`Melodic idea adapted from ${seedInfo.label}.`);
+          } else {
+            setAIStatus('Melodic idea written into the piano roll.');
+          }
+        }
         break;
       case 'humanize':
         aiHumanizeRow(rowIdx, density);
@@ -13522,8 +13586,9 @@ let lastBar = -1;             // arranger playhead column
       setMidiStatus(`Loading ${item.displayName || item.file}…`);
       const profile = await loadMidiProfile(item);
       currentMidiProfile = profile;
+      currentMidiSegmentId = 'all';
       updateAIMidiContext();
-      setAIStatus(`MIDI inspiration loaded: ${profile.displayName}. Generate Melody to adapt it.`);
+      setAIStatus(`MIDI inspiration loaded: ${profile.displayName}. Choose a segment and Generate Melody to adapt it.`);
       setMidiStatus(`Loaded ${profile.displayName}. Use "Generate Melody" for an AI remix.`);
     } catch (err) {
       setMidiStatus(`Failed to load MIDI (${err.message}).`);
@@ -13573,7 +13638,8 @@ let lastBar = -1;             // arranger playhead column
     ptr = headerStart + headerLen;
     if (!division) division = 480;
 
-    const events = [];
+    const allEvents = [];
+    const trackSummaries = [];
 
     for (let t = 0; t < tracks && ptr < view.byteLength; t++) {
       const chunkId = readString(4);
@@ -13586,6 +13652,11 @@ let lastBar = -1;             // arranger playhead column
       let tick = 0;
       let runningStatus = null;
       const active = new Map();
+      const trackEvents = [];
+      const channelPrograms = new Map();
+      const channelsUsed = new Set();
+      let trackName = '';
+      let instrumentName = '';
       while (ptr < trackEnd) {
         const delta = readVar();
         tick += delta;
@@ -13601,14 +13672,27 @@ let lastBar = -1;             // arranger playhead column
 
         if (status === 0xFF) {
           if (ptr >= trackEnd) break;
-          /* meta type */ ptr++;
+          const type = view.getUint8(ptr++);
           const len = readVar();
-          ptr += len;
+          if (type === 0x03 || type === 0x04) {
+            let text = '';
+            for (let i = 0; i < len && ptr < trackEnd; i++) {
+              text += String.fromCharCode(view.getUint8(ptr++));
+            }
+            const trimmed = text.trim();
+            if (type === 0x03 && trimmed) {
+              trackName = trimmed;
+            } else if (type === 0x04 && trimmed) {
+              instrumentName = trimmed;
+            }
+          } else {
+            ptr = Math.min(trackEnd, ptr + len);
+          }
           continue;
         }
         if (status === 0xF0 || status === 0xF7) {
           const len = readVar();
-          ptr += len;
+          ptr = Math.min(trackEnd, ptr + len);
           continue;
         }
 
@@ -13622,22 +13706,43 @@ let lastBar = -1;             // arranger playhead column
           velocity = view.getUint8(ptr++);
         }
 
+        if (command === 0xC) {
+          channelPrograms.set(channel, note);
+          continue;
+        }
+
         const key = `${channel}:${note}`;
         if (command === 0x9 && velocity && velocity > 0) {
-          active.set(key, { start: tick, velocity });
+          active.set(key, { start: tick, velocity, channel });
+          channelsUsed.add(channel);
         } else if (command === 0x8 || (command === 0x9 && (!velocity || velocity === 0))) {
           const info = active.get(key);
           if (info) {
             const duration = Math.max(1, tick - info.start);
-            events.push({ pitch: note, start: info.start, duration, velocity: info.velocity || 0 });
+            const eventChannel = info.channel ?? channel;
+            const event = { pitch: note, start: info.start, duration, velocity: info.velocity || 0, channel: eventChannel, track: t };
+            trackEvents.push(event);
+            allEvents.push(event);
+            channelsUsed.add(eventChannel);
             active.delete(key);
           }
         }
       }
       ptr = trackEnd;
+
+      if (trackEvents.length) {
+        trackSummaries.push({
+          index: t,
+          name: trackName,
+          instrument: instrumentName,
+          channels: Array.from(channelsUsed).sort((a, b) => a - b),
+          programs: Array.from(channelPrograms.entries()).map(([ch, program]) => ({ channel: ch, program })),
+          events: trackEvents,
+        });
+      }
     }
 
-    if (!events.length) {
+    if (!allEvents.length) {
       return {
         meta,
         events: [],
@@ -13650,53 +13755,131 @@ let lastBar = -1;             // arranger playhead column
       };
     }
 
-    const totalTicks = events.reduce((max, ev) => Math.max(max, ev.start + ev.duration), 0) || 1;
-    const pitches = events.map(ev => ev.pitch);
-    const avgPitch = pitches.reduce((sum, val) => sum + val, 0) / pitches.length;
-    const sorted = pitches.slice().sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)] || avgPitch || 60;
-    const baseIndex = 8;
-    const targetIndex = 9;
-    const shift = Math.round(targetIndex - (baseIndex + (median - 60)));
+    const analyzeMidiEvents = (sourceEvents) => {
+      if (!Array.isArray(sourceEvents) || !sourceEvents.length) return null;
+      const totalTicks = sourceEvents.reduce((max, ev) => Math.max(max, ev.start + ev.duration), 0) || 1;
+      const pitches = sourceEvents.map(ev => ev.pitch);
+      const avgPitch = pitches.reduce((sum, val) => sum + val, 0) / pitches.length;
+      const sorted = pitches.slice().sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)] || avgPitch || 60;
+      const baseIndex = 8;
+      const targetIndex = 9;
+      const shift = Math.round(targetIndex - (baseIndex + (median - 60)));
 
-    const pitchClasses = new Array(12).fill(0);
-    pitches.forEach(p => { pitchClasses[((p % 12) + 12) % 12]++; });
-    let rootPc = 0;
-    let rootCount = 0;
-    pitchClasses.forEach((count, idx) => { if (count > rootCount) { rootCount = count; rootPc = idx; } });
+      const pitchClasses = new Array(12).fill(0);
+      pitches.forEach(p => { pitchClasses[((p % 12) + 12) % 12]++; });
+      let rootPc = 0;
+      let rootCount = 0;
+      pitchClasses.forEach((count, idx) => { if (count > rootCount) { rootCount = count; rootPc = idx; } });
 
-    let bestScale = AI_MELODY_SCALES.minor;
-    let bestScore = -Infinity;
-    Object.values(AI_MELODY_SCALES).forEach(scale => {
-      const shifted = scale.map(semi => ((semi + rootPc) % 12 + 12) % 12);
-      const coverage = shifted.reduce((acc, pc) => acc + pitchClasses[pc], 0) / (pitches.length || 1);
-      if (coverage > bestScore) {
-        bestScore = coverage;
-        bestScale = scale.map(semi => semi + (rootPc - 0));
-      }
+      let bestScale = AI_MELODY_SCALES.minor;
+      let bestScore = -Infinity;
+      Object.values(AI_MELODY_SCALES).forEach(scale => {
+        const shifted = scale.map(semi => ((semi + rootPc) % 12 + 12) % 12);
+        const coverage = shifted.reduce((acc, pc) => acc + pitchClasses[pc], 0) / (pitches.length || 1);
+        if (coverage > bestScore) {
+          bestScore = coverage;
+          bestScale = scale.map(semi => semi + (rootPc - 0));
+        }
+      });
+
+      const steps = getStepCount(currentBank);
+      const cols = steps * SUBDIV;
+      const pattern = sourceEvents.map(ev => {
+        const basePitchIndex = baseIndex + (ev.pitch - 60);
+        const pitchIndex = Math.max(0, Math.min(PITCH_ROWS - 1, basePitchIndex + shift));
+        const start = Math.max(0, Math.min(cols - 1, Math.round((ev.start / totalTicks) * (cols - 1))));
+        const length = Math.max(1, Math.min(cols - start, Math.round((ev.duration / totalTicks) * cols)));
+        const velocity = ev.velocity || 80;
+        return { pitchIndex, start, length, velocity };
+      });
+
+      return { totalTicks, pattern, scale: bestScale, shift, pitchClasses, noteCount: sourceEvents.length };
+    };
+
+    const trackSegments = trackSummaries.map((summary, idx) => {
+      const analysis = analyzeMidiEvents(summary.events);
+      if (!analysis) return null;
+      const channelLabel = summary.channels.length
+        ? `Ch ${summary.channels.map(ch => ch + 1).join(', ')}`
+        : '';
+      const nameParts = [];
+      if (summary.name) nameParts.push(summary.name);
+      if (summary.instrument && summary.instrument !== summary.name) nameParts.push(summary.instrument);
+      if (channelLabel) nameParts.push(channelLabel);
+      const label = nameParts.length ? nameParts.join(' · ') : `Track ${idx + 1}`;
+      return {
+        id: `track-${summary.index + 1}`,
+        label,
+        trackIndex: summary.index,
+        channels: summary.channels,
+        programs: summary.programs,
+        events: summary.events,
+        ...analysis,
+      };
+    }).filter(Boolean);
+
+    const channelSegments = [];
+    trackSummaries.forEach(summary => {
+      if (!summary.events.length) return;
+      if (summary.channels.length <= 1) return;
+      const eventsByChannel = new Map();
+      summary.events.forEach(ev => {
+        const ch = (ev.channel ?? 0);
+        if (!eventsByChannel.has(ch)) eventsByChannel.set(ch, []);
+        eventsByChannel.get(ch).push(ev);
+      });
+      Array.from(eventsByChannel.entries()).sort((a, b) => a[0] - b[0]).forEach(([channel, channelEvents]) => {
+        const analysis = analyzeMidiEvents(channelEvents);
+        if (!analysis) return;
+        const baseParts = [];
+        if (summary.name) baseParts.push(summary.name);
+        if (summary.instrument && summary.instrument !== summary.name) baseParts.push(summary.instrument);
+        baseParts.push(`Ch ${channel + 1}`);
+        const programMatch = summary.programs.find(p => p.channel === channel);
+        if (programMatch) baseParts.push(`Program ${programMatch.program + 1}`);
+        const label = baseParts.join(' · ');
+        channelSegments.push({
+          id: `track-${summary.index + 1}-ch-${channel + 1}`,
+          label,
+          trackIndex: summary.index,
+          channel,
+          channels: [channel],
+          programs: summary.programs.filter(p => p.channel === channel),
+          events: channelEvents,
+          ...analysis,
+        });
+      });
     });
 
-    const steps = getStepCount(currentBank);
-    const cols = steps * SUBDIV;
-    const pattern = events.map(ev => {
-      const basePitchIndex = baseIndex + (ev.pitch - 60);
-      const pitchIndex = Math.max(0, Math.min(PITCH_ROWS - 1, basePitchIndex + shift));
-      const start = Math.max(0, Math.min(cols - 1, Math.round((ev.start / totalTicks) * (cols - 1))));
-      const length = Math.max(1, Math.min(cols - start, Math.round((ev.duration / totalTicks) * cols)));
-      const velocity = ev.velocity || 80;
-      return { pitchIndex, start, length, velocity };
-    });
+    const combinedAnalysis = analyzeMidiEvents(allEvents);
+    const segments = [...trackSegments, ...channelSegments];
+    if (combinedAnalysis) {
+      const fullLabel = trackSegments.length > 1
+        ? `Full song · ${trackSegments.length} tracks`
+        : 'Full song';
+      segments.unshift({
+        id: 'all',
+        label: fullLabel,
+        trackIndex: null,
+        channels: [],
+        programs: [],
+        events: allEvents,
+        ...combinedAnalysis,
+      });
+    }
 
     return {
       meta,
-      events,
-      pattern,
-      totalTicks,
+      events: allEvents,
+      pattern: combinedAnalysis?.pattern || [],
+      totalTicks: combinedAnalysis?.totalTicks || 0,
       division,
       displayName: meta.displayName || meta.name || meta.file,
-      scale: bestScale,
-      shift,
-      pitchClasses,
+      scale: combinedAnalysis?.scale || AI_MELODY_SCALES.minor,
+      shift: combinedAnalysis?.shift || 0,
+      pitchClasses: combinedAnalysis?.pitchClasses,
+      segments,
     };
   }
 
