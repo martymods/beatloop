@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import http from 'http';
+import https from 'https';
 import { Server as SocketIOServer } from 'socket.io';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -15,6 +16,7 @@ import crypto from 'crypto';
 import { lookup as mimeLookup, extension as mimeExtension } from 'mime-types';
 import dns from 'dns/promises';
 import { Readable } from 'stream';
+import zlib from 'zlib';
 import {
   durablePublicUrlForKey,
   durableStorageEnabled,
@@ -24,6 +26,212 @@ import {
   deleteUploadKey,
   localPathForKey
 } from './storage/uploads.js';
+
+const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
+
+class PolyfillHeaders {
+  constructor(raw = {}) {
+    this.map = new Map();
+    Object.entries(raw).forEach(([key, value]) => {
+      if (!key) return;
+      const normalizedKey = String(key).toLowerCase();
+      if (Array.isArray(value)) {
+        this.map.set(normalizedKey, value.join(', '));
+      } else if (typeof value === 'string') {
+        this.map.set(normalizedKey, value);
+      }
+    });
+  }
+
+  get(name) {
+    if (typeof name !== 'string') return null;
+    return this.map.get(name.toLowerCase()) ?? null;
+  }
+
+  has(name) {
+    if (typeof name !== 'string') return false;
+    return this.map.has(name.toLowerCase());
+  }
+}
+
+class PolyfillResponse {
+  constructor(bodyBuffer, statusCode, headers, url) {
+    this.url = url;
+    this.status = statusCode;
+    this.statusText = http.STATUS_CODES?.[statusCode] || '';
+    this.ok = statusCode >= 200 && statusCode < 300;
+    this.headers = new PolyfillHeaders(headers);
+    this._buffer = bodyBuffer;
+  }
+
+  async arrayBuffer() {
+    const view = this._buffer;
+    return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+  }
+
+  async text() {
+    return this._buffer.toString('utf8');
+  }
+
+  async json() {
+    const raw = await this.text();
+    return JSON.parse(raw);
+  }
+}
+
+function decodeBody(buffer, encoding) {
+  if (!encoding) return buffer;
+  const normalized = String(encoding).toLowerCase();
+  try {
+    if (normalized === 'gzip' || normalized === 'x-gzip') {
+      return zlib.gunzipSync(buffer);
+    }
+    if (normalized === 'deflate') {
+      return zlib.inflateSync(buffer);
+    }
+    if (normalized === 'br') {
+      return zlib.brotliDecompressSync(buffer);
+    }
+  } catch (error) {
+    console.warn('Failed to decode response body', error);
+  }
+  return buffer;
+}
+
+function normalizeHeaders(initHeaders = {}) {
+  const result = {};
+  if (Array.isArray(initHeaders)) {
+    initHeaders.forEach(([key, value]) => {
+      if (!key) return;
+      result[key] = value;
+    });
+    return result;
+  }
+  if (initHeaders instanceof Map) {
+    initHeaders.forEach((value, key) => {
+      if (!key) return;
+      result[key] = value;
+    });
+    return result;
+  }
+  if (initHeaders && typeof initHeaders.forEach === 'function') {
+    initHeaders.forEach((value, key) => {
+      if (!key) return;
+      result[key] = value;
+    });
+    return result;
+  }
+  if (typeof initHeaders === 'object' && initHeaders) {
+    return { ...initHeaders };
+  }
+  return result;
+}
+
+function createAbortError() {
+  const error = new Error('The operation was aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function createPolyfillFetch(maxRedirects = 4) {
+  const performRequest = async (input, init = {}, redirectCount = 0) => {
+    const url = input instanceof URL ? input : new URL(String(input));
+    const method = typeof init.method === 'string' ? init.method.toUpperCase() : 'GET';
+    const headers = normalizeHeaders(init.headers);
+    const body = init.body;
+    const transport = url.protocol === 'https:' ? https : http;
+
+    const options = {
+      method,
+      headers,
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: `${url.pathname || ''}${url.search || ''}` || '/',
+    };
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const request = transport.request(options, (response) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', async () => {
+          if (settled) return;
+          settled = true;
+          const statusCode = response.statusCode || 0;
+          const location = response.headers?.location;
+          if (
+            location &&
+            REDIRECT_STATUS_CODES.has(statusCode) &&
+            redirectCount < maxRedirects
+          ) {
+            const nextUrl = new URL(location, url);
+            const nextInit = { ...init };
+            if (statusCode === 303 || (statusCode === 301 && method === 'POST')) {
+              nextInit.method = 'GET';
+              delete nextInit.body;
+            }
+            resolve(performRequest(nextUrl, nextInit, redirectCount + 1));
+            return;
+          }
+          const buffer = Buffer.concat(chunks);
+          const decoded = decodeBody(buffer, response.headers?.['content-encoding']);
+          resolve(
+            new PolyfillResponse(
+              decoded,
+              statusCode,
+              response.headers || {},
+              url.href
+            )
+          );
+        });
+      });
+
+      request.on('error', (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      });
+
+      if (init.signal) {
+        const { signal } = init;
+        const abortHandler = () => {
+          if (settled) return;
+          settled = true;
+          request.destroy(createAbortError());
+          reject(createAbortError());
+        };
+        if (signal.aborted) {
+          abortHandler();
+          return;
+        }
+        signal.addEventListener('abort', abortHandler, { once: true });
+        request.on('close', () => signal.removeEventListener('abort', abortHandler));
+      }
+
+      if (body instanceof Uint8Array || body instanceof ArrayBuffer) {
+        request.end(Buffer.from(body));
+      } else if (typeof body === 'string') {
+        request.end(body);
+      } else if (body) {
+        if (typeof body.pipe === 'function') {
+          body.pipe(request);
+          return;
+        }
+        request.end(String(body));
+      } else {
+        request.end();
+      }
+    });
+  };
+
+  return (input, init) => performRequest(input, init);
+}
+
+const fetch = globalThis.fetch || createPolyfillFetch();
+
+if (!globalThis.fetch) {
+  globalThis.fetch = fetch;
+}
 
 /* ============================ ENV ============================ */
 const {
