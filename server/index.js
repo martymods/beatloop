@@ -33,7 +33,12 @@ const {
   PUBLIC_BASE_URL = `http://localhost:${PORT}`,
   FRONTEND_ORIGINS = 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,https://beatloop.co,http://localhost:8080',
   API_FALLBACK_BASE_URLS = 'https://beatloop-api.onrender.com',
-  RENDER_EXTERNAL_URL
+  RENDER_EXTERNAL_URL,
+  SOUNDCLOUD_CLIENT_ID = '',
+  SOUNDCLOUD_CLIENT_SECRET = '',
+  SOUNDCLOUD_REDIRECT_URI = '',
+  SOUNDCLOUD_SUCCESS_REDIRECT = '',
+  SOUNDCLOUD_FAILURE_REDIRECT = ''
 } = process.env;
 
 const RENDER_ENV_MARKERS = [
@@ -201,6 +206,13 @@ const TrackSchema = new mongoose.Schema({
   coverUrl: { type: String, default: '' },
   audioDurationSec: { type: Number, default: 0 },
   caption: { type: String, default: '' },
+  source: { type: String, enum: ['upload', 'soundcloud'], default: 'upload', index: true },
+  sourceId: { type: String, default: null, index: true },
+  sourcePermalinkUrl: { type: String, default: '' },
+  sourceData: { type: Object, default: {} },
+  streamUrl: { type: String, default: '' },
+  streamProtocol: { type: String, default: '' },
+  streamMimeType: { type: String, default: '' },
   albumId: { type: mongoose.Schema.Types.ObjectId, ref: 'Album', default: null, index: true },
   albumTrackOrder: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
@@ -212,6 +224,8 @@ TrackSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   next();
 });
+
+TrackSchema.index({ userId: 1, source: 1, sourceId: 1 }, { unique: true, sparse: true });
 
 const TrackStatsSchema = new mongoose.Schema({
   trackId: { type: mongoose.Schema.Types.ObjectId, ref: 'Track', unique: true, index: true },
@@ -338,6 +352,10 @@ const AlbumSchema = new mongoose.Schema({
   caption: { type: String, default: '' },
   coverUrl: { type: String, default: '' },
   coverStorageKey: { type: String, default: '' },
+  source: { type: String, default: '' },
+  sourceId: { type: String, default: null, index: true },
+  sourcePermalinkUrl: { type: String, default: '' },
+  sourceData: { type: Object, default: {} },
   trackIds: { type: [AlbumTrackRefSchema], default: [] },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
@@ -348,7 +366,32 @@ AlbumSchema.pre('save', function(next) {
   next();
 });
 
+AlbumSchema.index({ userId: 1, source: 1, sourceId: 1 }, { unique: true, sparse: true });
+
 const Album = mongoose.model('Album', AlbumSchema);
+
+const SoundCloudAccountSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true, index: true },
+  soundcloudUserId: { type: Number, index: true },
+  username: { type: String, default: '' },
+  permalinkUrl: { type: String, default: '' },
+  avatarUrl: { type: String, default: '' },
+  avatarStorageKey: { type: String, default: '' },
+  accessToken: { type: String, required: true },
+  refreshToken: { type: String, default: '' },
+  scope: { type: [String], default: [] },
+  expiresAt: { type: Date, default: null },
+  lastSyncAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+SoundCloudAccountSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+const SoundCloudAccount = mongoose.model('SoundCloudAccount', SoundCloudAccountSchema);
 
 /* ============================ APP ============================ */
 const app = express();
@@ -869,7 +912,12 @@ function presentAlbumTrack(req, trackDoc, albumDoc) {
     order,
     url: presentStoredUploadUrl(req, trackDoc.audioUrl, trackDoc.audioUrl),
     duration: trackDoc.audioDurationSec || null,
-    albumId: albumDoc?._id || null
+    albumId: albumDoc?._id || null,
+    source: trackDoc.source || 'upload',
+    sourceId: trackDoc.sourceId || '',
+    sourcePermalinkUrl: trackDoc.sourcePermalinkUrl || '',
+    streamUrl: trackDoc.streamUrl || presentStoredUploadUrl(req, trackDoc.audioUrl, trackDoc.audioUrl),
+    streamProtocol: trackDoc.streamProtocol || ''
   };
 }
 
@@ -902,6 +950,9 @@ function presentAlbum(req, albumDoc, { ownerSummary = null, trackDocs = [] } = {
     caption: albumDoc.caption || '',
     cover,
     coverStorageKey: albumDoc.coverStorageKey || '',
+    source: albumDoc.source || '',
+    sourceId: albumDoc.sourceId || '',
+    sourcePermalinkUrl: albumDoc.sourcePermalinkUrl || '',
     createdAt: albumDoc.createdAt,
     updatedAt: albumDoc.updatedAt,
     userId: albumDoc.userId,
@@ -909,6 +960,36 @@ function presentAlbum(req, albumDoc, { ownerSummary = null, trackDocs = [] } = {
     user: ownerSummary,
     tracks,
     db: true
+  };
+}
+
+function presentTrack(req, trackDoc, ownerSummary = null) {
+  if (!trackDoc) return null;
+  const audioUrl = presentStoredUploadUrl(req, trackDoc.audioUrl, trackDoc.audioUrl);
+  if (!audioUrl) return null;
+  const cover = presentStoredUploadUrl(req, trackDoc.coverUrl, trackDoc.coverUrl) || '';
+  return {
+    id: trackDoc._id,
+    title: trackDoc.title || 'Untitled',
+    caption: trackDoc.caption || '',
+    audioUrl,
+    coverUrl: cover,
+    duration: Number.isFinite(trackDoc.audioDurationSec) ? trackDoc.audioDurationSec : null,
+    artist: trackDoc.artist || '',
+    bpm: Number.isFinite(trackDoc.bpm) ? trackDoc.bpm : 0,
+    createdAt: trackDoc.createdAt,
+    updatedAt: trackDoc.updatedAt,
+    userId: trackDoc.userId,
+    ownerId: idToString(trackDoc.userId),
+    albumId: trackDoc.albumId || null,
+    albumTrackOrder: Number.isFinite(trackDoc.albumTrackOrder) ? trackDoc.albumTrackOrder : null,
+    source: trackDoc.source || 'upload',
+    sourceId: trackDoc.sourceId || '',
+    sourcePermalinkUrl: trackDoc.sourcePermalinkUrl || '',
+    streamUrl: trackDoc.streamUrl || audioUrl,
+    streamProtocol: trackDoc.streamProtocol || '',
+    streamMimeType: trackDoc.streamMimeType || '',
+    user: ownerSummary
   };
 }
 
@@ -945,6 +1026,510 @@ function resolveUserDisplayName(user) {
   const email = typeof user.email === 'string' ? user.email.trim() : '';
   if (email) return email;
   return '';
+}
+
+const SOUNDCLOUD_AUTHORIZE_URL = 'https://secure.soundcloud.com/authorize';
+const SOUNDCLOUD_TOKEN_URL = 'https://api.soundcloud.com/oauth2/token';
+const SOUNDCLOUD_API_BASE = 'https://api.soundcloud.com';
+const SOUNDCLOUD_STATE_TTL_MS = 10 * 60 * 1000;
+const SOUNDCLOUD_TOKEN_EXPIRY_BUFFER_MS = 60 * 1000;
+
+const soundCloudAuthStates = new Map();
+
+function soundCloudConfigured() {
+  return Boolean(SOUNDCLOUD_CLIENT_ID && SOUNDCLOUD_CLIENT_SECRET && SOUNDCLOUD_REDIRECT_URI);
+}
+
+function pruneSoundCloudAuthStates() {
+  const now = Date.now();
+  for (const [state, entry] of soundCloudAuthStates.entries()) {
+    if (!entry || now - (entry.createdAt || 0) > SOUNDCLOUD_STATE_TTL_MS) {
+      soundCloudAuthStates.delete(state);
+    }
+  }
+}
+
+if (typeof setInterval === 'function') {
+  const timer = setInterval(pruneSoundCloudAuthStates, SOUNDCLOUD_STATE_TTL_MS);
+  if (typeof timer?.unref === 'function') timer.unref();
+}
+
+function normalizeSoundCloudRedirect(value) {
+  if (!value || typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed, PUBLIC_BASE_URL);
+    if (!/^https?:$/.test(parsed.protocol)) return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
+function appendQueryParam(urlString, key, value) {
+  if (!urlString) return '';
+  try {
+    const parsed = new URL(urlString);
+    parsed.searchParams.set(key, value);
+    return parsed.toString();
+  } catch {
+    try {
+      const parsed = new URL(urlString, PUBLIC_BASE_URL);
+      parsed.searchParams.set(key, value);
+      return parsed.toString();
+    } catch {
+      if (urlString.includes('?')) {
+        return `${urlString}&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+      }
+      return `${urlString}?${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+    }
+  }
+}
+
+function registerSoundCloudState(state, { userId, redirectUrl = '' } = {}) {
+  if (!state || !userId) return;
+  soundCloudAuthStates.set(state, {
+    userId: userId.toString(),
+    redirectUrl: normalizeSoundCloudRedirect(redirectUrl),
+    createdAt: Date.now()
+  });
+}
+
+function consumeSoundCloudState(state) {
+  if (!state) return null;
+  const entry = soundCloudAuthStates.get(state);
+  soundCloudAuthStates.delete(state);
+  if (!entry) return null;
+  if (!entry.userId) return null;
+  const age = Date.now() - (entry.createdAt || 0);
+  if (age > SOUNDCLOUD_STATE_TTL_MS) return null;
+  return entry;
+}
+
+function parseSoundCloudScope(scopeValue) {
+  if (!scopeValue) return [];
+  if (Array.isArray(scopeValue)) return scopeValue.filter(Boolean).map(String);
+  if (typeof scopeValue === 'string') {
+    return scopeValue
+      .split(/[\s,]+/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function computeSoundCloudExpiry(expiresInSeconds) {
+  if (!Number.isFinite(expiresInSeconds)) return null;
+  const ms = Number(expiresInSeconds) * 1000;
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  return new Date(Date.now() + ms);
+}
+
+async function requestSoundCloudToken(params) {
+  const form = new URLSearchParams({
+    client_id: SOUNDCLOUD_CLIENT_ID,
+    client_secret: SOUNDCLOUD_CLIENT_SECRET,
+    ...params
+  });
+
+  const response = await fetch(SOUNDCLOUD_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form.toString()
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`SoundCloud token request failed (${response.status}): ${text || response.statusText}`);
+  }
+
+  return response.json();
+}
+
+async function exchangeSoundCloudCode(code) {
+  return requestSoundCloudToken({
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: SOUNDCLOUD_REDIRECT_URI
+  });
+}
+
+async function refreshSoundCloudTokens(refreshToken) {
+  return requestSoundCloudToken({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken
+  });
+}
+
+async function ensureFreshSoundCloudAccess(account, { forceRefresh = false } = {}) {
+  if (!account) {
+    throw new Error('SoundCloud account missing');
+  }
+
+  const expiresAt = account.expiresAt ? new Date(account.expiresAt).getTime() : 0;
+  const now = Date.now();
+  if (!forceRefresh && account.accessToken) {
+    if (!expiresAt || expiresAt - SOUNDCLOUD_TOKEN_EXPIRY_BUFFER_MS > now) {
+      return account.accessToken;
+    }
+  }
+
+  if (!account.refreshToken) {
+    if (account.accessToken && !forceRefresh) {
+      return account.accessToken;
+    }
+    throw new Error('SoundCloud session expired');
+  }
+
+  const refreshed = await refreshSoundCloudTokens(account.refreshToken);
+  account.accessToken = refreshed.access_token || account.accessToken;
+  if (refreshed.refresh_token) {
+    account.refreshToken = refreshed.refresh_token;
+  }
+  account.scope = parseSoundCloudScope(refreshed.scope);
+  account.expiresAt = computeSoundCloudExpiry(refreshed.expires_in);
+  await account.save();
+  return account.accessToken;
+}
+
+async function soundCloudFetch(account, path, { method = 'GET', query = null, headers = {}, body = null } = {}, attempt = 0) {
+  if (!account) throw new Error('SoundCloud account missing');
+
+  const accessToken = await ensureFreshSoundCloudAccess(account, { forceRefresh: attempt > 1 });
+  const hasAbsolute = typeof path === 'string' && /^https?:\/\//i.test(path);
+  const url = new URL(hasAbsolute ? path : `${SOUNDCLOUD_API_BASE}${path}`);
+  if (query && typeof query === 'object') {
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null) continue;
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  const requestHeaders = new Headers({ Authorization: `OAuth ${accessToken}` });
+  if (headers && typeof headers === 'object') {
+    for (const [key, value] of Object.entries(headers)) {
+      if (value === undefined || value === null) continue;
+      requestHeaders.set(key, value);
+    }
+  }
+
+  let bodyPayload = undefined;
+  if (body !== null && body !== undefined) {
+    if (typeof body === 'string' || body instanceof URLSearchParams) {
+      bodyPayload = body;
+    } else {
+      bodyPayload = JSON.stringify(body);
+      if (!requestHeaders.has('Content-Type')) {
+        requestHeaders.set('Content-Type', 'application/json');
+      }
+    }
+  }
+
+  const response = await fetch(url, {
+    method,
+    headers: requestHeaders,
+    body: bodyPayload
+  });
+
+  if (response.status === 401 && attempt < 2) {
+    if (account.refreshToken) {
+      await ensureFreshSoundCloudAccess(account, { forceRefresh: true });
+      return soundCloudFetch(account, path, { method, query, headers, body }, attempt + 1);
+    }
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`SoundCloud API ${response.status}: ${text || response.statusText}`);
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+  return response.text();
+}
+
+function normalizeSoundCloudArtworkUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  let normalized = url.trim();
+  if (!normalized) return '';
+  normalized = normalized.replace('http://', 'https://');
+  if (normalized.includes('-large.')) {
+    normalized = normalized.replace('-large.', '-t500x500.');
+  }
+  return normalized;
+}
+
+async function persistSoundCloudArtwork(url, { prefix = 'covers/soundcloud' } = {}) {
+  const normalized = normalizeSoundCloudArtworkUrl(url);
+  if (!normalized) return null;
+  try {
+    const response = await fetch(normalized);
+    if (!response.ok) {
+      return null;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const mimeExt = mimeExtension(contentType) || ''; // returns without dot
+    let extension = mimeExt ? (mimeExt.startsWith('.') ? mimeExt : `.${mimeExt}`) : '';
+    if (!extension) {
+      try {
+        const parsed = new URL(normalized);
+        extension = path.extname(parsed.pathname) || '.jpg';
+      } catch {
+        extension = '.jpg';
+      }
+    }
+    const key = `${prefix}/${crypto.randomUUID().replace(/-/g, '')}${extension}`;
+    await writeBufferToUploads({ key, buffer, contentType });
+    return { key, size: buffer.length, contentType };
+  } catch (error) {
+    console.warn('Failed to persist SoundCloud artwork', error);
+    return null;
+  }
+}
+
+function sanitizeSoundCloudCaption(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.slice(0, 500);
+}
+
+function soundCloudDurationMsToSeconds(ms) {
+  if (!Number.isFinite(ms)) return null;
+  const seconds = Number(ms) / 1000;
+  if (!Number.isFinite(seconds)) return null;
+  return Math.round(seconds * 1000) / 1000;
+}
+
+async function resolveSoundCloudStream(account, track) {
+  if (!track) return null;
+  const transcodings = track?.media?.transcodings;
+  if (!Array.isArray(transcodings) || !transcodings.length) return null;
+  const preferred = transcodings.find((entry) => entry?.format?.protocol === 'hls') || transcodings[0];
+  if (!preferred?.url) return null;
+  const resolved = await soundCloudFetch(account, preferred.url);
+  const streamUrl = typeof resolved === 'object' ? resolved?.url : null;
+  if (!streamUrl) return null;
+  return {
+    url: streamUrl,
+    protocol: preferred?.format?.protocol || '',
+    mimeType: preferred?.format?.mime_type || '',
+    preset: preferred?.preset || ''
+  };
+}
+
+function resolveSoundCloudTrackArtist(track) {
+  if (!track) return '';
+  const metadataArtist = track?.publisher_metadata?.artist;
+  if (metadataArtist) return metadataArtist;
+  const userArtist = track?.user?.username || track?.user?.full_name;
+  if (userArtist) return userArtist;
+  return '';
+}
+
+function mapSoundCloudTrackCatalog(track, existingDoc) {
+  if (!track) return null;
+  const duration = soundCloudDurationMsToSeconds(track.duration);
+  return {
+    id: track.id,
+    title: track.title,
+    permalinkUrl: track.permalink_url || '',
+    artworkUrl: normalizeSoundCloudArtworkUrl(track.artwork_url || track.user?.avatar_url || ''),
+    bpm: Number.isFinite(track.bpm) ? Number(track.bpm) : null,
+    duration: duration || null,
+    description: sanitizeSoundCloudCaption(track.description || ''),
+    createdAt: track.created_at || null,
+    importedTrackId: existingDoc ? existingDoc._id : null,
+    updatedAt: track.last_modified || track.display_date || null
+  };
+}
+
+function mapSoundCloudPlaylistCatalog(playlist, existingDoc) {
+  if (!playlist) return null;
+  return {
+    id: playlist.id,
+    title: playlist.title || playlist.name,
+    type: playlist.playlist_type || '',
+    trackCount: playlist.track_count || (Array.isArray(playlist.tracks) ? playlist.tracks.length : 0),
+    permalinkUrl: playlist.permalink_url || '',
+    artworkUrl: normalizeSoundCloudArtworkUrl(playlist.artwork_url || playlist.user?.avatar_url || ''),
+    description: sanitizeSoundCloudCaption(playlist.description || ''),
+    importedAlbumId: existingDoc ? existingDoc._id : null
+  };
+}
+
+async function importSoundCloudTrack({ account, userDoc, trackId, trackData = null }) {
+  const scTrack = trackData && trackData.id ? trackData : await soundCloudFetch(account, `/tracks/${trackId}`);
+  if (!scTrack || !scTrack.id) {
+    throw new Error('SoundCloud track not found');
+  }
+
+  const stream = await resolveSoundCloudStream(account, scTrack);
+  if (!stream?.url) {
+    throw new Error('SoundCloud track does not have a playable stream');
+  }
+
+  let artworkKey = null;
+  const artworkCandidate = scTrack.artwork_url || scTrack.user?.avatar_url || '';
+  if (artworkCandidate) {
+    const stored = await persistSoundCloudArtwork(artworkCandidate, { prefix: 'covers/soundcloud' });
+    artworkKey = stored?.key || null;
+  }
+
+  const caption = sanitizeSoundCloudCaption(scTrack.description || '');
+  const bpm = Number.isFinite(scTrack.bpm) ? Math.max(0, Math.min(Number(scTrack.bpm), 999)) : 0;
+  const durationSec = soundCloudDurationMsToSeconds(scTrack.duration) || 0;
+  const artist = resolveSoundCloudTrackArtist(scTrack) || resolveArtistFromUser(userDoc) || userDoc.email;
+
+  const query = {
+    userId: userDoc._id,
+    source: 'soundcloud',
+    sourceId: String(scTrack.id)
+  };
+
+  const existingDoc = await Track.findOne(query);
+  const update = {
+    $set: {
+      title: scTrack.title || 'Untitled',
+      artist,
+      bpm,
+      audioUrl: stream.url,
+      audioDurationSec: durationSec,
+      caption,
+      source: 'soundcloud',
+      sourceId: String(scTrack.id),
+      sourcePermalinkUrl: scTrack.permalink_url || '',
+      sourceData: {
+        track: {
+          id: scTrack.id,
+          permalink_url: scTrack.permalink_url || '',
+          uri: scTrack.uri || '',
+          waveform_url: scTrack.waveform_url || ''
+        }
+      },
+      streamUrl: stream.url,
+      streamProtocol: stream.protocol || '',
+      streamMimeType: stream.mimeType || '',
+      bumpedAt: new Date()
+    },
+    $setOnInsert: {
+      userId: userDoc._id,
+      createdAt: new Date()
+    }
+  };
+
+  if (artworkKey) {
+    update.$set.coverUrl = artworkKey;
+  }
+
+  const updatedDoc = await Track.findOneAndUpdate(query, update, {
+    upsert: true,
+    new: true,
+    setDefaultsOnInsert: true
+  });
+
+  if (artworkKey && existingDoc?.coverUrl && existingDoc.coverUrl !== artworkKey) {
+    await deleteUploadKey(existingDoc.coverUrl).catch(() => {});
+  }
+
+  return { trackDoc: updatedDoc, scTrack, stream };
+}
+
+async function importSoundCloudPlaylist({ account, userDoc, playlistId }) {
+  const playlist = await soundCloudFetch(account, `/playlists/${playlistId}`);
+  if (!playlist || !playlist.id) {
+    throw new Error('SoundCloud playlist not found');
+  }
+
+  const playlistTracks = Array.isArray(playlist.tracks) ? playlist.tracks : [];
+  const importedTracks = [];
+  for (let index = 0; index < playlistTracks.length; index += 1) {
+    const entry = playlistTracks[index];
+    const scTrackId = entry?.id || entry;
+    if (!scTrackId) continue;
+    try {
+      const { trackDoc } = await importSoundCloudTrack({ account, userDoc, trackId: scTrackId, trackData: entry });
+      if (trackDoc) {
+        trackDoc.albumId = null;
+        trackDoc.albumTrackOrder = index;
+        importedTracks.push(trackDoc);
+      }
+    } catch (err) {
+      console.warn('SoundCloud track import failed within playlist', scTrackId, err);
+    }
+  }
+
+  const trackRefs = importedTracks.map((doc, idx) => ({ trackId: doc._id, order: idx }));
+
+  let coverStorageKey = null;
+  const artworkCandidate = playlist.artwork_url || playlist.user?.avatar_url || '';
+  if (artworkCandidate) {
+    const stored = await persistSoundCloudArtwork(artworkCandidate, { prefix: 'covers/soundcloud-albums' });
+    coverStorageKey = stored?.key || null;
+  } else if (importedTracks[0]?.coverUrl) {
+    coverStorageKey = importedTracks[0].coverUrl;
+  }
+
+  const caption = sanitizeSoundCloudCaption(playlist.description || '');
+
+  const query = {
+    userId: userDoc._id,
+    source: 'soundcloud',
+    sourceId: String(playlist.id)
+  };
+
+  const existingAlbum = await Album.findOne(query);
+
+  const update = {
+    $set: {
+      title: playlist.title || playlist.name || 'Untitled Album',
+      caption,
+      trackIds: trackRefs,
+      source: 'soundcloud',
+      sourceId: String(playlist.id),
+      sourcePermalinkUrl: playlist.permalink_url || '',
+      sourceData: {
+        playlist_type: playlist.playlist_type || '',
+        track_count: playlist.track_count || trackRefs.length
+      }
+    },
+    $setOnInsert: {
+      userId: userDoc._id,
+      createdAt: new Date()
+    }
+  };
+
+  if (coverStorageKey) {
+    update.$set.coverStorageKey = coverStorageKey;
+    update.$set.coverUrl = coverStorageKey;
+  }
+
+  const albumDoc = await Album.findOneAndUpdate(query, update, {
+    upsert: true,
+    new: true,
+    setDefaultsOnInsert: true
+  });
+
+  if (coverStorageKey && existingAlbum?.coverStorageKey && existingAlbum.coverStorageKey !== coverStorageKey) {
+    await deleteUploadKey(existingAlbum.coverStorageKey).catch(() => {});
+  }
+
+  if (albumDoc?._id && trackRefs.length) {
+    await Promise.all(trackRefs.map((ref) => {
+      if (!ref?.trackId) return Promise.resolve();
+      return Track.updateOne({ _id: ref.trackId }, {
+        albumId: albumDoc._id,
+        albumTrackOrder: ref.order
+      });
+    }));
+  }
+
+  return { albumDoc, importedTracks };
 }
 
 function presentStudioSound(req, doc, ownerSummary = null) {
@@ -1467,6 +2052,348 @@ app.get('/api/auth/me', auth, async (req, res) => {
   res.json({ user: await userSummary(req, req.user) });
 });
 
+/* ============================ SoundCloud integration ============================ */
+app.get('/api/integrations/soundcloud/session', auth, async (req, res) => {
+  try {
+    if (!soundCloudConfigured()) {
+      return res.json({ available: false, connected: false });
+    }
+
+    const account = await SoundCloudAccount.findOne({ userId: req.user._id });
+    if (!account) {
+      return res.json({
+        available: true,
+        connected: false,
+        account: null
+      });
+    }
+
+    const avatarUrl = account.avatarStorageKey
+      ? publicUploadUrl(req, account.avatarStorageKey)
+      : account.avatarUrl || '';
+
+    res.json({
+      available: true,
+      connected: true,
+      account: {
+        username: account.username || '',
+        permalinkUrl: account.permalinkUrl || '',
+        avatar: avatarUrl,
+        scope: account.scope || [],
+        expiresAt: account.expiresAt,
+        lastSyncAt: account.lastSyncAt,
+        soundcloudUserId: account.soundcloudUserId || null
+      }
+    });
+  } catch (err) {
+    console.error('SoundCloud session lookup failed', err);
+    res.status(500).json({ error: 'soundcloud session lookup failed' });
+  }
+});
+
+app.get('/api/integrations/soundcloud/authorize', auth, (req, res) => {
+  if (!soundCloudConfigured() || !SOUNDCLOUD_REDIRECT_URI) {
+    return res.status(503).json({ error: 'soundcloud integration unavailable' });
+  }
+
+  const redirectParam = typeof req.query?.redirect === 'string' ? req.query.redirect : '';
+  const state = crypto.randomBytes(24).toString('hex');
+  registerSoundCloudState(state, { userId: req.user._id, redirectUrl: redirectParam });
+
+  const authorizeUrl = new URL(SOUNDCLOUD_AUTHORIZE_URL);
+  authorizeUrl.searchParams.set('client_id', SOUNDCLOUD_CLIENT_ID);
+  authorizeUrl.searchParams.set('response_type', 'code');
+  authorizeUrl.searchParams.set('redirect_uri', SOUNDCLOUD_REDIRECT_URI);
+  authorizeUrl.searchParams.set('scope', '*');
+  authorizeUrl.searchParams.set('state', state);
+
+  res.json({ url: authorizeUrl.toString(), state });
+});
+
+app.get('/api/integrations/soundcloud/callback', async (req, res) => {
+  if (!soundCloudConfigured()) {
+    return res.status(503).send('SoundCloud integration disabled');
+  }
+
+  const { code, state, error: errorParam } = req.query || {};
+
+  if (errorParam) {
+    const stateEntry = state ? consumeSoundCloudState(state) : null;
+    const failureBase = stateEntry?.redirectUrl || normalizeSoundCloudRedirect(SOUNDCLOUD_FAILURE_REDIRECT) || '';
+    if (failureBase) {
+      return res.redirect(appendQueryParam(failureBase, 'error', String(errorParam)));
+    }
+    return res.status(400).send(`SoundCloud authorization failed: ${errorParam}`);
+  }
+
+  if (!code || !state) {
+    return res.status(400).send('Missing authorization code or state');
+  }
+
+  const stateEntry = consumeSoundCloudState(state);
+  if (!stateEntry) {
+    return res.status(400).send('SoundCloud authorization state expired');
+  }
+
+  let userDoc = null;
+  try {
+    userDoc = await User.findById(stateEntry.userId);
+  } catch (lookupError) {
+    console.error('SoundCloud callback user lookup failed', lookupError);
+  }
+
+  if (!userDoc) {
+    const failureBase = stateEntry.redirectUrl || normalizeSoundCloudRedirect(SOUNDCLOUD_FAILURE_REDIRECT) || '';
+    if (failureBase) {
+      return res.redirect(appendQueryParam(failureBase, 'error', 'user_missing'));
+    }
+    return res.status(400).send('User session expired');
+  }
+
+  try {
+    const tokenResponse = await exchangeSoundCloudCode(code);
+    if (!tokenResponse?.access_token) {
+      throw new Error('SoundCloud did not return an access token');
+    }
+
+    let account = await SoundCloudAccount.findOne({ userId: userDoc._id });
+    if (!account) {
+      account = new SoundCloudAccount({ userId: userDoc._id });
+    }
+
+    account.accessToken = tokenResponse.access_token;
+    if (tokenResponse.refresh_token) {
+      account.refreshToken = tokenResponse.refresh_token;
+    }
+    account.scope = parseSoundCloudScope(tokenResponse.scope);
+    account.expiresAt = computeSoundCloudExpiry(tokenResponse.expires_in);
+    account.lastSyncAt = new Date();
+    await account.save();
+
+    let profile = null;
+    try {
+      profile = await soundCloudFetch(account, '/me');
+    } catch (profileError) {
+      console.warn('SoundCloud profile fetch failed', profileError);
+    }
+
+    if (profile) {
+      account.soundcloudUserId = profile.id || account.soundcloudUserId || null;
+      account.username = profile.username || profile.permalink || account.username || '';
+      account.permalinkUrl = profile.permalink_url || account.permalinkUrl || '';
+      if (profile.avatar_url) {
+        account.avatarUrl = profile.avatar_url;
+      }
+      await account.save();
+    }
+
+    const successBase = stateEntry.redirectUrl || normalizeSoundCloudRedirect(SOUNDCLOUD_SUCCESS_REDIRECT) || '';
+    if (successBase) {
+      return res.redirect(appendQueryParam(successBase, 'connected', '1'));
+    }
+
+    res.send('SoundCloud connected. You can close this window.');
+  } catch (callbackError) {
+    console.error('SoundCloud callback failed', callbackError);
+    const failureBase = stateEntry.redirectUrl || normalizeSoundCloudRedirect(SOUNDCLOUD_FAILURE_REDIRECT) || '';
+    if (failureBase) {
+      return res.redirect(appendQueryParam(failureBase, 'error', 'soundcloud_callback'));
+    }
+    res.status(500).send('SoundCloud authorization failed');
+  }
+});
+
+app.post('/api/integrations/soundcloud/disconnect', auth, async (req, res) => {
+  if (!soundCloudConfigured()) {
+    return res.json({ ok: true });
+  }
+
+  try {
+    const account = await SoundCloudAccount.findOne({ userId: req.user._id });
+    if (!account) {
+      return res.json({ ok: true });
+    }
+
+    const avatarKey = account.avatarStorageKey || '';
+    await SoundCloudAccount.deleteOne({ _id: account._id });
+    if (avatarKey) {
+      await deleteUploadKey(avatarKey).catch(() => {});
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('SoundCloud disconnect failed', err);
+    res.status(500).json({ error: 'failed to disconnect soundcloud' });
+  }
+});
+
+app.get('/api/integrations/soundcloud/catalog', auth, async (req, res) => {
+  if (!soundCloudConfigured()) {
+    return res.status(503).json({ error: 'soundcloud integration unavailable' });
+  }
+
+  try {
+    const account = await SoundCloudAccount.findOne({ userId: req.user._id });
+    if (!account) {
+      return res.status(404).json({ error: 'soundcloud account not connected' });
+    }
+
+    const profile = await soundCloudFetch(account, '/me');
+    const tracksResponse = await soundCloudFetch(account, '/me/tracks', { query: { limit: 200 } });
+    const playlistsResponse = await soundCloudFetch(account, '/me/playlists', { query: { limit: 200 } });
+
+    const trackCollection = Array.isArray(tracksResponse?.collection)
+      ? tracksResponse.collection
+      : Array.isArray(tracksResponse)
+        ? tracksResponse
+        : [];
+    const playlistCollection = Array.isArray(playlistsResponse?.collection)
+      ? playlistsResponse.collection
+      : Array.isArray(playlistsResponse)
+        ? playlistsResponse
+        : [];
+
+    const trackIds = trackCollection.map((track) => String(track?.id || '')).filter(Boolean);
+    const existingTracks = trackIds.length
+      ? await Track.find({ userId: req.user._id, source: 'soundcloud', sourceId: { $in: trackIds } }).select('_id sourceId')
+      : [];
+    const trackMap = new Map(existingTracks.map((doc) => [doc.sourceId, doc]));
+    const tracks = trackCollection
+      .map((track) => mapSoundCloudTrackCatalog(track, trackMap.get(String(track?.id || ''))))
+      .filter(Boolean);
+
+    const playlistIds = playlistCollection.map((pl) => String(pl?.id || '')).filter(Boolean);
+    const existingAlbums = playlistIds.length
+      ? await Album.find({ userId: req.user._id, source: 'soundcloud', sourceId: { $in: playlistIds } }).select('_id sourceId')
+      : [];
+    const albumMap = new Map(existingAlbums.map((doc) => [doc.sourceId, doc]));
+    const playlists = playlistCollection
+      .map((pl) => mapSoundCloudPlaylistCatalog(pl, albumMap.get(String(pl?.id || ''))))
+      .filter(Boolean);
+
+    const avatarUrl = account.avatarStorageKey
+      ? publicUploadUrl(req, account.avatarStorageKey)
+      : account.avatarUrl || profile?.avatar_url || '';
+
+    res.json({
+      account: {
+        username: account.username || profile?.username || '',
+        permalinkUrl: account.permalinkUrl || profile?.permalink_url || '',
+        avatar: avatarUrl,
+        scope: account.scope || [],
+        lastSyncAt: account.lastSyncAt
+      },
+      tracks,
+      playlists
+    });
+  } catch (err) {
+    console.error('SoundCloud catalog fetch failed', err);
+    res.status(502).json({ error: 'soundcloud catalog request failed' });
+  }
+});
+
+app.post('/api/integrations/soundcloud/import', auth, async (req, res) => {
+  if (!soundCloudConfigured()) {
+    return res.status(503).json({ error: 'soundcloud integration unavailable' });
+  }
+
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
+  const body = req.body || {};
+  const trackIds = Array.isArray(body.trackIds) ? body.trackIds : [];
+  const playlistIds = Array.isArray(body.playlistIds) ? body.playlistIds : [];
+
+  const normalizedTrackIds = Array.from(new Set(trackIds.map((id) => String(id).trim()).filter(Boolean)));
+  const normalizedPlaylistIds = Array.from(new Set(playlistIds.map((id) => String(id).trim()).filter(Boolean)));
+
+  if (!normalizedTrackIds.length && !normalizedPlaylistIds.length) {
+    return res.status(400).json({ error: 'no soundcloud items requested' });
+  }
+
+  try {
+    const account = await SoundCloudAccount.findOne({ userId: req.user._id });
+    if (!account) {
+      return res.status(404).json({ error: 'soundcloud account not connected' });
+    }
+
+    const ownerSummary = await userSummary(req, req.user);
+    const importedTrackIds = [];
+    const importedAlbumIds = [];
+
+    for (const trackId of normalizedTrackIds) {
+      try {
+        const { trackDoc } = await importSoundCloudTrack({ account, userDoc: req.user, trackId });
+        if (trackDoc?._id) {
+          importedTrackIds.push(trackDoc._id.toString());
+        }
+      } catch (trackError) {
+        console.warn('SoundCloud track import failed', trackId, trackError);
+      }
+    }
+
+    for (const playlistId of normalizedPlaylistIds) {
+      try {
+        const result = await importSoundCloudPlaylist({ account, userDoc: req.user, playlistId });
+        if (result?.albumDoc?._id) {
+          importedAlbumIds.push(result.albumDoc._id.toString());
+          for (const doc of result.importedTracks || []) {
+            if (doc?._id) importedTrackIds.push(doc._id.toString());
+          }
+        }
+      } catch (playlistError) {
+        console.warn('SoundCloud playlist import failed', playlistId, playlistError);
+      }
+    }
+
+    const allTrackIds = Array.from(new Set(importedTrackIds)).map((id) => asObjectId(id)).filter(Boolean);
+    const trackDocs = allTrackIds.length ? await Track.find({ _id: { $in: allTrackIds } }) : [];
+    const trackDocMap = new Map(trackDocs.map((doc) => [doc._id.toString(), doc]));
+    const tracks = trackDocs.map((doc) => presentTrack(req, doc, ownerSummary)).filter(Boolean);
+
+    const albumObjectIds = Array.from(new Set(importedAlbumIds)).map((id) => asObjectId(id)).filter(Boolean);
+    const albumDocs = albumObjectIds.length ? await Album.find({ _id: { $in: albumObjectIds } }) : [];
+
+    const albumTrackIds = new Set();
+    for (const album of albumDocs) {
+      if (!Array.isArray(album.trackIds)) continue;
+      for (const ref of album.trackIds) {
+        const tid = toIdString(ref?.trackId);
+        if (tid) albumTrackIds.add(tid);
+      }
+    }
+
+    const missingTrackIds = Array.from(albumTrackIds).filter((id) => !trackDocMap.has(id)).map((id) => asObjectId(id)).filter(Boolean);
+    if (missingTrackIds.length) {
+      const extraDocs = await Track.find({ _id: { $in: missingTrackIds } });
+      for (const doc of extraDocs) {
+        trackDocMap.set(doc._id.toString(), doc);
+      }
+    }
+
+    const albums = albumDocs.map((album) => {
+      const trackDocsForAlbum = Array.isArray(album.trackIds)
+        ? album.trackIds
+          .map((ref) => trackDocMap.get(toIdString(ref?.trackId)))
+          .filter(Boolean)
+        : [];
+      return presentAlbum(req, album, { ownerSummary, trackDocs: trackDocsForAlbum });
+    }).filter(Boolean);
+
+    account.lastSyncAt = new Date();
+    await account.save();
+
+    res.json({
+      tracks,
+      albums
+    });
+  } catch (err) {
+    console.error('SoundCloud import failed', err);
+    res.status(500).json({ error: 'soundcloud import failed' });
+  }
+});
+
 /* ---- profile update: change username (unique) and/or avatarUrl ---- */
 async function handleProfileUpdate(req, res) {
   const { name, avatarUrl, firstName, lastName, displayName, profileColor } = req.body || {};
@@ -1597,7 +2524,12 @@ app.get('/api/users/library', async (req, res) => {
           albumTrackOrder: Number.isFinite(doc.albumTrackOrder) ? doc.albumTrackOrder : null,
           duration: Number.isFinite(doc.audioDurationSec) ? doc.audioDurationSec : null,
           ownerId: idToString(doc.userId),
-          user: ownerSummary
+          user: ownerSummary,
+          source: doc.source || 'upload',
+          sourceId: doc.sourceId || '',
+          sourcePermalinkUrl: doc.sourcePermalinkUrl || '',
+          streamUrl: doc.streamUrl || url,
+          streamProtocol: doc.streamProtocol || ''
         };
       })
       .filter(Boolean);
@@ -2574,7 +3506,12 @@ app.post('/api/tracks', auth, (req, res) => {
           createdAt: trackDoc.createdAt,
           bumpedAt: trackDoc.bumpedAt,
           userId: trackDoc.userId,
-          user: summary
+          user: summary,
+          source: trackDoc.source || 'upload',
+          sourceId: trackDoc.sourceId || '',
+          sourcePermalinkUrl: trackDoc.sourcePermalinkUrl || '',
+          streamUrl: trackDoc.streamUrl || audioUrl,
+          streamProtocol: trackDoc.streamProtocol || ''
         });
     } catch (ex) {
       console.error('Track upload failed', ex);
@@ -3272,7 +4209,12 @@ app.get('/api/tracks', async (req, res) => {
         albumTrackOrder: Number.isFinite(doc.albumTrackOrder) ? doc.albumTrackOrder : null,
         user: userKey ? userMap.get(userKey) || null : null,
         stats: statsSummary(statsMap.get(key)),
-        comments: commentsByTrack.get(key) || []
+        comments: commentsByTrack.get(key) || [],
+        source: doc.source || 'upload',
+        sourceId: doc.sourceId || '',
+        sourcePermalinkUrl: doc.sourcePermalinkUrl || '',
+        streamUrl: doc.streamUrl || audioUrl,
+        streamProtocol: doc.streamProtocol || ''
       };
     });
 
