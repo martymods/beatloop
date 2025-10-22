@@ -5333,6 +5333,8 @@ let sessionsCard = null;
       crossfader: 0.5,
     }
 
+    const userLibrary = new Map()
+
     function createDjDeck(label, elements) {
       if (!elements) return null
       const deck = {
@@ -5950,7 +5952,6 @@ let sessionsCard = null;
     let customTrackIndex = 0
     let customAlbumIndex = 0
     let feedIsLoading = false
-    const userLibrary = new Map()
     const profileLibraryRequests = new Map()
 
     const profileTrackPlayers = new Map();
