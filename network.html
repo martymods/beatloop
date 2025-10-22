@@ -3126,7 +3126,7 @@
             <button id="blDjDeckAClear" type="button" class="bl-dj__ghost-btn">Unload</button>
           </div>
           <div class="bl-dj__deck-meta">
-            <img id="blDjDeckACover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck A cover" />
+            <img id="blDjDeckACover" src="./img/cover-default.svg" alt="Deck A cover" />
             <div>
               <p id="blDjDeckATitle" class="bl-dj__deck-title">No track loaded</p>
               <p id="blDjDeckAArtist" class="bl-dj__deck-artist">Select a song to load Deck A.</p>
@@ -3154,7 +3154,7 @@
             <button id="blDjDeckBClear" type="button" class="bl-dj__ghost-btn">Unload</button>
           </div>
           <div class="bl-dj__deck-meta">
-            <img id="blDjDeckBCover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck B cover" />
+            <img id="blDjDeckBCover" src="./img/cover-default.svg" alt="Deck B cover" />
             <div>
               <p id="blDjDeckBTitle" class="bl-dj__deck-title">No track loaded</p>
               <p id="blDjDeckBArtist" class="bl-dj__deck-artist">Select a song to load Deck B.</p>
@@ -4265,7 +4265,6 @@
       return match ? match[1].toLowerCase() : str;
     }
 
-    // REPLACE your DEFAULT_TRACK_COVER with this:
     const DEFAULT_TRACK_COVER = (function () {
       const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="128" height="128" rx="18" fill="url(#g)"/><g fill="#fff"><circle cx="46" cy="86" r="12"/><path d="M82 24v56.6a12 12 0 1 1-4-8.6V34l-26 6v36.6a12 12 0 1 1-4-8.6V36z"/></g></svg>';
       return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
@@ -5320,7 +5319,7 @@ let sessionsCard = null;
       clearBtn: document.getElementById('blDjDeckBClear'),
     }
 
-    const DJ_DEFAULT_COVER = 'https://www.beatloop.co/img/cover-default.svg'
+    const DJ_DEFAULT_COVER = DEFAULT_TRACK_COVER
 
     const djState = {
       tracks: [],
@@ -5332,6 +5331,9 @@ let sessionsCard = null;
       isOpen: false,
       crossfader: 0.5,
     }
+
+    const userLibrary = new Map()
+    const profileLibraryRequests = new Map()
 
     function createDjDeck(label, elements) {
       if (!elements) return null
@@ -5950,9 +5952,6 @@ let sessionsCard = null;
     let customTrackIndex = 0
     let customAlbumIndex = 0
     let feedIsLoading = false
-    const userLibrary = new Map()
-    const profileLibraryRequests = new Map()
-
     const profileTrackPlayers = new Map();
 
     function destroyProfileTrackWaves() {
