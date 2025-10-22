@@ -69,6 +69,458 @@
       background-color: #141420;
     }
 
+    /* ---------- Beatloop DJ modal ---------- */
+    #beatloopDj .bl-dj {
+      color: #f6f5ff;
+      background: radial-gradient(circle at top right, rgba(124, 58, 237, 0.18), transparent 45%),
+        radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.18), transparent 40%),
+        rgba(11, 11, 20, 0.96);
+    }
+
+    .bl-dj__header {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .bl-dj__heading {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .bl-dj__title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .bl-dj__subtitle {
+      margin: 0;
+      color: rgba(244, 244, 255, 0.65);
+      font-size: 0.95rem;
+    }
+
+    .bl-dj__header-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .bl-dj__crossfader-label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 0.85rem;
+      color: rgba(244, 244, 255, 0.75);
+    }
+
+    .bl-dj__crossfader-label input[type="range"] {
+      accent-color: #7c3aed;
+      width: 180px;
+      max-width: 100%;
+    }
+
+    .bl-dj__crossfader-value {
+      font-variant-numeric: tabular-nums;
+      color: rgba(244, 244, 255, 0.7);
+    }
+
+    .bl-dj__ghost-btn,
+    .bl-dj__cta-btn {
+      border: none;
+      border-radius: 0.75rem;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+      cursor: pointer;
+    }
+
+    .bl-dj__ghost-btn {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(244, 244, 255, 0.88);
+    }
+
+    .bl-dj__ghost-btn:hover,
+    .bl-dj__ghost-btn:focus-visible {
+      background: rgba(34, 211, 238, 0.22);
+      outline: none;
+    }
+
+    .bl-dj__cta-btn {
+      background: linear-gradient(135deg, #7c3aed, #0ea5e9);
+      color: #0b0b14;
+      box-shadow: 0 10px 30px rgba(14, 165, 233, 0.35);
+    }
+
+    .bl-dj__cta-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .bl-dj__cta-btn:not(:disabled):hover,
+    .bl-dj__cta-btn:not(:disabled):focus-visible {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 32px rgba(124, 58, 237, 0.35);
+      outline: none;
+    }
+
+    .bl-dj__layout {
+      display: grid;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .bl-dj__panel {
+      background: rgba(17, 17, 30, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1.25rem;
+      padding: 1.25rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .bl-dj__library {
+      gap: 1.25rem;
+    }
+
+    .bl-dj__panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .bl-dj__panel-header h4 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    .bl-dj__panel-hint {
+      margin: 0;
+      font-size: 0.8rem;
+      color: rgba(244, 244, 255, 0.6);
+    }
+
+    .bl-dj__search input,
+    .bl-dj__playlist-create input,
+    .bl-dj__playlist-select {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 0.75rem;
+      background: rgba(10, 10, 20, 0.85);
+      color: #f6f5ff;
+      padding: 0.6rem 0.8rem;
+      width: 100%;
+      font-size: 0.85rem;
+    }
+
+    .bl-dj__search input:focus,
+    .bl-dj__playlist-create input:focus {
+      outline: none;
+      border-color: rgba(124, 58, 237, 0.65);
+      box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.35);
+    }
+
+    .bl-dj__table {
+      width: 100%;
+      border-collapse: collapse;
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+
+    .bl-dj__table thead {
+      background: rgba(124, 58, 237, 0.12);
+    }
+
+    .bl-dj__table th,
+    .bl-dj__table td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    .bl-dj__table tbody tr {
+      background: rgba(12, 12, 22, 0.65);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .bl-dj__table tbody tr:hover {
+      background: rgba(124, 58, 237, 0.18);
+    }
+
+    .bl-dj__track {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .bl-dj__track img {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      flex-shrink: 0;
+    }
+
+    .bl-dj__track-title {
+      margin: 0;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .bl-dj__track-artist {
+      margin: 0;
+      font-size: 0.8rem;
+      color: rgba(244, 244, 255, 0.6);
+    }
+
+    .bl-dj__actions-column {
+      width: 220px;
+    }
+
+    .bl-dj__table-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .bl-dj__empty {
+      margin: 0.25rem 0 0;
+      font-size: 0.8rem;
+      color: rgba(244, 244, 255, 0.6);
+    }
+
+    .bl-dj__playlist {
+      background: rgba(8, 8, 16, 0.85);
+      border: 1px solid rgba(34, 211, 238, 0.15);
+      border-radius: 1.25rem;
+    }
+
+    .bl-dj__playlist-create {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .bl-dj__playlist-create button {
+      flex-shrink: 0;
+    }
+
+    .bl-dj__playlist-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .bl-dj__playlist-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .bl-dj__playlist-select {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      background: rgba(14, 165, 233, 0.12);
+      font-weight: 600;
+      text-align: left;
+      flex: 1;
+    }
+
+    .bl-dj__playlist-select[aria-current="true"] {
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.45), rgba(34, 211, 238, 0.45));
+      color: #0b0b14;
+      box-shadow: 0 10px 30px rgba(124, 58, 237, 0.35);
+    }
+
+    .bl-dj__playlist-remove {
+      padding-inline: 0.75rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .bl-dj__playlist-detail {
+      background: rgba(15, 15, 25, 0.9);
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .bl-dj__playlist-detail-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .bl-dj__playlist-detail-header h5 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .bl-dj__badge {
+      background: rgba(34, 211, 238, 0.25);
+      color: rgba(244, 244, 255, 0.92);
+      border-radius: 999px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.75rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .bl-dj__playlist-tracks {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .bl-dj__playlist-track {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      background: rgba(124, 58, 237, 0.15);
+      border-radius: 0.85rem;
+      padding: 0.65rem 0.85rem;
+    }
+
+    .bl-dj__playlist-track span {
+      font-size: 0.85rem;
+      color: rgba(244, 244, 255, 0.85);
+      flex: 1;
+    }
+
+    .bl-dj__playlist-track-actions {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    .bl-dj__deck {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      background: rgba(7, 7, 14, 0.85);
+      border: 1px solid rgba(124, 58, 237, 0.2);
+      border-radius: 1.25rem;
+      padding: 1.25rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    .bl-dj__deck-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .bl-dj__deck-header h4 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    .bl-dj__deck-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .bl-dj__deck-meta img {
+      width: 84px;
+      height: 84px;
+      object-fit: cover;
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(10, 10, 20, 0.8);
+    }
+
+    .bl-dj__deck-title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .bl-dj__deck-artist {
+      margin: 0.35rem 0 0;
+      font-size: 0.85rem;
+      color: rgba(244, 244, 255, 0.65);
+    }
+
+    .bl-dj__deck-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .bl-dj__control-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+      color: rgba(244, 244, 255, 0.7);
+    }
+
+    .bl-dj__control-row input[type="range"] {
+      width: 100%;
+      accent-color: #22d3ee;
+    }
+
+    .bl-dj__value {
+      font-variant-numeric: tabular-nums;
+      color: rgba(244, 244, 255, 0.75);
+    }
+
+    .bl-dj__decks {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    #beatloopDjOverlay {
+      cursor: pointer;
+    }
+
+    @media (min-width: 900px) {
+      .bl-dj__header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .bl-dj__layout {
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      }
+
+      .bl-dj__decks {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+      }
+    }
+
+    @media (min-width: 1200px) {
+      .bl-dj__decks {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
     /* ---------- Beatloop Studio layout resizing ---------- */
     #beatloopStudioLayout {
       --studio-left-width: 300px;
@@ -2378,6 +2830,10 @@
             class="rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#0ea5e9] px-4 py-2 text-sm font-semibold shadow-glow hover:opacity-90">
             ▶︎ Beatloop Studio
           </button>
+          <button id="beatloopDjBtn"
+            class="rounded-xl bg-gradient-to-r from-[#0ea5e9] to-[#22d3ee] px-4 py-2 text-sm font-semibold shadow-glow hover:opacity-90">
+            🎚️ Beatloop DJ
+          </button>
           <span id="recordingStatus" class="text-white/60 hidden">Recording…</span>
         </div>
 
@@ -2594,6 +3050,132 @@
         </section>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Beatloop DJ (hidden until opened) -->
+<div id="beatloopDj" class="fixed inset-0 z-[80] hidden">
+  <div id="beatloopDjOverlay" class="absolute inset-0 bg-black/70 backdrop-blur"></div>
+  <div class="relative mx-auto my-10 w-full max-w-[min(1600px,96vw)] max-h-[88vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#0f0f15] p-4 ring-1 ring-white/10 bl-dj">
+    <div class="bl-dj__header">
+      <div class="bl-dj__heading">
+        <h3 class="bl-dj__title">Beatloop DJ — Live Mixer</h3>
+        <p class="bl-dj__subtitle">Queue songs, blend decks, and craft mixes with your beatloop library.</p>
+      </div>
+      <div class="bl-dj__header-controls">
+        <label class="bl-dj__crossfader-label">
+          <span>Crossfader</span>
+          <input id="blDjCrossfader" type="range" min="0" max="100" value="50" aria-label="Crossfader" />
+          <span id="blDjCrossfaderValue" class="bl-dj__crossfader-value">Center</span>
+        </label>
+        <button id="blDjStopAll" type="button" class="bl-dj__ghost-btn">Stop Decks</button>
+        <button id="blDjClose" type="button" class="bl-dj__ghost-btn">Close</button>
+      </div>
+    </div>
+
+    <div class="bl-dj__layout">
+      <section class="bl-dj__panel bl-dj__library">
+        <header class="bl-dj__panel-header">
+          <h4>Library</h4>
+          <p class="bl-dj__panel-hint">Search tracks and load them onto either deck.</p>
+        </header>
+        <div class="bl-dj__search">
+          <input id="blDjSearch" type="search" placeholder="Search title or artist" autocomplete="off" />
+        </div>
+        <div class="bl-dj__table-wrap">
+          <table class="bl-dj__table">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Track</th>
+                <th scope="col" class="bl-dj__actions-column">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="blDjSongTable"></tbody>
+          </table>
+          <p id="blDjEmptyLibrary" class="bl-dj__empty hidden">Your library is loading… add tracks or refresh to see them here.</p>
+        </div>
+
+        <section class="bl-dj__panel bl-dj__playlist">
+          <header class="bl-dj__panel-header">
+            <h4>Playlists</h4>
+            <button id="blDjClearPlaylist" type="button" class="bl-dj__ghost-btn">Clear Selected</button>
+          </header>
+          <p class="bl-dj__panel-hint">Create crates of tracks and add songs using the actions above.</p>
+          <div class="bl-dj__playlist-create">
+            <input id="blDjPlaylistName" type="text" placeholder="New playlist name" />
+            <button id="blDjCreatePlaylist" type="button" class="bl-dj__cta-btn">Create</button>
+          </div>
+          <ul id="blDjPlaylists" class="bl-dj__playlist-list"></ul>
+          <div class="bl-dj__playlist-detail">
+            <div class="bl-dj__playlist-detail-header">
+              <h5 id="blDjActivePlaylistLabel">Select a playlist to view tracks</h5>
+              <span id="blDjPlaylistCount" class="bl-dj__badge hidden">0</span>
+            </div>
+            <ul id="blDjPlaylistTracks" class="bl-dj__playlist-tracks"></ul>
+            <p id="blDjPlaylistEmpty" class="bl-dj__empty">No tracks yet — add songs from the library.</p>
+          </div>
+        </section>
+      </section>
+
+      <section class="bl-dj__panel bl-dj__decks">
+        <div class="bl-dj__deck" data-deck="A">
+          <div class="bl-dj__deck-header">
+            <h4>Deck A</h4>
+            <button id="blDjDeckAClear" type="button" class="bl-dj__ghost-btn">Unload</button>
+          </div>
+          <div class="bl-dj__deck-meta">
+            <img id="blDjDeckACover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck A cover" />
+            <div>
+              <p id="blDjDeckATitle" class="bl-dj__deck-title">No track loaded</p>
+              <p id="blDjDeckAArtist" class="bl-dj__deck-artist">Select a song to load Deck A.</p>
+            </div>
+          </div>
+          <div class="bl-dj__deck-controls">
+            <button id="blDjDeckAPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
+            <div class="bl-dj__control-row">
+              <label for="blDjDeckATempo">Tempo</label>
+              <input id="blDjDeckATempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
+              <span id="blDjDeckATempoVal" class="bl-dj__value">1.00×</span>
+            </div>
+            <div class="bl-dj__control-row">
+              <label for="blDjDeckASeek">Position</label>
+              <input id="blDjDeckASeek" type="range" min="0" max="0" value="0" step="0.01" />
+              <span id="blDjDeckAProgress" class="bl-dj__value">0:00 / 0:00</span>
+            </div>
+          </div>
+          <audio id="blDjDeckAAudio" preload="metadata"></audio>
+        </div>
+
+        <div class="bl-dj__deck" data-deck="B">
+          <div class="bl-dj__deck-header">
+            <h4>Deck B</h4>
+            <button id="blDjDeckBClear" type="button" class="bl-dj__ghost-btn">Unload</button>
+          </div>
+          <div class="bl-dj__deck-meta">
+            <img id="blDjDeckBCover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck B cover" />
+            <div>
+              <p id="blDjDeckBTitle" class="bl-dj__deck-title">No track loaded</p>
+              <p id="blDjDeckBArtist" class="bl-dj__deck-artist">Select a song to load Deck B.</p>
+            </div>
+          </div>
+          <div class="bl-dj__deck-controls">
+            <button id="blDjDeckBPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
+            <div class="bl-dj__control-row">
+              <label for="blDjDeckBTempo">Tempo</label>
+              <input id="blDjDeckBTempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
+              <span id="blDjDeckBTempoVal" class="bl-dj__value">1.00×</span>
+            </div>
+            <div class="bl-dj__control-row">
+              <label for="blDjDeckBSeek">Position</label>
+              <input id="blDjDeckBSeek" type="range" min="0" max="0" value="0" step="0.01" />
+              <span id="blDjDeckBProgress" class="bl-dj__value">0:00 / 0:00</span>
+            </div>
+          </div>
+          <audio id="blDjDeckBAudio" preload="metadata"></audio>
+        </div>
+      </section>
     </div>
   </div>
 </div>
@@ -4693,6 +5275,672 @@ let sessionsCard = null;
     const trendsEl = document.getElementById('trends')
     const trendsMEl = document.getElementById('trendsM')
 
+    const beatloopDjBtn = document.getElementById('beatloopDjBtn')
+    const djModal = document.getElementById('beatloopDj')
+    const djOverlay = document.getElementById('beatloopDjOverlay')
+    const djCloseBtn = document.getElementById('blDjClose')
+    const djStopAllBtn = document.getElementById('blDjStopAll')
+    const djCrossfader = document.getElementById('blDjCrossfader')
+    const djCrossfaderValue = document.getElementById('blDjCrossfaderValue')
+    const djSongTable = document.getElementById('blDjSongTable')
+    const djEmptyLibrary = document.getElementById('blDjEmptyLibrary')
+    const djSearchInput = document.getElementById('blDjSearch')
+    const djPlaylistNameInput = document.getElementById('blDjPlaylistName')
+    const djCreatePlaylistBtn = document.getElementById('blDjCreatePlaylist')
+    const djPlaylistsList = document.getElementById('blDjPlaylists')
+    const djPlaylistTracks = document.getElementById('blDjPlaylistTracks')
+    const djPlaylistEmpty = document.getElementById('blDjPlaylistEmpty')
+    const djActivePlaylistLabel = document.getElementById('blDjActivePlaylistLabel')
+    const djPlaylistCount = document.getElementById('blDjPlaylistCount')
+    const djClearPlaylistBtn = document.getElementById('blDjClearPlaylist')
+
+    const djDeckA = {
+      cover: document.getElementById('blDjDeckACover'),
+      title: document.getElementById('blDjDeckATitle'),
+      artist: document.getElementById('blDjDeckAArtist'),
+      playBtn: document.getElementById('blDjDeckAPlay'),
+      tempo: document.getElementById('blDjDeckATempo'),
+      tempoVal: document.getElementById('blDjDeckATempoVal'),
+      seek: document.getElementById('blDjDeckASeek'),
+      progress: document.getElementById('blDjDeckAProgress'),
+      audio: document.getElementById('blDjDeckAAudio'),
+      clearBtn: document.getElementById('blDjDeckAClear'),
+    }
+
+    const djDeckB = {
+      cover: document.getElementById('blDjDeckBCover'),
+      title: document.getElementById('blDjDeckBTitle'),
+      artist: document.getElementById('blDjDeckBArtist'),
+      playBtn: document.getElementById('blDjDeckBPlay'),
+      tempo: document.getElementById('blDjDeckBTempo'),
+      tempoVal: document.getElementById('blDjDeckBTempoVal'),
+      seek: document.getElementById('blDjDeckBSeek'),
+      progress: document.getElementById('blDjDeckBProgress'),
+      audio: document.getElementById('blDjDeckBAudio'),
+      clearBtn: document.getElementById('blDjDeckBClear'),
+    }
+
+    const DJ_DEFAULT_COVER = 'https://www.beatloop.co/img/cover-default.svg'
+
+    const djState = {
+      tracks: [],
+      trackIndex: new Map(),
+      filteredTracks: [],
+      playlists: [],
+      nextPlaylistId: 1,
+      activePlaylistId: null,
+      isOpen: false,
+      crossfader: 0.5,
+    }
+
+    function createDjDeck(label, elements) {
+      if (!elements) return null
+      const deck = {
+        label,
+        elements,
+        track: null,
+        duration: 0,
+        isPlaying: false,
+      }
+      if (elements.audio) {
+        try { elements.audio.preload = 'metadata' } catch {}
+        elements.audio.dataset.deck = label
+      }
+      return deck
+    }
+
+    const djDecks = {
+      A: createDjDeck('A', djDeckA),
+      B: createDjDeck('B', djDeckB),
+    }
+
+    function getDjTrackById(trackId) {
+      if (!trackId) return null
+      return djState.trackIndex.get(trackId) || null
+    }
+
+    function formatDjTime(seconds) {
+      const value = Number(seconds)
+      if (!Number.isFinite(value) || value <= 0) return '0:00'
+      const total = Math.max(value, 0)
+      const minutes = Math.floor(total / 60)
+      const secs = Math.floor(total % 60)
+      return `${minutes}:${String(secs).padStart(2, '0')}`
+    }
+
+    function refreshDeckProgress(deck) {
+      if (!deck || !deck.elements) return
+      const { audio, seek, progress } = deck.elements
+      if (!audio || !seek || !progress) return
+      const duration = Number.isFinite(audio.duration) ? audio.duration : deck.duration || 0
+      if (duration > 0) {
+        deck.duration = duration
+        seek.max = String(duration)
+      } else {
+        seek.max = '0'
+      }
+      const current = Number(audio.currentTime) || 0
+      seek.value = duration > 0 ? String(Math.min(current, duration)) : '0'
+      progress.textContent = `${formatDjTime(current)} / ${formatDjTime(duration)}`
+    }
+
+    function setDeckPlayingState(deck, playing) {
+      if (!deck || !deck.elements || !deck.elements.playBtn) return
+      deck.isPlaying = Boolean(playing)
+      const label = playing ? 'Pause' : 'Play'
+      deck.elements.playBtn.textContent = label
+      deck.elements.playBtn.setAttribute('aria-pressed', playing ? 'true' : 'false')
+    }
+
+    function applyCrossfader() {
+      const mix = Math.min(Math.max(djState.crossfader, 0), 1)
+      const left = Math.max(0, Math.min(1, Math.cos(mix * Math.PI / 2)))
+      const right = Math.max(0, Math.min(1, Math.cos((1 - mix) * Math.PI / 2)))
+      const deckAState = djDecks.A
+      const deckBState = djDecks.B
+      if (deckAState?.elements?.audio) {
+        deckAState.elements.audio.volume = left
+      }
+      if (deckBState?.elements?.audio) {
+        deckBState.elements.audio.volume = right
+      }
+    }
+
+    function updateCrossfaderValue(value) {
+      const normalized = Math.min(Math.max(Number(value) || 0, 0), 100)
+      djState.crossfader = normalized / 100
+      if (djCrossfader && djCrossfader.value !== String(normalized)) {
+        djCrossfader.value = String(normalized)
+      }
+      if (djCrossfaderValue) {
+        if (normalized === 50) {
+          djCrossfaderValue.textContent = 'Center'
+        } else if (normalized < 50) {
+          djCrossfaderValue.textContent = `Deck A ${String(50 - normalized)}%`
+        } else {
+          djCrossfaderValue.textContent = `Deck B ${String(normalized - 50)}%`
+        }
+      }
+      applyCrossfader()
+    }
+
+    function stopAllDjDecks() {
+      Object.values(djDecks).forEach((deck) => {
+        if (!deck?.elements?.audio) return
+        try { deck.elements.audio.pause() } catch {}
+        try { deck.elements.audio.currentTime = 0 } catch {}
+        setDeckPlayingState(deck, false)
+        refreshDeckProgress(deck)
+      })
+    }
+
+    function clearDeck(deck) {
+      if (!deck || !deck.elements) return
+      deck.track = null
+      deck.duration = 0
+      const { elements } = deck
+      if (elements.audio) {
+        try { elements.audio.pause() } catch {}
+        try { elements.audio.currentTime = 0 } catch {}
+        try { elements.audio.removeAttribute('src') } catch {}
+        try { elements.audio.load?.() } catch {}
+      }
+      if (elements.cover) {
+        elements.cover.src = DJ_DEFAULT_COVER
+      }
+      if (elements.title) {
+        elements.title.textContent = 'No track loaded'
+      }
+      if (elements.artist) {
+        elements.artist.textContent = `Select a song to load Deck ${deck.label}.`
+      }
+      if (elements.seek) {
+        elements.seek.value = '0'
+        elements.seek.max = '0'
+      }
+      if (elements.progress) {
+        elements.progress.textContent = '0:00 / 0:00'
+      }
+      if (elements.playBtn) {
+        elements.playBtn.disabled = true
+      }
+      setDeckPlayingState(deck, false)
+      applyCrossfader()
+    }
+
+    function updateDeckUi(deck) {
+      if (!deck || !deck.elements) return
+      const { elements } = deck
+      const track = deck.track
+      if (!track) {
+        clearDeck(deck)
+        return
+      }
+      if (elements.title) {
+        elements.title.textContent = track.title || 'Untitled'
+      }
+      if (elements.artist) {
+        elements.artist.textContent = track.artist || 'beatloop creator'
+      }
+      if (elements.cover) {
+        elements.cover.src = track.cover || DJ_DEFAULT_COVER
+        elements.cover.onerror = () => { elements.cover.src = DJ_DEFAULT_COVER }
+      }
+      if (elements.audio) {
+        try { elements.audio.pause() } catch {}
+        elements.audio.src = track.url
+        elements.audio.currentTime = 0
+        const rate = Number(elements.tempo?.value) || 1
+        try { elements.audio.playbackRate = rate } catch {}
+      }
+      if (elements.playBtn) {
+        elements.playBtn.disabled = false
+      }
+      setDeckPlayingState(deck, false)
+      refreshDeckProgress(deck)
+      applyCrossfader()
+    }
+
+    function loadTrackToDeck(deckKey, track) {
+      if (!deckKey || !track) return
+      const deck = djDecks[deckKey]
+      if (!deck) return
+      deck.track = track
+      updateDeckUi(deck)
+    }
+
+    function toggleDeckPlayback(deck) {
+      if (!deck || !deck.elements?.audio || !deck.track) return
+      const audio = deck.elements.audio
+      if (audio.paused || audio.ended) {
+        const playPromise = audio.play()
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {})
+        }
+      } else {
+        audio.pause()
+      }
+    }
+
+    function bindDeckEvents(deck) {
+      if (!deck || !deck.elements) return
+      const { audio, playBtn, tempo, tempoVal, seek, clearBtn } = deck.elements
+      if (playBtn) {
+        playBtn.addEventListener('click', () => toggleDeckPlayback(deck))
+      }
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => clearDeck(deck))
+      }
+      if (tempo && tempoVal) {
+        const updateTempo = () => {
+          const rate = Math.min(Math.max(Number(tempo.value) || 1, Number(tempo.min) || 0.5), Number(tempo.max) || 1.5)
+          tempoVal.textContent = `${rate.toFixed(2)}×`
+          if (audio) {
+            try { audio.playbackRate = rate } catch {}
+          }
+        }
+        tempo.addEventListener('input', updateTempo)
+        updateTempo()
+      }
+      if (seek) {
+        seek.addEventListener('input', () => {
+          if (!deck.track || !audio) return
+          const target = Number(seek.value)
+          if (!Number.isFinite(target)) return
+          try { audio.currentTime = Math.max(0, Math.min(target, deck.duration || audio.duration || 0)) } catch {}
+          refreshDeckProgress(deck)
+        })
+      }
+      if (audio) {
+        audio.addEventListener('loadedmetadata', () => {
+          deck.duration = Number(audio.duration) || 0
+          refreshDeckProgress(deck)
+        })
+        audio.addEventListener('timeupdate', () => refreshDeckProgress(deck))
+        audio.addEventListener('ended', () => {
+          setDeckPlayingState(deck, false)
+          refreshDeckProgress(deck)
+        })
+        audio.addEventListener('play', () => {
+          setDeckPlayingState(deck, true)
+          applyCrossfader()
+        })
+        audio.addEventListener('pause', () => {
+          setDeckPlayingState(deck, false)
+        })
+      }
+    }
+
+    Object.values(djDecks).forEach(bindDeckEvents)
+
+    function collectDjTracks() {
+      const tracks = []
+      const index = new Map()
+      const seen = new Set()
+      userLibrary.forEach((entry) => {
+        if (!entry || !Array.isArray(entry.tracks)) return
+        const artist = entry.user?.displayName || entry.user?.name || 'beatloop creator'
+        entry.tracks.forEach((track) => {
+          if (!track || !track.id || !track.url) return
+          if (seen.has(track.id)) return
+          seen.add(track.id)
+          const normalized = {
+            id: track.id,
+            title: track.title || 'Untitled',
+            url: track.url,
+            cover: track.cover || DEFAULT_TRACK_COVER,
+            artist,
+            ownerKey: entry.key,
+          }
+          tracks.push(normalized)
+          index.set(normalized.id, normalized)
+        })
+      })
+      tracks.sort((a, b) => a.title.localeCompare(b.title))
+      djState.tracks = tracks
+      djState.trackIndex = index
+      applyDjSearchFilter()
+    }
+
+    function applyDjSearchFilter() {
+      const query = (djSearchInput?.value || '').trim().toLowerCase()
+      if (!query) {
+        djState.filteredTracks = djState.tracks.slice()
+      } else {
+        djState.filteredTracks = djState.tracks.filter((track) => {
+          const haystack = `${track.title || ''} ${track.artist || ''}`.toLowerCase()
+          return haystack.includes(query)
+        })
+      }
+      renderDjSongTable()
+    }
+
+    function renderDjSongTable() {
+      if (!djSongTable) return
+      djSongTable.innerHTML = ''
+      const rows = djState.filteredTracks
+      if (!rows.length) {
+        if (djEmptyLibrary) {
+          const query = (djSearchInput?.value || '').trim()
+          if (query && djState.tracks.length) {
+            djEmptyLibrary.textContent = 'No tracks match your search.'
+          } else {
+            djEmptyLibrary.textContent = 'Your library is loading… add tracks or refresh to see them here.'
+          }
+          djEmptyLibrary.classList.remove('hidden')
+        }
+        return
+      }
+      if (djEmptyLibrary) {
+        djEmptyLibrary.textContent = 'Your library is loading… add tracks or refresh to see them here.'
+        djEmptyLibrary.classList.add('hidden')
+      }
+      const hasPlaylist = Boolean(djState.activePlaylistId)
+      rows.forEach((track, index) => {
+        const row = document.createElement('tr')
+        const indexCell = document.createElement('td')
+        indexCell.textContent = String(index + 1)
+        row.appendChild(indexCell)
+
+        const trackCell = document.createElement('td')
+        const trackWrap = document.createElement('div')
+        trackWrap.className = 'bl-dj__track'
+        const img = document.createElement('img')
+        img.src = track.cover || DJ_DEFAULT_COVER
+        img.alt = ''
+        img.onerror = () => { img.src = DJ_DEFAULT_COVER }
+        trackWrap.appendChild(img)
+        const meta = document.createElement('div')
+        const title = document.createElement('p')
+        title.className = 'bl-dj__track-title'
+        title.textContent = track.title || 'Untitled'
+        const artist = document.createElement('p')
+        artist.className = 'bl-dj__track-artist'
+        artist.textContent = track.artist || 'beatloop creator'
+        meta.appendChild(title)
+        meta.appendChild(artist)
+        trackWrap.appendChild(meta)
+        trackCell.appendChild(trackWrap)
+        row.appendChild(trackCell)
+
+        const actionsCell = document.createElement('td')
+        actionsCell.className = 'bl-dj__actions-column'
+        const actions = document.createElement('div')
+        actions.className = 'bl-dj__table-actions'
+
+        const loadABtn = document.createElement('button')
+        loadABtn.type = 'button'
+        loadABtn.className = 'bl-dj__ghost-btn'
+        loadABtn.textContent = 'Load A'
+        loadABtn.addEventListener('click', () => loadTrackToDeck('A', track))
+
+        const loadBBtn = document.createElement('button')
+        loadBBtn.type = 'button'
+        loadBBtn.className = 'bl-dj__ghost-btn'
+        loadBBtn.textContent = 'Load B'
+        loadBBtn.addEventListener('click', () => loadTrackToDeck('B', track))
+
+        const addBtn = document.createElement('button')
+        addBtn.type = 'button'
+        addBtn.className = 'bl-dj__cta-btn'
+        addBtn.textContent = 'Add to playlist'
+        if (!hasPlaylist) {
+          addBtn.disabled = true
+          addBtn.title = 'Create or select a playlist to add tracks'
+        }
+        addBtn.addEventListener('click', () => {
+          if (!djState.activePlaylistId) return
+          addTrackToPlaylist(track.id)
+        })
+
+        actions.appendChild(loadABtn)
+        actions.appendChild(loadBBtn)
+        actions.appendChild(addBtn)
+        actionsCell.appendChild(actions)
+        row.appendChild(actionsCell)
+
+        row.addEventListener('dblclick', () => loadTrackToDeck('A', track))
+        djSongTable.appendChild(row)
+      })
+    }
+
+    function setActivePlaylist(playlistId) {
+      if (!playlistId) {
+        djState.activePlaylistId = null
+      } else if (djState.playlists.some((playlist) => playlist.id === playlistId)) {
+        djState.activePlaylistId = playlistId
+      }
+      renderDjPlaylists()
+      renderDjPlaylistTracks()
+      renderDjSongTable()
+    }
+
+    function removeDjPlaylist(playlistId) {
+      const index = djState.playlists.findIndex((playlist) => playlist.id === playlistId)
+      if (index < 0) return
+      djState.playlists.splice(index, 1)
+      if (djState.activePlaylistId === playlistId) {
+        djState.activePlaylistId = null
+      }
+      renderDjPlaylists()
+      renderDjPlaylistTracks()
+      renderDjSongTable()
+    }
+
+    function addTrackToPlaylist(trackId) {
+      if (!trackId) return
+      const playlist = djState.playlists.find((entry) => entry.id === djState.activePlaylistId)
+      if (!playlist) return
+      if (!playlist.tracks.includes(trackId)) {
+        playlist.tracks.push(trackId)
+      }
+      renderDjPlaylistTracks()
+      renderDjPlaylists()
+    }
+
+    function removeTrackFromPlaylist(playlistId, trackId) {
+      const playlist = djState.playlists.find((entry) => entry.id === playlistId)
+      if (!playlist) return
+      playlist.tracks = playlist.tracks.filter((id) => id !== trackId)
+      renderDjPlaylistTracks()
+      renderDjPlaylists()
+    }
+
+    function clearActivePlaylist() {
+      const playlist = djState.playlists.find((entry) => entry.id === djState.activePlaylistId)
+      if (!playlist) return
+      playlist.tracks = []
+      renderDjPlaylistTracks()
+      renderDjPlaylists()
+    }
+
+    function renderDjPlaylists() {
+      if (!djPlaylistsList) return
+      djPlaylistsList.innerHTML = ''
+      if (!djState.playlists.length) {
+        const empty = document.createElement('li')
+        empty.className = 'bl-dj__empty'
+        empty.textContent = 'No playlists yet — create one above.'
+        djPlaylistsList.appendChild(empty)
+        return
+      }
+      djState.playlists.forEach((playlist) => {
+        const item = document.createElement('li')
+        item.className = 'bl-dj__playlist-item'
+
+        const selectBtn = document.createElement('button')
+        selectBtn.type = 'button'
+        selectBtn.className = 'bl-dj__playlist-select'
+        selectBtn.textContent = playlist.name || 'Untitled playlist'
+        selectBtn.setAttribute('aria-current', playlist.id === djState.activePlaylistId ? 'true' : 'false')
+        const count = document.createElement('span')
+        count.className = 'bl-dj__badge'
+        count.textContent = String(playlist.tracks.length)
+        selectBtn.appendChild(count)
+        selectBtn.addEventListener('click', () => setActivePlaylist(playlist.id))
+
+        const removeBtn = document.createElement('button')
+        removeBtn.type = 'button'
+        removeBtn.className = 'bl-dj__ghost-btn bl-dj__playlist-remove'
+        removeBtn.textContent = 'Remove'
+        removeBtn.addEventListener('click', (event) => {
+          event.stopPropagation()
+          removeDjPlaylist(playlist.id)
+        })
+
+        item.appendChild(selectBtn)
+        item.appendChild(removeBtn)
+        djPlaylistsList.appendChild(item)
+      })
+    }
+
+    function renderDjPlaylistTracks() {
+      if (!djPlaylistTracks || !djPlaylistEmpty || !djActivePlaylistLabel) return
+      djPlaylistTracks.innerHTML = ''
+      const playlist = djState.playlists.find((entry) => entry.id === djState.activePlaylistId)
+      if (!playlist) {
+        djPlaylistEmpty.classList.remove('hidden')
+        djActivePlaylistLabel.textContent = 'Select a playlist to view tracks'
+        djPlaylistCount?.classList.add('hidden')
+        return
+      }
+      djActivePlaylistLabel.textContent = playlist.name || 'Untitled playlist'
+      if (djPlaylistCount) {
+        djPlaylistCount.textContent = String(playlist.tracks.length)
+        if (playlist.tracks.length) {
+          djPlaylistCount.classList.remove('hidden')
+        } else {
+          djPlaylistCount.classList.add('hidden')
+        }
+      }
+      if (!playlist.tracks.length) {
+        djPlaylistEmpty.classList.remove('hidden')
+        return
+      }
+      djPlaylistEmpty.classList.add('hidden')
+      playlist.tracks.forEach((trackId, index) => {
+        const track = getDjTrackById(trackId)
+        if (!track) return
+        const item = document.createElement('li')
+        item.className = 'bl-dj__playlist-track'
+        const label = document.createElement('span')
+        label.textContent = `${index + 1}. ${track.title || 'Untitled'} — ${track.artist || 'beatloop creator'}`
+        const actions = document.createElement('div')
+        actions.className = 'bl-dj__playlist-track-actions'
+
+        const loadABtn = document.createElement('button')
+        loadABtn.type = 'button'
+        loadABtn.className = 'bl-dj__ghost-btn'
+        loadABtn.textContent = 'Load A'
+        loadABtn.addEventListener('click', () => loadTrackToDeck('A', track))
+
+        const loadBBtn = document.createElement('button')
+        loadBBtn.type = 'button'
+        loadBBtn.className = 'bl-dj__ghost-btn'
+        loadBBtn.textContent = 'Load B'
+        loadBBtn.addEventListener('click', () => loadTrackToDeck('B', track))
+
+        const removeBtn = document.createElement('button')
+        removeBtn.type = 'button'
+        removeBtn.className = 'bl-dj__ghost-btn'
+        removeBtn.textContent = 'Remove'
+        removeBtn.addEventListener('click', () => removeTrackFromPlaylist(playlist.id, trackId))
+
+        actions.appendChild(loadABtn)
+        actions.appendChild(loadBBtn)
+        actions.appendChild(removeBtn)
+        item.appendChild(label)
+        item.appendChild(actions)
+        djPlaylistTracks.appendChild(item)
+      })
+    }
+
+    function createDjPlaylist(name) {
+      const trimmed = (name || '').trim()
+      if (!trimmed) return null
+      const playlist = {
+        id: `pl-${Date.now()}-${djState.nextPlaylistId++}`,
+        name: trimmed,
+        tracks: [],
+      }
+      djState.playlists.push(playlist)
+      setActivePlaylist(playlist.id)
+      return playlist
+    }
+
+    function refreshDjLibrary() {
+      collectDjTracks()
+    }
+
+    window.__beatloopDjRefreshLibrary = refreshDjLibrary
+
+    function handleDjEscape(event) {
+      if (event.key === 'Escape') {
+        hideDjModal()
+      }
+    }
+
+    function showDjModal() {
+      if (!djModal) return
+      djModal.classList.remove('hidden')
+      djState.isOpen = true
+      updateCrossfaderValue(djCrossfader?.value ?? 50)
+      refreshDjLibrary()
+      document.addEventListener('keydown', handleDjEscape)
+    }
+
+    function hideDjModal() {
+      if (!djModal) return
+      if (!djState.isOpen) {
+        djModal.classList.add('hidden')
+        return
+      }
+      djModal.classList.add('hidden')
+      djState.isOpen = false
+      stopAllDjDecks()
+      document.removeEventListener('keydown', handleDjEscape)
+    }
+
+    beatloopDjBtn?.addEventListener('click', () => {
+      showDjModal()
+    })
+
+    djCloseBtn?.addEventListener('click', hideDjModal)
+    djOverlay?.addEventListener('click', hideDjModal)
+    djStopAllBtn?.addEventListener('click', stopAllDjDecks)
+
+    djCrossfader?.addEventListener('input', (event) => {
+      updateCrossfaderValue(event?.target?.value ?? djCrossfader.value)
+    })
+
+    djSearchInput?.addEventListener('input', () => {
+      applyDjSearchFilter()
+    })
+
+    djCreatePlaylistBtn?.addEventListener('click', () => {
+      const value = djPlaylistNameInput?.value || ''
+      const created = createDjPlaylist(value)
+      if (created && djPlaylistNameInput) {
+        djPlaylistNameInput.value = ''
+      }
+    })
+
+    djPlaylistNameInput?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        const created = createDjPlaylist(djPlaylistNameInput.value)
+        if (created) {
+          djPlaylistNameInput.value = ''
+        }
+      }
+    })
+
+    djClearPlaylistBtn?.addEventListener('click', clearActivePlaylist)
+
+    Object.values(djDecks).forEach(clearDeck)
+    updateCrossfaderValue(djCrossfader?.value ?? 50)
+    refreshDjLibrary()
+
     const renderedTrackIds = new Set()
     const renderedAlbumIds = new Set()
     let remoteCursor = null
@@ -6134,6 +7382,9 @@ function recordUserTrackEntry(track) {
     entry.tracks.push(record)
   }
   entry.tracks.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+  if (typeof window !== 'undefined' && typeof window.__beatloopDjRefreshLibrary === 'function') {
+    try { window.__beatloopDjRefreshLibrary() } catch (err) { console.warn('DJ library refresh failed', err) }
+  }
 }
 
 function normalizeAlbumTrackMeta(track, index = 0) {
