@@ -4104,7 +4104,7 @@
 
   function loadTrack(deckId, trackId) {
     const deck = decks[deckId];
-    const track = tracks[trackId];
+    const track = turntableTracks[trackId];
     if (!deck || !track) return;
 
     if (deck.audio) {
