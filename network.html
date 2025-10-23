@@ -4983,23 +4983,32 @@
     const buildUploadUrlCandidates = (path) => {
       const normalizedPath = path.startsWith('/') ? path : `/${path}`;
       const list = [];
-      if (ASSET_BASE_CANDIDATES.length) {
-        for (const assetBase of ASSET_BASE_CANDIDATES) {
-          list.push(`${assetBase.replace(/\/+$/, '')}${normalizedPath}`);
-        }
-      } else if (ASSETS_BASE) {
-        list.push(`${ASSETS_BASE.replace(/\/+$/, '')}${normalizedPath}`);
-      }
+
+      const pushCandidate = (base) => {
+        if (!base) return;
+        list.push(`${base.replace(/\/+$/, '')}${normalizedPath}`);
+      };
+
       const currentBase = getCurrentApiBase();
       if (currentBase) {
-        list.push(`${currentBase.replace(/\/+$/, '')}${normalizedPath}`);
+        pushCandidate(currentBase);
       }
+
+      if (ASSET_BASE_CANDIDATES.length) {
+        for (const assetBase of ASSET_BASE_CANDIDATES) {
+          pushCandidate(assetBase);
+        }
+      } else if (ASSETS_BASE) {
+        pushCandidate(ASSETS_BASE);
+      }
+
       try {
         const origin = (window.location && window.location.origin) || '';
         if (origin && origin !== 'null' && origin !== 'undefined') {
-          list.push(`${origin.replace(/\/+$/, '')}${normalizedPath}`);
+          pushCandidate(origin);
         }
       } catch {}
+
       return list;
     };
 
@@ -5192,6 +5201,17 @@
     };
 
     // Defaults (leave fallbackAvatar as-is)
+    const AVATAR_UPLOAD_PREFIX = /^\/?uploads\/avatars\//i;
+
+    const resolveAvatarUpload = (pathLike) => {
+      if (!pathLike || typeof pathLike !== 'string') return '';
+      const trimmed = pathLike.trim();
+      if (!trimmed || !AVATAR_UPLOAD_PREFIX.test(trimmed)) return '';
+      const normalizedPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+      const resolved = resolveUploadUrl(normalizedPath);
+      return resolved || '';
+    };
+
     const fallbackAvatar = toAssetUrl('/img/avatar-default.svg');
 
     function createWaveSurferForAudio(audioEl, container, options = {}) {
@@ -5329,22 +5349,20 @@
 
       if (/^(data:|blob:|filesystem:)/i.test(trimmed)) return trimmed;
 
+      const resolvedAvatarUpload = resolveAvatarUpload(trimmed);
+      if (resolvedAvatarUpload) return resolvedAvatarUpload;
+
       const rewriteBeatloopUploads = (parsed) => {
         if (!parsed || typeof parsed !== 'object') return parsed;
-        const hostname = (parsed.hostname || '').toLowerCase();
         const pathname = parsed.pathname || '';
-        if (!hostname.includes('beatloop-api')) return parsed;
-        if (!/^\/?uploads\/avatars\//i.test(pathname)) return parsed;
-        const base = ASSETS_BASE || 'https://www.beatloop.co';
-        const normalizedBase = base.endsWith('/') ? base : `${base}/`;
-        const relative = pathname.replace(/^\/+/, '');
+        if (!AVATAR_UPLOAD_PREFIX.test(pathname)) return parsed;
+        const resolved = resolveAvatarUpload(`${pathname}${parsed.search || ''}${parsed.hash || ''}`);
+        if (!resolved) return parsed;
         try {
-          const rewritten = new URL(relative || '', normalizedBase);
-          if (parsed.search) rewritten.search = parsed.search;
-          if (parsed.hash) rewritten.hash = parsed.hash;
-          return rewritten;
-        } catch {}
-        return parsed;
+          return new URL(resolved);
+        } catch {
+          return parsed;
+        }
       };
 
       const normalizeParsedAvatar = (parsed) => {
