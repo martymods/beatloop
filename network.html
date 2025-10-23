@@ -168,6 +168,436 @@
       outline: none;
     }
 
+    /* ---------- Beatloop DJ turntable ---------- */
+    #beatloopDjShell {
+      position: relative;
+    }
+
+    .bl-turntable {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+      padding: 2rem;
+      border-radius: 1.75rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background:
+        radial-gradient(circle at 12% -10%, rgba(124, 58, 237, 0.35), transparent 55%),
+        radial-gradient(circle at 88% 110%, rgba(14, 165, 233, 0.28), transparent 60%),
+        linear-gradient(145deg, rgba(7, 7, 18, 0.95), rgba(12, 12, 28, 0.92));
+      color: #f6f5ff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 24px 80px rgba(8, 8, 20, 0.65);
+    }
+
+    .bl-turntable__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .bl-turntable__title {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .bl-turntable__title h3 {
+      margin: 0;
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .bl-turntable__title p {
+      margin: 0;
+      font-size: 0.95rem;
+      color: rgba(244, 244, 255, 0.7);
+    }
+
+    .bl-turntable__board {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 2rem;
+      align-items: stretch;
+    }
+
+    .bl-turntable__deck {
+      position: relative;
+      padding: 1.8rem 1.4rem 1.6rem;
+      border-radius: 1.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: linear-gradient(160deg, rgba(6, 6, 18, 0.92), rgba(15, 15, 32, 0.94));
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), inset 0 18px 32px rgba(255, 255, 255, 0.04), 0 20px 50px rgba(4, 4, 12, 0.6);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 1.4rem;
+    }
+
+    .bl-turntable__deck .info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(244, 244, 255, 0.78);
+      padding: 0.6rem 0.75rem;
+      border-radius: 0.75rem;
+      background: rgba(0, 0, 12, 0.6);
+      border: 1px solid rgba(124, 58, 237, 0.22);
+    }
+
+    .bl-turntable__deck .song {
+      position: relative;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .bl-turntable__deck .info-time {
+      font-size: 0.9rem;
+      font-variant-numeric: tabular-nums;
+      color: rgba(244, 244, 255, 0.88);
+    }
+
+    .bl-turntable__deck .info-tempo {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: rgba(34, 211, 238, 0.8);
+    }
+
+    .bl-turntable__deck.is-pending .info {
+      border-color: rgba(34, 211, 238, 0.55);
+      box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35);
+    }
+
+    .bl-turntable__deck.is-playing .bl-turntable__platter {
+      box-shadow:
+        inset 0 12px 24px rgba(0, 0, 0, 0.4),
+        inset 0 -12px 30px rgba(0, 0, 0, 0.4),
+        0 0 40px rgba(34, 211, 238, 0.25);
+    }
+
+    .bl-turntable__platter {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.18), rgba(10, 10, 16, 0.9));
+      box-shadow: inset 0 12px 24px rgba(0, 0, 0, 0.4), inset 0 -12px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .bl-turntable__label {
+      position: absolute;
+      inset: 24% 24%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(124, 58, 237, 0.9), rgba(67, 56, 202, 0.92));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(246, 245, 255, 0.95);
+      text-shadow: 0 4px 12px rgba(5, 5, 12, 0.65);
+    }
+
+    .bl-turntable__label::after {
+      content: '';
+      position: absolute;
+      inset: 16%;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      opacity: 0.8;
+    }
+
+    .bl-turntable__platter .jog {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 14px solid rgba(24, 24, 34, 0.95);
+      box-shadow: inset 0 0 0 12px rgba(255, 255, 255, 0.08);
+    }
+
+    .bl-turntable__platter .jog.running {
+      animation: turntable-spin 5s linear infinite;
+    }
+
+    .bl-turntable__platter .jog.paused {
+      animation-play-state: paused;
+    }
+
+    @keyframes turntable-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .bl-turntable__controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .bl-turntable__controls button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.55rem 1.3rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #0b0b14;
+      background: linear-gradient(135deg, #7c3aed, #22d3ee);
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+      box-shadow: 0 12px 28px rgba(124, 58, 237, 0.35);
+    }
+
+    .bl-turntable__controls button:hover,
+    .bl-turntable__controls button:focus-visible {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 34px rgba(14, 165, 233, 0.3);
+      outline: none;
+    }
+
+    .bl-turntable__controls .load,
+    .bl-turntable__controls .sync {
+      background: rgba(255, 255, 255, 0.16);
+      color: rgba(244, 244, 255, 0.9);
+      box-shadow: none;
+    }
+
+    .bl-turntable__controls .load:hover,
+    .bl-turntable__controls .sync:hover {
+      background: rgba(34, 211, 238, 0.26);
+      color: #0b0b14;
+    }
+
+    .bl-turntable__seek {
+      width: 100%;
+      accent-color: #7c3aed;
+    }
+
+    .bl-turntable__faders {
+      display: flex;
+      justify-content: space-between;
+      gap: 1.5rem;
+    }
+
+    .bl-turntable__slider-track {
+      position: relative;
+      width: 24px;
+      flex-shrink: 0;
+      border-radius: 999px;
+      height: 140px;
+      background: linear-gradient(180deg, rgba(124, 58, 237, 0.65), rgba(14, 165, 233, 0.65));
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .bl-turntable__slider-handle {
+      position: absolute;
+      left: 50%;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #0b0b14;
+      border: 3px solid rgba(244, 244, 255, 0.9);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+      transform: translate(-50%, 0);
+      cursor: grab;
+    }
+
+    .bl-turntable__slider-handle:active {
+      cursor: grabbing;
+    }
+
+    .bl-turntable__center {
+      position: relative;
+      padding: 1.4rem;
+      border-radius: 1.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: linear-gradient(180deg, rgba(10, 10, 26, 0.95), rgba(12, 12, 28, 0.88));
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 1.5rem;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    }
+
+    .bl-turntable__mystery {
+      display: grid;
+      place-items: center;
+    }
+
+    #beatloopDjToggle {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      border: 0;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.55));
+      color: #0b0b14;
+      font-size: 2.4rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 18px 45px rgba(124, 58, 237, 0.45), inset 0 -6px 16px rgba(0, 0, 0, 0.45);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    #beatloopDjToggle:hover,
+    #beatloopDjToggle:focus-visible {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 24px 55px rgba(34, 211, 238, 0.35), inset 0 -4px 12px rgba(0, 0, 0, 0.55);
+      outline: none;
+    }
+
+    .bl-turntable__crossfade {
+      position: relative;
+      border-radius: 999px;
+      padding: 1.2rem 1rem;
+      background: rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .bl-turntable__crossfade-track {
+      position: relative;
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    #crossfade {
+      position: absolute;
+      top: 50%;
+      width: 120px;
+      height: 24px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #7c3aed, #22d3ee);
+      transform: translate(0, -50%);
+      box-shadow: 0 14px 24px rgba(14, 165, 233, 0.32);
+      cursor: grab;
+    }
+
+    #crossfade:active {
+      cursor: grabbing;
+    }
+
+    #songloader {
+      position: absolute;
+      top: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(480px, 90vw);
+      border-radius: 1.25rem;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(7, 7, 18, 0.95);
+      box-shadow: 0 28px 60px rgba(5, 5, 15, 0.65);
+      overflow: hidden;
+      z-index: 4;
+    }
+
+    #songloader header {
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(124, 58, 237, 0.16);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    #songloader ul {
+      list-style: none;
+      margin: 0;
+      padding: 0.75rem 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #songloader li {
+      margin: 0;
+      padding: 0;
+    }
+
+    #songloader button {
+      width: 100%;
+      padding: 0.85rem 1.25rem;
+      background: transparent;
+      border: none;
+      color: rgba(244, 244, 255, 0.9);
+      font-size: 0.95rem;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+
+    #songloader button:hover,
+    #songloader button:focus-visible {
+      background: rgba(124, 58, 237, 0.18);
+      color: #ffffff;
+      outline: none;
+    }
+
+    #beatloopDj.timeline-shader-active .bl-turntable,
+    #beatloopDj.timeline-shader-active .bl-dj {
+      box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.28), 0 32px 90px rgba(124, 58, 237, 0.55);
+      background-image:
+        radial-gradient(circle at 18% 10%, rgba(124, 58, 237, 0.45), transparent 55%),
+        radial-gradient(circle at 82% 90%, rgba(14, 165, 233, 0.4), transparent 60%),
+        linear-gradient(155deg, rgba(6, 6, 18, 0.95), rgba(18, 18, 34, 0.95));
+    }
+
+    .bl-dj.hidden,
+    .bl-turntable.hidden {
+      display: none;
+    }
+
+    @media (max-width: 1100px) {
+      .bl-turntable__board {
+        grid-template-columns: 1fr;
+      }
+
+      .bl-turntable__center {
+        order: -1;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .bl-turntable {
+        padding: 1.5rem;
+      }
+
+      .bl-turntable__controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .bl-turntable__controls button,
+      .bl-turntable__controls .load,
+      .bl-turntable__controls .sync {
+        width: 100%;
+        text-align: center;
+      }
+
+      .bl-turntable__faders {
+        justify-content: center;
+      }
+    }
+
     .bl-dj__layout {
       display: grid;
       gap: 1.5rem;
@@ -3057,128 +3487,674 @@
 <!-- Beatloop DJ (hidden until opened) -->
 <div id="beatloopDj" class="fixed inset-0 z-[80] hidden">
   <div id="beatloopDjOverlay" class="absolute inset-0 bg-black/70 backdrop-blur"></div>
-  <div class="relative mx-auto my-10 w-full max-w-[min(1600px,96vw)] max-h-[88vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#0f0f15] p-4 ring-1 ring-white/10 bl-dj">
-    <div class="bl-dj__header">
-      <div class="bl-dj__heading">
-        <h3 class="bl-dj__title">Beatloop DJ — Live Mixer</h3>
-        <p class="bl-dj__subtitle">Queue songs, blend decks, and craft mixes with your beatloop library.</p>
+  <div id="beatloopDjShell" class="relative mx-auto my-10 w-full max-w-[min(1600px,96vw)] max-h-[88vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#0f0f15] p-4 ring-1 ring-white/10">
+    <div id="beatloopTurntable" class="bl-turntable">
+      <div class="bl-turntable__header">
+        <div class="bl-turntable__title">
+          <h3>Record Track</h3>
+          <p>🎚️ Beatloop DJ</p>
+        </div>
+        <div class="bl-turntable__actions flex items-center gap-2">
+          <button id="blTurntableStopAll" type="button" class="bl-dj__ghost-btn">Stop Decks</button>
+          <button id="blTurntableClose" type="button" class="bl-dj__ghost-btn">Close</button>
+        </div>
       </div>
-      <div class="bl-dj__header-controls">
-        <label class="bl-dj__crossfader-label">
-          <span>Crossfader</span>
-          <input id="blDjCrossfader" type="range" min="0" max="100" value="50" aria-label="Crossfader" />
-          <span id="blDjCrossfaderValue" class="bl-dj__crossfader-value">Center</span>
-        </label>
-        <button id="blDjStopAll" type="button" class="bl-dj__ghost-btn">Stop Decks</button>
-        <button id="blDjClose" type="button" class="bl-dj__ghost-btn">Close</button>
+      <div id="songloader" class="hidden">
+        <header>
+          <span>Select a track</span>
+          <button type="button" id="songloaderClose" class="bl-dj__ghost-btn">Close</button>
+        </header>
+        <ul>
+          <li><button type="button" data-track="1">A-Trak feat. Andrew Wyatt – Push [Mak &amp; Pasteman Remix]</button></li>
+          <li><button type="button" data-track="2">South Royston – Thinking Of You [Original Mix]</button></li>
+          <li><button type="button" data-track="3">My Digital Enemy – On A Ragga Tip [Original Mix]</button></li>
+          <li><button type="button" data-track="4">Showtek feat MC Ambush – 90s By Nature [Lucas &amp; Steve Remix]</button></li>
+        </ul>
+      </div>
+      <div class="bl-turntable__board">
+        <article id="left" class="bl-turntable__deck" data-channel="left">
+          <header class="flex items-center justify-between text-sm uppercase tracking-[0.18em] text-white/50">
+            <span>Deck A</span>
+          </header>
+          <div class="info">
+            <div class="song">Load a track to get spinning</div>
+            <div class="info-time">00:00</div>
+            <div class="info-tempo"><strong>±0.00<span> %</span></strong></div>
+          </div>
+          <div class="bl-turntable__platter">
+            <div class="jog paused"></div>
+            <div class="bl-turntable__label">beatloop</div>
+          </div>
+          <input type="range" min="0" max="0" value="0" class="bl-turntable__seek" />
+          <div class="bl-turntable__controls">
+            <button type="button" class="play">Play / Pause</button>
+            <button type="button" class="load">Load</button>
+            <button type="button" class="less">◀ Nudge</button>
+            <button type="button" class="more">Nudge ▶</button>
+            <button type="button" class="sync">Sync</button>
+          </div>
+          <div class="bl-turntable__faders">
+            <div class="bl-turntable__slider-track tempo-track">
+              <div class="tempo bl-turntable__slider-handle" role="slider" aria-label="Tempo"></div>
+            </div>
+            <div class="bl-turntable__slider-track volume-track">
+              <div class="volume bl-turntable__slider-handle" role="slider" aria-label="Volume"></div>
+            </div>
+          </div>
+        </article>
+        <div class="bl-turntable__center">
+          <div class="bl-turntable__mystery">
+            <button id="beatloopDjToggle" type="button" aria-label="Open Beatloop DJ — Live Mixer">?</button>
+          </div>
+          <div class="bl-turntable__crossfade">
+            <div class="bl-turntable__crossfade-track">
+              <div id="crossfade"></div>
+            </div>
+          </div>
+        </div>
+        <article id="right" class="bl-turntable__deck" data-channel="right">
+          <header class="flex items-center justify-between text-sm uppercase tracking-[0.18em] text-white/50">
+            <span>Deck B</span>
+          </header>
+          <div class="info">
+            <div class="song">Load a track to get spinning</div>
+            <div class="info-time">00:00</div>
+            <div class="info-tempo"><strong>±0.00<span> %</span></strong></div>
+          </div>
+          <div class="bl-turntable__platter">
+            <div class="jog paused"></div>
+            <div class="bl-turntable__label">beatloop</div>
+          </div>
+          <input type="range" min="0" max="0" value="0" class="bl-turntable__seek" />
+          <div class="bl-turntable__controls">
+            <button type="button" class="play">Play / Pause</button>
+            <button type="button" class="load">Load</button>
+            <button type="button" class="less">◀ Nudge</button>
+            <button type="button" class="more">Nudge ▶</button>
+            <button type="button" class="sync">Sync</button>
+          </div>
+          <div class="bl-turntable__faders">
+            <div class="bl-turntable__slider-track tempo-track">
+              <div class="tempo bl-turntable__slider-handle" role="slider" aria-label="Tempo"></div>
+            </div>
+            <div class="bl-turntable__slider-track volume-track">
+              <div class="volume bl-turntable__slider-handle" role="slider" aria-label="Volume"></div>
+            </div>
+          </div>
+        </article>
       </div>
     </div>
-
-    <div class="bl-dj__layout">
-      <section class="bl-dj__panel bl-dj__library">
-        <header class="bl-dj__panel-header">
-          <h4>Library</h4>
-          <p class="bl-dj__panel-hint">Search tracks and load them onto either deck.</p>
-        </header>
-        <div class="bl-dj__search">
-          <input id="blDjSearch" type="search" placeholder="Search title or artist" autocomplete="off" />
+    <div id="beatloopDjMixer" class="bl-dj hidden">
+      <div class="bl-dj__header">
+        <div class="bl-dj__heading">
+          <h3 class="bl-dj__title">Beatloop DJ — Live Mixer</h3>
+          <p class="bl-dj__subtitle">Queue songs, blend decks, and craft mixes with your beatloop library.</p>
         </div>
-        <div class="bl-dj__table-wrap">
-          <table class="bl-dj__table">
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Track</th>
-                <th scope="col" class="bl-dj__actions-column">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="blDjSongTable"></tbody>
-          </table>
-          <p id="blDjEmptyLibrary" class="bl-dj__empty hidden">Your library is loading… add tracks or refresh to see them here.</p>
+        <div class="bl-dj__header-controls">
+          <button id="blDjShowTurntable" type="button" class="bl-dj__ghost-btn">Turntable</button>
+          <label class="bl-dj__crossfader-label">
+            <span>Crossfader</span>
+            <input id="blDjCrossfader" type="range" min="0" max="100" value="50" aria-label="Crossfader" />
+            <span id="blDjCrossfaderValue" class="bl-dj__crossfader-value">Center</span>
+          </label>
+          <button id="blDjStopAll" type="button" class="bl-dj__ghost-btn">Stop Decks</button>
+          <button id="blDjClose" type="button" class="bl-dj__ghost-btn">Close</button>
         </div>
+      </div>
 
-        <section class="bl-dj__panel bl-dj__playlist">
+      <div class="bl-dj__layout">
+        <section class="bl-dj__panel bl-dj__library">
           <header class="bl-dj__panel-header">
-            <h4>Playlists</h4>
-            <button id="blDjClearPlaylist" type="button" class="bl-dj__ghost-btn">Clear Selected</button>
+            <h4>Library</h4>
+            <p class="bl-dj__panel-hint">Search tracks and load them onto either deck.</p>
           </header>
-          <p class="bl-dj__panel-hint">Create crates of tracks and add songs using the actions above.</p>
-          <div class="bl-dj__playlist-create">
-            <input id="blDjPlaylistName" type="text" placeholder="New playlist name" />
-            <button id="blDjCreatePlaylist" type="button" class="bl-dj__cta-btn">Create</button>
+          <div class="bl-dj__search">
+            <input id="blDjSearch" type="search" placeholder="Search title or artist" autocomplete="off" />
           </div>
-          <ul id="blDjPlaylists" class="bl-dj__playlist-list"></ul>
-          <div class="bl-dj__playlist-detail">
-            <div class="bl-dj__playlist-detail-header">
-              <h5 id="blDjActivePlaylistLabel">Select a playlist to view tracks</h5>
-              <span id="blDjPlaylistCount" class="bl-dj__badge hidden">0</span>
+          <div class="bl-dj__table-wrap">
+            <table class="bl-dj__table">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Track</th>
+                  <th scope="col" class="bl-dj__actions-column">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="blDjSongTable"></tbody>
+            </table>
+            <p id="blDjEmptyLibrary" class="bl-dj__empty hidden">Your library is loading… add tracks or refresh to see them here.</p>
+          </div>
+
+          <section class="bl-dj__panel bl-dj__playlist">
+            <header class="bl-dj__panel-header">
+              <h4>Playlists</h4>
+              <button id="blDjClearPlaylist" type="button" class="bl-dj__ghost-btn">Clear Selected</button>
+            </header>
+            <p class="bl-dj__panel-hint">Create crates of tracks and add songs using the actions above.</p>
+            <div class="bl-dj__playlist-create">
+              <input id="blDjPlaylistName" type="text" placeholder="New playlist name" />
+              <button id="blDjCreatePlaylist" type="button" class="bl-dj__cta-btn">Create</button>
             </div>
-            <ul id="blDjPlaylistTracks" class="bl-dj__playlist-tracks"></ul>
-            <p id="blDjPlaylistEmpty" class="bl-dj__empty">No tracks yet — add songs from the library.</p>
+            <ul id="blDjPlaylists" class="bl-dj__playlist-list"></ul>
+            <div class="bl-dj__playlist-detail">
+              <div class="bl-dj__playlist-detail-header">
+                <h5 id="blDjActivePlaylistLabel">Select a playlist to view tracks</h5>
+                <span id="blDjPlaylistCount" class="bl-dj__badge hidden">0</span>
+              </div>
+              <ul id="blDjPlaylistTracks" class="bl-dj__playlist-tracks"></ul>
+              <p id="blDjPlaylistEmpty" class="bl-dj__empty">No tracks yet — add songs from the library.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="bl-dj__panel bl-dj__decks">
+          <div class="bl-dj__deck" data-deck="A">
+            <div class="bl-dj__deck-header">
+              <h4>Deck A</h4>
+              <button id="blDjDeckAClear" type="button" class="bl-dj__ghost-btn">Unload</button>
+            </div>
+            <div class="bl-dj__deck-meta">
+              <img id="blDjDeckACover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck A cover" />
+              <div>
+                <p id="blDjDeckATitle" class="bl-dj__deck-title">No track loaded</p>
+                <p id="blDjDeckAArtist" class="bl-dj__deck-artist">Select a song to load Deck A.</p>
+              </div>
+            </div>
+            <div class="bl-dj__deck-controls">
+              <button id="blDjDeckAPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
+              <div class="bl-dj__control-row">
+                <label for="blDjDeckATempo">Tempo</label>
+                <input id="blDjDeckATempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
+                <span id="blDjDeckATempoVal" class="bl-dj__value">1.00×</span>
+              </div>
+              <div class="bl-dj__control-row">
+                <label for="blDjDeckASeek">Position</label>
+                <input id="blDjDeckASeek" type="range" min="0" max="0" value="0" step="0.01" />
+                <span id="blDjDeckAProgress" class="bl-dj__value">0:00 / 0:00</span>
+              </div>
+            </div>
+            <audio id="blDjDeckAAudio" preload="metadata"></audio>
+          </div>
+
+          <div class="bl-dj__deck" data-deck="B">
+            <div class="bl-dj__deck-header">
+              <h4>Deck B</h4>
+              <button id="blDjDeckBClear" type="button" class="bl-dj__ghost-btn">Unload</button>
+            </div>
+            <div class="bl-dj__deck-meta">
+              <img id="blDjDeckBCover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck B cover" />
+              <div>
+                <p id="blDjDeckBTitle" class="bl-dj__deck-title">No track loaded</p>
+                <p id="blDjDeckBArtist" class="bl-dj__deck-artist">Select a song to load Deck B.</p>
+              </div>
+            </div>
+            <div class="bl-dj__deck-controls">
+            <button id="blDjDeckBPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
+              <div class="bl-dj__control-row">
+                <label for="blDjDeckBTempo">Tempo</label>
+                <input id="blDjDeckBTempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
+                <span id="blDjDeckBTempoVal" class="bl-dj__value">1.00×</span>
+              </div>
+              <div class="bl-dj__control-row">
+                <label for="blDjDeckBSeek">Position</label>
+                <input id="blDjDeckBSeek" type="range" min="0" max="0" value="0" step="0.01" />
+                <span id="blDjDeckBProgress" class="bl-dj__value">0:00 / 0:00</span>
+              </div>
+            </div>
+            <audio id="blDjDeckBAudio" preload="metadata"></audio>
           </div>
         </section>
-      </section>
-
-      <section class="bl-dj__panel bl-dj__decks">
-        <div class="bl-dj__deck" data-deck="A">
-          <div class="bl-dj__deck-header">
-            <h4>Deck A</h4>
-            <button id="blDjDeckAClear" type="button" class="bl-dj__ghost-btn">Unload</button>
-          </div>
-          <div class="bl-dj__deck-meta">
-            <img id="blDjDeckACover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck A cover" />
-            <div>
-              <p id="blDjDeckATitle" class="bl-dj__deck-title">No track loaded</p>
-              <p id="blDjDeckAArtist" class="bl-dj__deck-artist">Select a song to load Deck A.</p>
-            </div>
-          </div>
-          <div class="bl-dj__deck-controls">
-            <button id="blDjDeckAPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
-            <div class="bl-dj__control-row">
-              <label for="blDjDeckATempo">Tempo</label>
-              <input id="blDjDeckATempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
-              <span id="blDjDeckATempoVal" class="bl-dj__value">1.00×</span>
-            </div>
-            <div class="bl-dj__control-row">
-              <label for="blDjDeckASeek">Position</label>
-              <input id="blDjDeckASeek" type="range" min="0" max="0" value="0" step="0.01" />
-              <span id="blDjDeckAProgress" class="bl-dj__value">0:00 / 0:00</span>
-            </div>
-          </div>
-          <audio id="blDjDeckAAudio" preload="metadata"></audio>
-        </div>
-
-        <div class="bl-dj__deck" data-deck="B">
-          <div class="bl-dj__deck-header">
-            <h4>Deck B</h4>
-            <button id="blDjDeckBClear" type="button" class="bl-dj__ghost-btn">Unload</button>
-          </div>
-          <div class="bl-dj__deck-meta">
-            <img id="blDjDeckBCover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck B cover" />
-            <div>
-              <p id="blDjDeckBTitle" class="bl-dj__deck-title">No track loaded</p>
-              <p id="blDjDeckBArtist" class="bl-dj__deck-artist">Select a song to load Deck B.</p>
-            </div>
-          </div>
-          <div class="bl-dj__deck-controls">
-            <button id="blDjDeckBPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
-            <div class="bl-dj__control-row">
-              <label for="blDjDeckBTempo">Tempo</label>
-              <input id="blDjDeckBTempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
-              <span id="blDjDeckBTempoVal" class="bl-dj__value">1.00×</span>
-            </div>
-            <div class="bl-dj__control-row">
-              <label for="blDjDeckBSeek">Position</label>
-              <input id="blDjDeckBSeek" type="range" min="0" max="0" value="0" step="0.01" />
-              <span id="blDjDeckBProgress" class="bl-dj__value">0:00 / 0:00</span>
-            </div>
-          </div>
-          <audio id="blDjDeckBAudio" preload="metadata"></audio>
-        </div>
-      </section>
+      </div>
     </div>
   </div>
-</div>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+<script>
+(function() {
+  const root = document.getElementById('beatloopDj');
+  if (!root || typeof window === 'undefined') return;
+  const $ = window.jQuery;
+  if (!$ || !$.fn || typeof $.fn.draggable !== 'function') return;
+
+  const tracks = {
+    1: {
+      title: 'A-Trak feat. Andrew Wyatt – Push [Mak & Pasteman Remix]',
+      url: 'http://www.michelacosta.com/html5/push.mp3'
+    },
+    2: {
+      title: 'South Royston – Thinking Of You [Original Mix]',
+      url: 'http://www.michelacosta.com/html5/royston.mp3'
+    },
+    3: {
+      title: 'My Digital Enemy – On A Ragga Tip [Original Mix]',
+      url: 'http://www.michelacosta.com/html5/ragga.mp3'
+    },
+    4: {
+      title: 'Showtek feat MC Ambush – 90s By Nature [Lucas & Steve Remix]',
+      url: 'http://www.michelacosta.com/html5/showtek.mp3'
+    }
+  };
+
+  const $root = $('#beatloopDj');
+  const $turntable = $('#beatloopTurntable');
+  const $mixer = $('#beatloopDjMixer');
+  const $songloader = $('#songloader');
+  const $songloaderClose = $('#songloaderClose');
+  const $toggleButton = $('#beatloopDjToggle');
+  const $showTurntableBtn = $('#blDjShowTurntable');
+  const $turntableStopBtn = $('#blTurntableStopAll');
+  const $turntableCloseBtn = $('#blTurntableClose');
+  const $crossfadeHandle = $('#crossfade');
+  const $crossfadeTrack = $crossfadeHandle.parent();
+
+  let pendingDeck = null;
+  let crossfadeRatio = 0.5;
+  let playbackActive = false;
+
+  const decks = {
+    left: initDeck('left'),
+    right: initDeck('right')
+  };
+
+  function initDeck(id) {
+    const $rootDeck = $('#' + id);
+    return {
+      id,
+      $root: $rootDeck,
+      $song: $rootDeck.find('.song'),
+      $time: $rootDeck.find('.info-time'),
+      $tempoDisplay: $rootDeck.find('.info-tempo strong'),
+      $seek: $rootDeck.find('input[type="range"]'),
+      $tempoHandle: $rootDeck.find('.tempo'),
+      $volumeHandle: $rootDeck.find('.volume'),
+      $jog: $rootDeck.find('.jog'),
+      $play: $rootDeck.find('.play'),
+      $load: $rootDeck.find('.load'),
+      $less: $rootDeck.find('.less'),
+      $more: $rootDeck.find('.more'),
+      $sync: $rootDeck.find('.sync'),
+      audio: null,
+      trackId: null,
+      tempoPct: 0,
+      volume: 0.75
+    };
+  }
+
+  function setHandleRatio($handle, ratio) {
+    const $track = $handle.parent();
+    const trackHeight = Math.max($track.innerHeight() - $handle.outerHeight(), 0);
+    const bounded = Math.min(Math.max(ratio, 0), 1);
+    const top = trackHeight * bounded;
+    $handle.css('top', `${top}px`);
+    return bounded;
+  }
+
+  function getHandleRatio($handle) {
+    const $track = $handle.parent();
+    const trackHeight = Math.max($track.innerHeight() - $handle.outerHeight(), 0);
+    if (!trackHeight) return 0;
+    const top = parseFloat($handle.css('top')) || 0;
+    return Math.min(Math.max(top / trackHeight, 0), 1);
+  }
+
+  function formatTime(seconds) {
+    const total = Number(seconds) || 0;
+    const mins = Math.floor(total / 60);
+    const secs = Math.floor(total % 60);
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  function notifyTimeline(active) {
+    const playing = Boolean(active);
+    if (playing === playbackActive) return;
+    playbackActive = playing;
+    if (typeof window.notifyTimelineShaderPlayback === 'function') {
+      window.notifyTimelineShaderPlayback(playing);
+    } else if (typeof window.setPlayPauseState === 'function') {
+      window.setPlayPauseState(playing);
+    }
+  }
+
+  function updateTimelineState() {
+    const isPlaying = Object.values(decks).some(deck => deck.audio && !deck.audio.paused && !deck.audio.ended);
+    notifyTimeline(isPlaying);
+  }
+
+  function applyJogState(deck) {
+    if (!deck.$jog.length) return;
+    const running = deck.audio && !deck.audio.paused && !deck.audio.ended;
+    deck.$jog.toggleClass('running', running);
+    deck.$jog.toggleClass('paused', !running);
+    const tempoMultiplier = deck.audio ? Math.max(deck.audio.playbackRate || 1, 0.25) : 1;
+    deck.$jog.css('animation-duration', `${(5 / tempoMultiplier).toFixed(2)}s`);
+  }
+
+  function applyMix() {
+    Object.values(decks).forEach(deck => {
+      if (!deck.audio) return;
+      const baseVolume = Math.min(Math.max(deck.volume, 0), 1);
+      const output = deck.id === 'left'
+        ? baseVolume * (1 - crossfadeRatio)
+        : baseVolume * crossfadeRatio;
+      deck.audio.volume = Math.min(Math.max(output, 0), 1);
+    });
+  }
+
+  function updateTempoDisplay(deck) {
+    const pct = deck.tempoPct || 0;
+    const sign = pct >= 0 ? '+' : '';
+    deck.$tempoDisplay.html(`${sign}${pct.toFixed(2)}<span> %</span>`);
+    if (deck.audio) {
+      const playbackRate = Math.max(0.5, Math.min(1.5, 1 + pct / 100));
+      deck.audio.playbackRate = playbackRate;
+    }
+    applyJogState(deck);
+  }
+
+  function updateVolumeDisplay(deck) {
+    deck.volume = Math.min(Math.max(deck.volume, 0), 1);
+    applyMix();
+  }
+
+  function setTempoFromHandle(deck) {
+    const ratio = getHandleRatio(deck.$tempoHandle);
+    deck.tempoPct = (0.5 - ratio) * 40;
+    updateTempoDisplay(deck);
+  }
+
+  function setVolumeFromHandle(deck) {
+    const ratio = getHandleRatio(deck.$volumeHandle);
+    deck.volume = 1 - ratio;
+    updateVolumeDisplay(deck);
+  }
+
+  function updateSeek(deck) {
+    if (!deck.audio || !deck.$seek.length) return;
+    const duration = Number(deck.audio.duration) || 0;
+    const current = Number(deck.audio.currentTime) || 0;
+    if (duration > 0) {
+      deck.$seek.attr('max', duration.toFixed(2));
+    }
+    deck.$seek.val(current.toFixed(2));
+    deck.$time.text(formatTime(current));
+  }
+
+  function stopDeck(deck, reset = false) {
+    if (!deck.audio) return;
+    try { deck.audio.pause(); } catch (err) {}
+    if (reset) {
+      try { deck.audio.currentTime = 0; } catch (err) {}
+    }
+    updateSeek(deck);
+    applyJogState(deck);
+    updateTimelineState();
+  }
+
+  function resetDeckUi(deck) {
+    deck.trackId = null;
+    if (deck.audio) {
+      try { deck.audio.pause(); } catch (err) {}
+    }
+    deck.audio = null;
+    deck.$song.text('Load a track to get spinning');
+    deck.$time.text('00:00');
+    deck.$seek.val('0').attr('max', '0');
+    deck.$root.removeClass('is-playing');
+    applyJogState(deck);
+    updateTimelineState();
+  }
+
+  function loadTrack(deckId, trackId) {
+    const deck = decks[deckId];
+    const track = tracks[trackId];
+    if (!deck || !track) return;
+
+    if (deck.audio) {
+      try { deck.audio.pause(); } catch (err) {}
+    }
+
+    const audio = new Audio(track.url);
+    audio.preload = 'metadata';
+    audio.playbackRate = Math.max(0.5, Math.min(1.5, 1 + (deck.tempoPct || 0) / 100));
+    deck.audio = audio;
+    deck.trackId = trackId;
+    deck.$song.text(track.title);
+    deck.$root.removeClass('is-pending');
+
+    audio.addEventListener('loadedmetadata', () => {
+      updateSeek(deck);
+      applyMix();
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      updateSeek(deck);
+    });
+
+    audio.addEventListener('play', () => {
+      deck.$root.addClass('is-playing');
+      applyJogState(deck);
+      updateTimelineState();
+    });
+
+    const handlePause = () => {
+      deck.$root.removeClass('is-playing');
+      applyJogState(deck);
+      updateTimelineState();
+    };
+
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('ended', () => {
+      handlePause();
+      try { audio.currentTime = 0; } catch (err) {}
+      updateSeek(deck);
+    });
+
+    updateSeek(deck);
+    applyMix();
+  }
+
+  function togglePlayback(deck) {
+    if (!deck.audio) {
+      openLoader(deck.id);
+      return;
+    }
+    if (deck.audio.paused || deck.audio.ended) {
+      const promise = deck.audio.play();
+      if (promise && typeof promise.catch === 'function') {
+        promise.catch(() => {});
+      }
+    } else {
+      deck.audio.pause();
+    }
+  }
+
+  function nudge(deck, direction) {
+    if (!deck.audio) {
+      openLoader(deck.id);
+      return;
+    }
+    const amount = 0.1 * direction;
+    try {
+      const current = deck.audio.currentTime || 0;
+      const duration = deck.audio.duration || 0;
+      let next = current + amount;
+      if (duration > 0) {
+        next = Math.max(0, Math.min(duration, next));
+      } else {
+        next = Math.max(0, next);
+      }
+      deck.audio.currentTime = next;
+      updateSeek(deck);
+    } catch (err) {}
+  }
+
+  function requestSyncDislike() {
+    const title = '¡Desprecio infinito!';
+    const options = {
+      body: 'No nos gustan los DJs que usan el SYNC',
+      icon: 'http://www.michelacosta.com/yo.png'
+    };
+    try {
+      if ('Notification' in window && Notification.requestPermission) {
+        Notification.requestPermission(() => {
+          try { new Notification(title, options); } catch (err) {}
+        });
+      }
+    } catch (err) {}
+  }
+
+  function openLoader(deckId) {
+    pendingDeck = deckId;
+    $('.bl-turntable__deck').removeClass('is-pending');
+    if (deckId && decks[deckId]) {
+      decks[deckId].$root.addClass('is-pending');
+    }
+    $songloader.removeClass('hidden');
+  }
+
+  function closeLoader() {
+    pendingDeck = null;
+    $('.bl-turntable__deck').removeClass('is-pending');
+    $songloader.addClass('hidden');
+  }
+
+  function setCrossfade(ratio) {
+    const bounded = Math.min(Math.max(ratio, 0), 1);
+    const trackWidth = Math.max($crossfadeTrack.innerWidth() - $crossfadeHandle.outerWidth(), 0);
+    const left = trackWidth * bounded;
+    $crossfadeHandle.css('left', `${left}px`);
+    crossfadeRatio = bounded;
+    applyMix();
+  }
+
+  Object.values(decks).forEach(deck => {
+    setHandleRatio(deck.$tempoHandle, 0.5);
+    setHandleRatio(deck.$volumeHandle, 0.25);
+    setTempoFromHandle(deck);
+    setVolumeFromHandle(deck);
+
+    deck.$tempoHandle.draggable({
+      axis: 'y',
+      containment: 'parent',
+      drag: () => setTempoFromHandle(deck),
+      stop: () => setTempoFromHandle(deck)
+    });
+
+    deck.$volumeHandle.draggable({
+      axis: 'y',
+      containment: 'parent',
+      drag: () => setVolumeFromHandle(deck),
+      stop: () => setVolumeFromHandle(deck)
+    });
+
+    deck.$tempoHandle.on('dblclick', () => {
+      setHandleRatio(deck.$tempoHandle, 0.5);
+      setTempoFromHandle(deck);
+    });
+
+    deck.$volumeHandle.on('dblclick', () => {
+      setHandleRatio(deck.$volumeHandle, 0.25);
+      setVolumeFromHandle(deck);
+    });
+
+    deck.$play.on('click', () => togglePlayback(deck));
+    deck.$load.on('click', () => openLoader(deck.id));
+    deck.$less.on('click', () => nudge(deck, -1));
+    deck.$more.on('click', () => nudge(deck, 1));
+    deck.$sync.on('click', requestSyncDislike);
+
+    deck.$seek.on('input change', function() {
+      if (!deck.audio) return;
+      const target = Number(this.value);
+      if (!Number.isFinite(target)) return;
+      try { deck.audio.currentTime = Math.max(0, target); } catch (err) {}
+      updateSeek(deck);
+    });
+  });
+
+  setCrossfade(0.5);
+  $crossfadeHandle.draggable({
+    axis: 'x',
+    containment: 'parent',
+    drag: () => {
+      const trackWidth = Math.max($crossfadeTrack.innerWidth() - $crossfadeHandle.outerWidth(), 0);
+      const left = parseFloat($crossfadeHandle.css('left')) || 0;
+      const ratio = trackWidth ? left / trackWidth : 0.5;
+      crossfadeRatio = Math.min(Math.max(ratio, 0), 1);
+      applyMix();
+    },
+    stop: () => {
+      const trackWidth = Math.max($crossfadeTrack.innerWidth() - $crossfadeHandle.outerWidth(), 0);
+      const left = parseFloat($crossfadeHandle.css('left')) || 0;
+      const ratio = trackWidth ? left / trackWidth : 0.5;
+      crossfadeRatio = Math.min(Math.max(ratio, 0), 1);
+      applyMix();
+    }
+  });
+
+  $('#songloader button[data-track]').on('click', function() {
+    const trackId = Number($(this).data('track'));
+    if (pendingDeck && decks[pendingDeck]) {
+      loadTrack(pendingDeck, trackId);
+    }
+    closeLoader();
+  });
+
+  $songloaderClose.on('click', closeLoader);
+
+  $toggleButton.on('click', () => {
+    showMixerView();
+    if (typeof window.__beatloopDjRefreshLibrary === 'function') {
+      try { window.__beatloopDjRefreshLibrary(); } catch (err) {}
+    }
+  });
+
+  $showTurntableBtn.on('click', () => {
+    showTurntableView();
+  });
+
+  $turntableStopBtn.on('click', () => {
+    stopAllDecks(true);
+  });
+
+  function stopAllDecks(reset = false) {
+    Object.values(decks).forEach(deck => stopDeck(deck, reset));
+  }
+
+  function showTurntableView() {
+    $turntable.removeClass('hidden');
+    $mixer.addClass('hidden');
+    closeLoader();
+    $root.attr('data-view', 'turntable');
+  }
+
+  function showMixerView() {
+    $turntable.addClass('hidden');
+    $mixer.removeClass('hidden');
+    $root.attr('data-view', 'mixer');
+  }
+
+  window.__beatloopTurntable = {
+    showTurntable: showTurntableView,
+    showMixer: showMixerView,
+    stop: stopAllDecks,
+    resetDeck: (deckId) => {
+      if (deckId && decks[deckId]) resetDeckUi(decks[deckId]);
+    },
+    isPlaying: () => Object.values(decks).some(deck => deck.audio && !deck.audio.paused && !deck.audio.ended)
+  };
+
+  if ($turntableCloseBtn.length) {
+    $turntableCloseBtn.on('click', () => {
+      if (typeof window.__beatloopHideDjModal === 'function') {
+        window.__beatloopHideDjModal();
+      }
+    });
+  }
+
+  showTurntableView();
+})();
+</script>
 
 <!-- Notifications overlay -->
 <div id="notificationsOverlay" class="bl-notify-overlay" aria-hidden="true">
@@ -5282,6 +6258,8 @@ let sessionsCard = null;
     const djStopAllBtn = document.getElementById('blDjStopAll')
     const djCrossfader = document.getElementById('blDjCrossfader')
     const djCrossfaderValue = document.getElementById('blDjCrossfaderValue')
+    const turntableStopBtn = document.getElementById('blTurntableStopAll')
+    const turntableCloseBtn = document.getElementById('blTurntableClose')
     const djSongTable = document.getElementById('blDjSongTable')
     const djEmptyLibrary = document.getElementById('blDjEmptyLibrary')
     const djSearchInput = document.getElementById('blDjSearch')
@@ -5386,12 +6364,27 @@ let sessionsCard = null;
       progress.textContent = `${formatDjTime(current)} / ${formatDjTime(duration)}`
     }
 
+    function notifyDjTimelinePlayback(playing) {
+      const state = Boolean(playing)
+      if (typeof window.notifyTimelineShaderPlayback === 'function') {
+        try { window.notifyTimelineShaderPlayback(state) } catch {}
+      } else if (typeof window.setPlayPauseState === 'function') {
+        try { window.setPlayPauseState(state) } catch {}
+      }
+    }
+
+    function updateDjTimelinePlaybackState() {
+      const active = Object.values(djDecks).some(deck => deck?.isPlaying)
+      notifyDjTimelinePlayback(active)
+    }
+
     function setDeckPlayingState(deck, playing) {
       if (!deck || !deck.elements || !deck.elements.playBtn) return
       deck.isPlaying = Boolean(playing)
       const label = playing ? 'Pause' : 'Play'
       deck.elements.playBtn.textContent = label
       deck.elements.playBtn.setAttribute('aria-pressed', playing ? 'true' : 'false')
+      updateDjTimelinePlaybackState()
     }
 
     function applyCrossfader() {
@@ -5434,6 +6427,7 @@ let sessionsCard = null;
         setDeckPlayingState(deck, false)
         refreshDeckProgress(deck)
       })
+      updateDjTimelinePlaybackState()
     }
 
     function clearDeck(deck) {
@@ -5889,6 +6883,9 @@ let sessionsCard = null;
       updateCrossfaderValue(djCrossfader?.value ?? 50)
       refreshDjLibrary()
       document.addEventListener('keydown', handleDjEscape)
+      if (window.__beatloopTurntable && typeof window.__beatloopTurntable.showTurntable === 'function') {
+        try { window.__beatloopTurntable.showTurntable() } catch {}
+      }
     }
 
     function hideDjModal() {
@@ -5900,6 +6897,10 @@ let sessionsCard = null;
       djModal.classList.add('hidden')
       djState.isOpen = false
       stopAllDjDecks()
+      if (window.__beatloopTurntable && typeof window.__beatloopTurntable.stop === 'function') {
+        try { window.__beatloopTurntable.stop(true) } catch {}
+      }
+      notifyDjTimelinePlayback(false)
       document.removeEventListener('keydown', handleDjEscape)
     }
 
@@ -5907,9 +6908,20 @@ let sessionsCard = null;
       showDjModal()
     })
 
+    window.__beatloopHideDjModal = hideDjModal
+
     djCloseBtn?.addEventListener('click', hideDjModal)
     djOverlay?.addEventListener('click', hideDjModal)
-    djStopAllBtn?.addEventListener('click', stopAllDjDecks)
+    djStopAllBtn?.addEventListener('click', () => {
+      stopAllDjDecks()
+      if (window.__beatloopTurntable && typeof window.__beatloopTurntable.stop === 'function') {
+        try { window.__beatloopTurntable.stop(true) } catch {}
+      }
+    })
+    turntableCloseBtn?.addEventListener('click', hideDjModal)
+    turntableStopBtn?.addEventListener('click', () => {
+      stopAllDjDecks()
+    })
 
     djCrossfader?.addEventListener('input', (event) => {
       updateCrossfaderValue(event?.target?.value ?? djCrossfader.value)
@@ -5942,6 +6954,7 @@ let sessionsCard = null;
     Object.values(djDecks).forEach(clearDeck)
     updateCrossfaderValue(djCrossfader?.value ?? 50)
     refreshDjLibrary()
+    updateDjTimelinePlaybackState()
 
     const renderedTrackIds = new Set()
     const renderedAlbumIds = new Set()
@@ -15611,6 +16624,7 @@ void main()
   const canvas = document.getElementById('timelineShaderCanvas');
   const fragEl = document.getElementById('timeline-shader-fragment');
   const vertEl = document.getElementById('timeline-shader-vertex');
+  const djBackdrop = document.getElementById('beatloopDj');
   if (!overlay || !canvas || !fragEl || !vertEl) return;
 
   const debugEnabled = window.__TIMELINE_SHADER_DEBUG ?? true;
@@ -15627,6 +16641,12 @@ void main()
     fragmentFound: !!fragEl,
     vertexFound: !!vertEl,
   });
+
+  const setShaderActiveClass = (active) => {
+    const method = active ? 'add' : 'remove';
+    document.body?.classList[method]('timeline-shader-active');
+    if (djBackdrop) djBackdrop.classList[method]('timeline-shader-active');
+  };
 
   const reportOverlayState = (stage, extra = {}) => {
     try {
@@ -15780,7 +16800,7 @@ void main()
   const deactivateImmediately = (reason = 'unknown') => {
     overlay.classList.remove('is-active');
     overlay.classList.remove('is-exiting');
-    document.body?.classList.remove('timeline-shader-active');
+    setShaderActiveClass(false);
     reportOverlayState('Overlay deactivated immediately', { reason });
   };
 
@@ -15794,7 +16814,7 @@ void main()
       debugLog('Activating overlay', { reason });
       overlay.classList.remove('is-exiting');
       overlay.classList.add('is-active');
-      document.body?.classList.add('timeline-shader-active');
+      setShaderActiveClass(true);
       reportOverlayState('Overlay activated', { reason });
     },
     deactivate(options = {}) {
@@ -15931,6 +16951,8 @@ void main()
       shader.deactivate({ immediate: true, reason: 'playback-stop' });
     }
   };
+
+  window.notifyTimelineShaderPlayback = (playing) => applyPlayState(playing);
 
   const originalSetPlayPauseState = window.setPlayPauseState;
   window.setPlayPauseState = function patchedSetPlayPauseState(playing) {
