@@ -4348,6 +4348,10 @@
     isPlaying: () => Object.values(decks).some(deck => deck.audio && !deck.audio.paused && !deck.audio.ended)
   };
 
+  if (typeof window !== 'undefined') {
+    window.loadTrack = loadTrack;
+  }
+
   if ($turntableCloseBtn.length) {
     $turntableCloseBtn.on('click', () => {
       if (typeof window.__beatloopHideDjModal === 'function') {
@@ -4897,8 +4901,26 @@
       }
     };
 
+    const FALLBACK_TRACK_COVER_DATA_URL = (() => {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="128" height="128" rx="18" fill="url(#g)"/><g fill="#fff"><circle cx="46" cy="86" r="12"/><path d="M82 24v56.6a12 12 0 1 1-4-8.6V34l-26 6v36.6a12 12 0 1 1-4-8.6V36z"/></g></svg>';
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    })();
+
+    const maybeGetLegacyCoverFallback = (value) => {
+      if (!value || typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (/^(data:|blob:|filesystem:)/i.test(trimmed)) return null;
+      if (trimmed.toLowerCase().endsWith('cover-default.svg')) {
+        return FALLBACK_TRACK_COVER_DATA_URL;
+      }
+      return null;
+    };
+
     const toAssetUrl = (path) => {
       if (!path || typeof path !== 'string') return path;
+      const legacyCover = maybeGetLegacyCoverFallback(path);
+      if (legacyCover) return legacyCover;
       if (/^https?:\/\//i.test(path)) return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(path));
       if (/^(data:|blob:|filesystem:)/i.test(path)) return path;
       if (path.startsWith('//')) {
@@ -4916,6 +4938,8 @@
       const trimmed = path.trim();
       if (!trimmed) return [];
       if (/^(data:|blob:|filesystem:)/i.test(trimmed)) return [trimmed];
+      const legacyCover = maybeGetLegacyCoverFallback(trimmed);
+      if (legacyCover) return [legacyCover];
       if (/^https?:\/\//i.test(trimmed)) {
         const normalized = ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(trimmed));
         return normalized ? [normalized] : [];
@@ -5482,10 +5506,7 @@
     }
 
     // REPLACE your DEFAULT_TRACK_COVER with this:
-    const DEFAULT_TRACK_COVER = (function () {
-      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="128" height="128" rx="18" fill="url(#g)"/><g fill="#fff"><circle cx="46" cy="86" r="12"/><path d="M82 24v56.6a12 12 0 1 1-4-8.6V34l-26 6v36.6a12 12 0 1 1-4-8.6V36z"/></g></svg>';
-      return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-    })();
+    const DEFAULT_TRACK_COVER = FALLBACK_TRACK_COVER_DATA_URL;
 
     // ---------- IndexedDB (for blobs)
     const DB_NAME = 'beatloop'
