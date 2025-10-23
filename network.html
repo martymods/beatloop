@@ -5329,6 +5329,24 @@
 
       if (/^(data:|blob:|filesystem:)/i.test(trimmed)) return trimmed;
 
+      const rewriteBeatloopUploads = (parsed) => {
+        if (!parsed || typeof parsed !== 'object') return parsed;
+        const hostname = (parsed.hostname || '').toLowerCase();
+        const pathname = parsed.pathname || '';
+        if (!hostname.includes('beatloop-api')) return parsed;
+        if (!/^\/?uploads\/avatars\//i.test(pathname)) return parsed;
+        const base = ASSETS_BASE || 'https://www.beatloop.co';
+        const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+        const relative = pathname.replace(/^\/+/, '');
+        try {
+          const rewritten = new URL(relative || '', normalizedBase);
+          if (parsed.search) rewritten.search = parsed.search;
+          if (parsed.hash) rewritten.hash = parsed.hash;
+          return rewritten;
+        } catch {}
+        return parsed;
+      };
+
       const normalizeParsedAvatar = (parsed) => {
         if (!parsed || !parsed.href) return null;
         const protocol = (parsed.protocol || '').toLowerCase();
@@ -5351,11 +5369,11 @@
       try {
         if (/^https?:\/\//i.test(trimmed)) {
           const parsed = new URL(trimmed);
-          const normalized = normalizeParsedAvatar(parsed);
+          const normalized = normalizeParsedAvatar(rewriteBeatloopUploads(parsed));
           if (normalized) return normalized;
         } else if (trimmed.startsWith('//')) {
           const parsed = new URL(`${window.location.protocol}${trimmed}`);
-          const normalized = normalizeParsedAvatar(parsed);
+          const normalized = normalizeParsedAvatar(rewriteBeatloopUploads(parsed));
           if (normalized) return normalized;
         }
       } catch {}
@@ -5372,7 +5390,7 @@
         if (!base) continue;
         try {
           const parsed = new URL(trimmed, base);
-          const normalized = normalizeParsedAvatar(parsed);
+          const normalized = normalizeParsedAvatar(rewriteBeatloopUploads(parsed));
           if (normalized) return normalized;
         } catch {}
       }
@@ -6671,8 +6689,9 @@ let sessionsCard = null;
         stopPlaylistAutoplay()
       }
       const turntableId = DJ_TO_TURNTABLE_DECK[deck.label]
-      if (turntableId && decks[turntableId]) {
-        resetDeckUi(decks[turntableId])
+      const turntableDecks = typeof decks !== 'undefined' ? decks : null
+      if (turntableId && turntableDecks && turntableDecks[turntableId]) {
+        resetDeckUi(turntableDecks[turntableId])
       }
     }
 
