@@ -3856,7 +3856,7 @@
   const $ = window.jQuery;
   if (!$ || !$.fn || typeof $.fn.draggable !== 'function') return;
 
-  const tracks = {
+  const turntableTracks = {
     1: {
       title: 'A-Trak feat. Andrew Wyatt – Push [Mak & Pasteman Remix]',
       url: 'https://www.michelacosta.com/html5/push.mp3'
@@ -3876,7 +3876,7 @@
   };
 
   const dynamicTurntableTrackIndex = new Map();
-  let nextTurntableTrackId = Object.keys(tracks).reduce((max, key) => {
+  let nextTurntableTrackId = Object.keys(turntableTracks).reduce((max, key) => {
     const value = Number(key);
     return Number.isFinite(value) ? Math.max(max, value) : max;
   }, 0) + 1;
@@ -3908,7 +3908,7 @@
     const key = String(track.url);
     if (dynamicTurntableTrackIndex.has(key)) {
       const existingId = dynamicTurntableTrackIndex.get(key);
-      tracks[existingId] = {
+      turntableTracks[existingId] = {
         title: resolveTurntableTrackTitle(track),
         artist: resolveTurntableTrackArtist(track),
         url: track.url,
@@ -3917,7 +3917,7 @@
     }
     const trackId = nextTurntableTrackId++;
     dynamicTurntableTrackIndex.set(key, trackId);
-    tracks[trackId] = {
+    turntableTracks[trackId] = {
       title: resolveTurntableTrackTitle(track),
       artist: resolveTurntableTrackArtist(track),
       url: track.url,
@@ -6954,7 +6954,7 @@ let sessionsCard = null;
 
     function buildTurntableLibraryTracks() {
       const library = []
-      Object.entries(tracks).forEach(([id, entry]) => {
+      Object.entries(turntableTracks).forEach(([id, entry]) => {
         if (!entry || !entry.url) return
         const { title, artist } = deriveTurntableLibraryMeta(entry)
         library.push({
