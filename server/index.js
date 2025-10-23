@@ -22,6 +22,8 @@ import {
   durableStorageEnabled,
   getDurablePublicBase,
   getUploadsRoot,
+  uploadsStorageAvailable,
+  uploadsUsingLocalFallback,
   writeBufferToUploads,
   deleteUploadKey,
   localPathForKey
@@ -267,14 +269,18 @@ const RUNNING_IN_PRODUCTION = Boolean(
 );
 const DURABLE_UPLOADS_REQUIRED_MESSAGE =
   'Durable uploads storage is required in production. Configure S3_BUCKET, S3_REGION, S3_PUBLIC_BASE_URL and AWS credentials.';
-const durableUploadsAvailable = durableStorageEnabled();
+const durableUploadsActive = durableStorageEnabled();
+const uploadsAvailable = uploadsStorageAvailable();
+const localUploadsFallbackActive = uploadsUsingLocalFallback();
 
-if (RUNNING_IN_PRODUCTION && !durableUploadsAvailable) {
+if (RUNNING_IN_PRODUCTION && !uploadsAvailable) {
   throw new Error(DURABLE_UPLOADS_REQUIRED_MESSAGE);
 }
 
-if (!durableUploadsAvailable) {
-  console.warn('⚠️  Durable storage not configured; falling back to local uploads directory.');
+if (!durableUploadsActive && localUploadsFallbackActive) {
+  console.warn(
+    '⚠️  Durable storage not configured; using local uploads directory. Uploaded files may be lost on redeploy.'
+  );
 }
 
 if (!MONGODB_URI) {
@@ -752,7 +758,7 @@ const DURABLE_UPLOADS_UNAVAILABLE_RESPONSE = {
 };
 
 function ensureDurableUploadsEnabled(res) {
-  if (RUNNING_IN_PRODUCTION && !durableUploadsAvailable) {
+  if (RUNNING_IN_PRODUCTION && !uploadsAvailable) {
     res.status(503).json(DURABLE_UPLOADS_UNAVAILABLE_RESPONSE);
     return false;
   }
@@ -786,7 +792,7 @@ const DURABLE_UPLOAD_HEADER_PASSTHROUGH = [
 
 app.get('/uploads/:prefix/*', async (req, res, next) => {
   const { prefix } = req.params;
-  if (!PROXIED_STORAGE_PREFIXES.has(prefix) || !durableUploadsAvailable) {
+  if (!PROXIED_STORAGE_PREFIXES.has(prefix) || !durableUploadsActive) {
     return next();
   }
 
