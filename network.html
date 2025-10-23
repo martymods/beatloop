@@ -414,15 +414,74 @@
       gap: 0.4rem;
     }
 
+    .bl-dj__turntable {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      border-radius: 1.75rem;
+      padding: 2.25rem 2rem 1.75rem;
+      background: radial-gradient(circle at 12% 10%, rgba(124, 58, 237, 0.26), transparent 45%),
+        radial-gradient(circle at 88% 10%, rgba(14, 165, 233, 0.26), transparent 48%),
+        linear-gradient(135deg, rgba(8, 8, 18, 0.92), rgba(4, 4, 10, 0.92));
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 18px 45px rgba(8, 8, 24, 0.65);
+    }
+
+    .bl-dj__turntable-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 1.75rem;
+    }
+
     .bl-dj__deck {
+      position: relative;
+      flex: 1 1 320px;
       display: flex;
       flex-direction: column;
       gap: 1rem;
-      background: rgba(7, 7, 14, 0.85);
-      border: 1px solid rgba(124, 58, 237, 0.2);
-      border-radius: 1.25rem;
-      padding: 1.25rem;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      padding: 1.5rem;
+      border-radius: 1.5rem;
+      background: rgba(7, 7, 14, 0.78);
+      border: 1px solid rgba(124, 58, 237, 0.25);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      overflow: hidden;
+      min-height: 320px;
+    }
+
+    .bl-dj__deck::before,
+    .bl-dj__deck::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      transition: transform 0.3s ease;
+    }
+
+    .bl-dj__deck::before {
+      inset: 18% -26% -18%;
+      background: radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.14), rgba(12, 12, 22, 0.2) 45%, rgba(0, 0, 0, 0.45));
+      filter: drop-shadow(0 12px 28px rgba(8, 8, 18, 0.65));
+    }
+
+    .bl-dj__deck::after {
+      inset: 34% -8% -34%;
+      background: radial-gradient(circle, rgba(0, 0, 0, 0.9) 0%, rgba(14, 14, 24, 0.7) 45%, transparent 60%);
+      border: 4px solid rgba(124, 58, 237, 0.2);
+    }
+
+    .bl-dj__deck > * {
+      position: relative;
+      z-index: 2;
+    }
+
+    .bl-dj__deck.bl-dj__deck--left::before {
+      transform: translateX(-6%);
+    }
+
+    .bl-dj__deck.bl-dj__deck--right::before {
+      transform: translateX(6%);
     }
 
     .bl-dj__deck-header {
@@ -490,13 +549,216 @@
       color: rgba(244, 244, 255, 0.75);
     }
 
-    .bl-dj__decks {
+    .bl-dj__turntable-center {
+      position: relative;
+      flex: 0 0 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      padding: 1.5rem 1rem;
+      border-radius: 1.5rem;
+      background: rgba(9, 9, 18, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .bl-dj__turntable-brand {
+      text-align: center;
+      font-family: 'Amatic SC', 'Inter', system-ui;
+      font-weight: 700;
+      font-size: 2.35rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.82);
+      text-shadow: 0 6px 24px rgba(8, 8, 18, 0.6);
+    }
+
+    .bl-dj__loader-toggle {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      border: 4px solid rgba(124, 58, 237, 0.5);
+      background: radial-gradient(circle at 30% 30%, rgba(124, 58, 237, 0.55), rgba(14, 165, 233, 0.45));
+      color: #050510;
+      font-size: 2.75rem;
+      font-weight: 700;
       display: grid;
-      gap: 1.5rem;
+      place-items: center;
+      cursor: pointer;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      box-shadow: 0 10px 30px rgba(14, 165, 233, 0.35);
+    }
+
+    .bl-dj__loader-toggle:hover,
+    .bl-dj__loader-toggle:focus-visible {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 14px 40px rgba(124, 58, 237, 0.4);
+      outline: none;
+    }
+
+    .bl-dj__loader-panel {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translate(-50%, 18px);
+      width: min(420px, 82vw);
+      max-height: 320px;
+      overflow: hidden;
+      border-radius: 1.25rem;
+      border: 1px solid rgba(124, 58, 237, 0.28);
+      background: rgba(9, 9, 18, 0.95);
+      box-shadow: 0 24px 60px rgba(6, 6, 16, 0.75);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.25s ease, visibility 0.25s ease, transform 0.25s ease;
+      z-index: 10;
+    }
+
+    .bl-dj__loader-panel.is-open {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, 8px);
+    }
+
+    .bl-dj__loader-tabs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .bl-dj__loader-tab {
+      border: none;
+      background: transparent;
+      padding: 0.75rem 1rem;
+      color: rgba(244, 244, 255, 0.7);
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .bl-dj__loader-tab.is-active {
+      color: #0b0b14;
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.85), rgba(34, 211, 238, 0.65));
+    }
+
+    .bl-dj__loader-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .bl-dj__loader-track,
+    .bl-dj__loader-playlist {
+      border-radius: 0.9rem;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      padding: 0.75rem 0.85rem;
+      background: rgba(15, 15, 25, 0.85);
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .bl-dj__loader-track-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+    }
+
+    .bl-dj__loader-track-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .bl-dj__loader-track-artist {
+      font-size: 0.8rem;
+      color: rgba(244, 244, 255, 0.6);
+    }
+
+    .bl-dj__loader-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .bl-dj__loader-empty {
+      margin: 0.5rem 0 0;
+      font-size: 0.8rem;
+      color: rgba(244, 244, 255, 0.6);
+      text-align: center;
+    }
+
+    .bl-dj__loader-playlist-tracks {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .bl-dj__loader-playlist-tracks li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: rgba(244, 244, 255, 0.7);
+    }
+
+    .bl-dj__loader-playlist-tracks li span {
+      flex: 1;
+    }
+
+    .bl-dj__decks {
+      display: block;
     }
 
     #beatloopDjOverlay {
       cursor: pointer;
+    }
+
+    body.timeline-shader-active #beatloopDj .bl-dj,
+    #beatloopDj.timeline-shader-active .bl-dj {
+      background: radial-gradient(circle at top right, rgba(124, 58, 237, 0.28), transparent 45%),
+        radial-gradient(circle at bottom left, rgba(34, 211, 238, 0.28), transparent 40%),
+        rgba(6, 6, 14, 0.96);
+      box-shadow: 0 25px 60px rgba(6, 6, 16, 0.75);
+    }
+
+    body.timeline-shader-active #beatloopDj .bl-dj__turntable {
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 26px 70px rgba(8, 8, 24, 0.85);
+    }
+
+    @media (max-width: 1024px) {
+      .bl-dj__turntable-top {
+        justify-content: center;
+      }
+
+      .bl-dj__turntable-center {
+        order: 3;
+        flex: 1 1 100%;
+      }
+
+      .bl-dj__turntable-brand {
+        font-size: 1.85rem;
+        letter-spacing: 0.18em;
+      }
+
+      .bl-dj__deck {
+        min-height: 280px;
+      }
     }
 
     @media (min-width: 900px) {
@@ -509,15 +771,11 @@
       .bl-dj__layout {
         grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
       }
-
-      .bl-dj__decks {
-        grid-template-columns: repeat(1, minmax(0, 1fr));
-      }
     }
 
     @media (min-width: 1200px) {
-      .bl-dj__decks {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+      .bl-dj__turntable-center {
+        flex-basis: 220px;
       }
     }
 
@@ -3120,60 +3378,80 @@
       </section>
 
       <section class="bl-dj__panel bl-dj__decks">
-        <div class="bl-dj__deck" data-deck="A">
-          <div class="bl-dj__deck-header">
-            <h4>Deck A</h4>
-            <button id="blDjDeckAClear" type="button" class="bl-dj__ghost-btn">Unload</button>
-          </div>
-          <div class="bl-dj__deck-meta">
-            <img id="blDjDeckACover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck A cover" />
-            <div>
-              <p id="blDjDeckATitle" class="bl-dj__deck-title">No track loaded</p>
-              <p id="blDjDeckAArtist" class="bl-dj__deck-artist">Select a song to load Deck A.</p>
+        <div class="bl-dj__turntable">
+          <div class="bl-dj__turntable-top">
+            <div class="bl-dj__deck bl-dj__deck--left" data-deck="A">
+              <div class="bl-dj__deck-header">
+                <h4>Deck A</h4>
+                <button id="blDjDeckAClear" type="button" class="bl-dj__ghost-btn">Unload</button>
+              </div>
+              <div class="bl-dj__deck-meta">
+                <img id="blDjDeckACover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck A cover" />
+                <div>
+                  <p id="blDjDeckATitle" class="bl-dj__deck-title">No track loaded</p>
+                  <p id="blDjDeckAArtist" class="bl-dj__deck-artist">Select a song to load Deck A.</p>
+                </div>
+              </div>
+              <div class="bl-dj__deck-controls">
+                <button id="blDjDeckAPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
+                <div class="bl-dj__control-row">
+                  <label for="blDjDeckATempo">Tempo</label>
+                  <input id="blDjDeckATempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
+                  <span id="blDjDeckATempoVal" class="bl-dj__value">1.00×</span>
+                </div>
+                <div class="bl-dj__control-row">
+                  <label for="blDjDeckASeek">Position</label>
+                  <input id="blDjDeckASeek" type="range" min="0" max="0" value="0" step="0.01" />
+                  <span id="blDjDeckAProgress" class="bl-dj__value">0:00 / 0:00</span>
+                </div>
+              </div>
+              <audio id="blDjDeckAAudio" preload="metadata"></audio>
             </div>
-          </div>
-          <div class="bl-dj__deck-controls">
-            <button id="blDjDeckAPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
-            <div class="bl-dj__control-row">
-              <label for="blDjDeckATempo">Tempo</label>
-              <input id="blDjDeckATempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
-              <span id="blDjDeckATempoVal" class="bl-dj__value">1.00×</span>
-            </div>
-            <div class="bl-dj__control-row">
-              <label for="blDjDeckASeek">Position</label>
-              <input id="blDjDeckASeek" type="range" min="0" max="0" value="0" step="0.01" />
-              <span id="blDjDeckAProgress" class="bl-dj__value">0:00 / 0:00</span>
-            </div>
-          </div>
-          <audio id="blDjDeckAAudio" preload="metadata"></audio>
-        </div>
 
-        <div class="bl-dj__deck" data-deck="B">
-          <div class="bl-dj__deck-header">
-            <h4>Deck B</h4>
-            <button id="blDjDeckBClear" type="button" class="bl-dj__ghost-btn">Unload</button>
-          </div>
-          <div class="bl-dj__deck-meta">
-            <img id="blDjDeckBCover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck B cover" />
-            <div>
-              <p id="blDjDeckBTitle" class="bl-dj__deck-title">No track loaded</p>
-              <p id="blDjDeckBArtist" class="bl-dj__deck-artist">Select a song to load Deck B.</p>
+            <div class="bl-dj__turntable-center">
+              <button id="blDjLoaderToggle" type="button" class="bl-dj__loader-toggle" aria-expanded="false" aria-controls="blDjLoaderPanel">?</button>
+              <div id="blDjLoaderPanel" class="bl-dj__loader-panel" role="dialog" aria-modal="false" aria-label="Beatloop loader">
+                <div class="bl-dj__loader-tabs">
+                  <button type="button" class="bl-dj__loader-tab is-active" data-loader-tab="tracks">Songs</button>
+                  <button type="button" class="bl-dj__loader-tab" data-loader-tab="playlists">Playlists</button>
+                </div>
+                <div class="bl-dj__loader-content">
+                  <div id="blDjLoaderTracks"></div>
+                  <div id="blDjLoaderPlaylists" class="hidden"></div>
+                </div>
+              </div>
+              <p class="text-xs text-white/60 text-center">Choose a song or playlist for Deck A/B</p>
+            </div>
+
+            <div class="bl-dj__deck bl-dj__deck--right" data-deck="B">
+              <div class="bl-dj__deck-header">
+                <h4>Deck B</h4>
+                <button id="blDjDeckBClear" type="button" class="bl-dj__ghost-btn">Unload</button>
+              </div>
+              <div class="bl-dj__deck-meta">
+                <img id="blDjDeckBCover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck B cover" />
+                <div>
+                  <p id="blDjDeckBTitle" class="bl-dj__deck-title">No track loaded</p>
+                  <p id="blDjDeckBArtist" class="bl-dj__deck-artist">Select a song to load Deck B.</p>
+                </div>
+              </div>
+              <div class="bl-dj__deck-controls">
+                <button id="blDjDeckBPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
+                <div class="bl-dj__control-row">
+                  <label for="blDjDeckBTempo">Tempo</label>
+                  <input id="blDjDeckBTempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
+                  <span id="blDjDeckBTempoVal" class="bl-dj__value">1.00×</span>
+                </div>
+                <div class="bl-dj__control-row">
+                  <label for="blDjDeckBSeek">Position</label>
+                  <input id="blDjDeckBSeek" type="range" min="0" max="0" value="0" step="0.01" />
+                  <span id="blDjDeckBProgress" class="bl-dj__value">0:00 / 0:00</span>
+                </div>
+              </div>
+              <audio id="blDjDeckBAudio" preload="metadata"></audio>
             </div>
           </div>
-          <div class="bl-dj__deck-controls">
-            <button id="blDjDeckBPlay" type="button" class="bl-dj__cta-btn" disabled>Play</button>
-            <div class="bl-dj__control-row">
-              <label for="blDjDeckBTempo">Tempo</label>
-              <input id="blDjDeckBTempo" type="range" min="0.5" max="1.5" step="0.01" value="1" />
-              <span id="blDjDeckBTempoVal" class="bl-dj__value">1.00×</span>
-            </div>
-            <div class="bl-dj__control-row">
-              <label for="blDjDeckBSeek">Position</label>
-              <input id="blDjDeckBSeek" type="range" min="0" max="0" value="0" step="0.01" />
-              <span id="blDjDeckBProgress" class="bl-dj__value">0:00 / 0:00</span>
-            </div>
-          </div>
-          <audio id="blDjDeckBAudio" preload="metadata"></audio>
+          <div class="bl-dj__turntable-brand">beatloop</div>
         </div>
       </section>
     </div>
@@ -15541,6 +15819,272 @@ stopBtn.addEventListener('click', () => {
 })();
 </script>
 
+<script>
+(() => {
+  const loaderToggle = document.getElementById('blDjLoaderToggle');
+  const loaderPanel = document.getElementById('blDjLoaderPanel');
+  const loaderTracks = document.getElementById('blDjLoaderTracks');
+  const loaderPlaylists = document.getElementById('blDjLoaderPlaylists');
+  const loaderTabs = Array.from(document.querySelectorAll('.bl-dj__loader-tab'));
+  const songTable = document.getElementById('blDjSongTable');
+  const playlistTracksList = document.getElementById('blDjPlaylistTracks');
+  const playlistEmptyState = document.getElementById('blDjPlaylistEmpty');
+  const playlistLabel = document.getElementById('blDjActivePlaylistLabel');
+  const djModalRoot = document.getElementById('beatloopDj');
+
+  if (!loaderToggle || !loaderPanel || !loaderTracks || !loaderPlaylists) {
+    return;
+  }
+
+  if (!loaderPanel.hasAttribute('tabindex')) {
+    loaderPanel.setAttribute('tabindex', '-1');
+  }
+
+  let loaderMode = 'tracks';
+  let loaderOpen = false;
+  const cleanupFns = [];
+  const registerCleanup = (fn) => { if (typeof fn === 'function') cleanupFns.push(fn); };
+  const runCleanup = () => { while (cleanupFns.length) { try { cleanupFns.pop()(); } catch {} } };
+
+  const setTabsActive = () => {
+    loaderTabs.forEach((tab) => {
+      const target = tab?.dataset?.loaderTab;
+      const isActive = target === loaderMode;
+      tab?.classList.toggle('is-active', isActive);
+      if (isActive) tab?.setAttribute('aria-current', 'true');
+      else tab?.removeAttribute('aria-current');
+    });
+  };
+
+  function closeLoader() {
+    if (!loaderOpen) return;
+    loaderOpen = false;
+    loaderPanel.classList.remove('is-open');
+    loaderToggle.setAttribute('aria-expanded', 'false');
+  }
+
+  const createLoaderMessage = (message) => {
+    const paragraph = document.createElement('p');
+    paragraph.className = 'bl-dj__loader-empty';
+    paragraph.textContent = message;
+    return paragraph;
+  };
+
+  const createProxyButton = (source, label) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'bl-dj__ghost-btn';
+    button.textContent = label || source?.textContent?.trim() || 'Load';
+    button.disabled = !!(source && source.disabled);
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (source && typeof source.click === 'function') {
+        source.click();
+        closeLoader();
+      }
+    });
+    return button;
+  };
+
+  function renderLoaderTracks() {
+    loaderTracks.innerHTML = '';
+    const rows = Array.from(songTable?.querySelectorAll('tr') || []);
+    if (!rows.length) {
+      const fallback = document.getElementById('blDjEmptyLibrary');
+      const message = fallback?.textContent?.trim() || 'Your library is loading… add tracks or refresh to see them here.';
+      loaderTracks.appendChild(createLoaderMessage(message));
+      return;
+    }
+
+    rows.slice(0, 40).forEach((row, index) => {
+      const item = document.createElement('div');
+      item.className = 'bl-dj__loader-track';
+
+      const header = document.createElement('div');
+      header.className = 'bl-dj__loader-track-header';
+
+      const titleWrap = document.createElement('div');
+      const title = row.querySelector('.bl-dj__track-title');
+      const artist = row.querySelector('.bl-dj__track-artist');
+      const titleEl = document.createElement('p');
+      titleEl.className = 'bl-dj__loader-track-title';
+      titleEl.textContent = title?.textContent?.trim() || `Track ${index + 1}`;
+      const artistEl = document.createElement('p');
+      artistEl.className = 'bl-dj__loader-track-artist';
+      artistEl.textContent = artist?.textContent?.trim() || 'beatloop creator';
+      titleWrap.appendChild(titleEl);
+      titleWrap.appendChild(artistEl);
+      header.appendChild(titleWrap);
+
+      const actions = document.createElement('div');
+      actions.className = 'bl-dj__loader-actions';
+      const originalButtons = Array.from(row.querySelectorAll('.bl-dj__table-actions button'));
+      const loadButtons = originalButtons.filter((btn) => /load\s+[ab]/i.test(btn.textContent || ''));
+      loadButtons.forEach((btn) => actions.appendChild(createProxyButton(btn, btn.textContent?.trim())));
+      header.appendChild(actions);
+
+      item.appendChild(header);
+      loaderTracks.appendChild(item);
+    });
+  }
+
+  function renderLoaderPlaylists() {
+    loaderPlaylists.innerHTML = '';
+    const header = document.createElement('div');
+    header.className = 'bl-dj__loader-track-header';
+    const label = document.createElement('p');
+    label.className = 'bl-dj__loader-track-title';
+    label.textContent = playlistLabel?.textContent?.trim() || 'Playlists';
+    header.appendChild(label);
+    loaderPlaylists.appendChild(header);
+
+    const items = Array.from(playlistTracksList?.querySelectorAll('li') || []);
+    const emptyVisible = playlistEmptyState && !playlistEmptyState.classList.contains('hidden');
+    if (!items.length || emptyVisible) {
+      const message = playlistEmptyState?.textContent?.trim() || 'No tracks yet — add songs from the library.';
+      loaderPlaylists.appendChild(createLoaderMessage(message));
+      return;
+    }
+
+    const list = document.createElement('ul');
+    list.className = 'bl-dj__loader-playlist-tracks';
+    items.slice(0, 40).forEach((li, index) => {
+      const entry = document.createElement('li');
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = li.querySelector('span')?.textContent?.trim() || `Track ${index + 1}`;
+      entry.appendChild(labelSpan);
+      const actionsWrap = document.createElement('div');
+      actionsWrap.className = 'bl-dj__loader-actions';
+      const originalButtons = Array.from(li.querySelectorAll('button'));
+      const loadButtons = originalButtons.filter((btn) => /load\s+[ab]/i.test(btn.textContent || ''));
+      loadButtons.forEach((btn) => actionsWrap.appendChild(createProxyButton(btn, btn.textContent?.trim())));
+      entry.appendChild(actionsWrap);
+      list.appendChild(entry);
+    });
+    loaderPlaylists.appendChild(list);
+  }
+
+  function renderLoaderContent() {
+    if (loaderMode === 'playlists') {
+      loaderTracks.classList.add('hidden');
+      loaderPlaylists.classList.remove('hidden');
+      renderLoaderPlaylists();
+    } else {
+      loaderPlaylists.classList.add('hidden');
+      loaderTracks.classList.remove('hidden');
+      renderLoaderTracks();
+    }
+  }
+
+  function setLoaderMode(mode) {
+    const normalized = mode === 'playlists' ? 'playlists' : 'tracks';
+    if (loaderMode === normalized) {
+      renderLoaderContent();
+      return;
+    }
+    loaderMode = normalized;
+    setTabsActive();
+    renderLoaderContent();
+  }
+
+  function openLoader() {
+    if (loaderOpen) return;
+    loaderOpen = true;
+    loaderPanel.classList.add('is-open');
+    loaderToggle.setAttribute('aria-expanded', 'true');
+    setTabsActive();
+    renderLoaderContent();
+    window.requestAnimationFrame(() => loaderPanel?.focus?.());
+  }
+
+  loaderTabs.forEach((tab) => {
+    tab.addEventListener('click', (event) => {
+      event.preventDefault();
+      setLoaderMode(tab.dataset.loaderTab);
+    });
+  });
+
+  loaderToggle.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (loaderOpen) closeLoader();
+    else openLoader();
+  });
+
+  const handleDocumentClick = (event) => {
+    if (!loaderOpen) return;
+    if (loaderPanel.contains(event.target) || loaderToggle.contains(event.target)) return;
+    closeLoader();
+  };
+  document.addEventListener('click', handleDocumentClick);
+  registerCleanup(() => document.removeEventListener('click', handleDocumentClick));
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape' && loaderOpen) {
+      closeLoader();
+    }
+  };
+  document.addEventListener('keydown', handleKeyDown);
+  registerCleanup(() => document.removeEventListener('keydown', handleKeyDown));
+
+  if (typeof MutationObserver !== 'undefined') {
+    const observerConfig = { childList: true, subtree: true };
+    if (songTable) {
+      const tracksObserver = new MutationObserver(() => {
+        if (loaderOpen && loaderMode === 'tracks') renderLoaderTracks();
+      });
+      tracksObserver.observe(songTable, observerConfig);
+      registerCleanup(() => tracksObserver.disconnect());
+    }
+    if (playlistTracksList) {
+      const playlistObserver = new MutationObserver(() => {
+        if (loaderOpen && loaderMode === 'playlists') renderLoaderPlaylists();
+      });
+      playlistObserver.observe(playlistTracksList, observerConfig);
+      registerCleanup(() => playlistObserver.disconnect());
+    }
+  }
+
+  if (djModalRoot) {
+    const modalObserver = new MutationObserver(() => {
+      if (djModalRoot.classList.contains('hidden')) closeLoader();
+    });
+    modalObserver.observe(djModalRoot, { attributes: true, attributeFilter: ['class'] });
+    registerCleanup(() => modalObserver.disconnect());
+  }
+
+  let lastPlaybackState = null;
+  const deckAudios = [
+    document.getElementById('blDjDeckAAudio'),
+    document.getElementById('blDjDeckBAudio')
+  ].filter(Boolean);
+
+  function updatePlaybackState() {
+    const playing = deckAudios.some((audio) => {
+      if (!audio) return false;
+      if (audio.readyState <= 2 && audio.currentTime === 0) return false;
+      return !audio.paused && !audio.ended;
+    });
+    if (playing === lastPlaybackState) return;
+    lastPlaybackState = playing;
+    window.dispatchEvent(new CustomEvent('beatloop:dj-playback', { detail: { playing } }));
+  }
+
+  deckAudios.forEach((audio) => {
+    ['play', 'pause', 'ended', 'emptied', 'abort', 'suspend'].forEach((eventName) => {
+      audio.addEventListener(eventName, updatePlaybackState);
+    });
+    audio.addEventListener('timeupdate', () => {
+      if (!audio.paused) updatePlaybackState();
+    });
+  });
+  updatePlaybackState();
+
+  window.addEventListener('beforeunload', runCleanup, { once: true });
+})();
+</script>
+
 <script id="timeline-shader-fragment" type="x-shader/x-fragment">
 precision mediump float;
 
@@ -15609,6 +16153,7 @@ void main()
 (() => {
   const overlay = document.getElementById('timelineShaderOverlay');
   const canvas = document.getElementById('timelineShaderCanvas');
+  const djModalRoot = document.getElementById('beatloopDj');
   const fragEl = document.getElementById('timeline-shader-fragment');
   const vertEl = document.getElementById('timeline-shader-vertex');
   if (!overlay || !canvas || !fragEl || !vertEl) return;
@@ -15781,6 +16326,7 @@ void main()
     overlay.classList.remove('is-active');
     overlay.classList.remove('is-exiting');
     document.body?.classList.remove('timeline-shader-active');
+    djModalRoot?.classList.remove('timeline-shader-active');
     reportOverlayState('Overlay deactivated immediately', { reason });
   };
 
@@ -15795,6 +16341,7 @@ void main()
       overlay.classList.remove('is-exiting');
       overlay.classList.add('is-active');
       document.body?.classList.add('timeline-shader-active');
+      djModalRoot?.classList.add('timeline-shader-active');
       reportOverlayState('Overlay activated', { reason });
     },
     deactivate(options = {}) {
@@ -15931,6 +16478,13 @@ void main()
       shader.deactivate({ immediate: true, reason: 'playback-stop' });
     }
   };
+
+  window.__applyTimelineShaderPlayState = applyPlayState;
+  window.addEventListener('beatloop:dj-playback', (event) => {
+    const playing = Boolean(event?.detail?.playing);
+    debugLog('DJ playback event received', { playing });
+    applyPlayState(playing);
+  });
 
   const originalSetPlayPauseState = window.setPlayPauseState;
   window.setPlayPauseState = function patchedSetPlayPauseState(playing) {
