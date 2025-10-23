@@ -279,7 +279,7 @@
       color: #fff;
     }
 
-    #beatloopTurntable #credits {
+    #beatloopTurntable #turntableCredits {
       position: absolute;
       top: 80px;
       left: 352px;
@@ -287,15 +287,21 @@
       margin: 0;
       font-family: 'Kristi', sans-serif;
       z-index: 5;
-    }
-
-    #beatloopTurntable #credits a {
-      text-decoration: none;
+      background: none;
+      border: none;
       color: #ddd;
+      padding: 0;
+      cursor: pointer;
     }
 
-    #beatloopTurntable #credits:hover {
+    #beatloopTurntable #turntableCredits:hover:not(:disabled) {
       text-shadow: 0 0 10px #3FAEFD, 0 0 10px #3FAEFD;
+    }
+
+    #beatloopTurntable #turntableCredits:disabled {
+      opacity: 0.6;
+      cursor: default;
+      text-shadow: none;
     }
 
     #beatloopTurntable section#left,
@@ -657,6 +663,14 @@
       border-radius: 20px 20px 0 0;
       border: 6px solid #444;
       box-shadow: 0px 0px 5px #3FAEFD inset;
+      pointer-events: none;
+      opacity: 0;
+      transition: top 0.45s cubic-bezier(.4, 0, .2, 1), opacity 0.35s ease;
+    }
+
+    #beatloopTurntable #songloader.is-visible {
+      top: 0;
+      opacity: 1;
       pointer-events: auto;
     }
 
@@ -3622,7 +3636,7 @@
         </div>
         <p>Cerrar tutorial</p>
       </div>
-      <div id="credits"><a href="https://www.michelacosta.com">Míchel Acosta</a></div>
+      <button id="turntableCredits" type="button" aria-label="Play your sound tag" disabled>Creator</button>
       <div id="tutorial-button">
         <div id="beatloopDjToggle" role="button" aria-label="Open Beatloop DJ — Live Mixer" tabindex="0">?</div>
       </div>
@@ -3664,7 +3678,7 @@
         </section>
       </main>
       <div id="songloader-container">
-        <section id="songloader" class="hidden">
+        <section id="songloader" aria-hidden="true">
           <table>
             <thead>
               <tr>
@@ -4129,7 +4143,8 @@
 
   function openLoader(deckId) {
     if (!deckId) return;
-    if (!$songloader.hasClass('hidden') && pendingDeck === deckId) {
+    const isVisible = $songloader.hasClass('is-visible');
+    if (isVisible && pendingDeck === deckId) {
       closeLoader();
       return;
     }
@@ -4138,13 +4153,17 @@
     if (decks[deckId]) {
       decks[deckId].$root.addClass('is-pending');
     }
-    $songloader.removeClass('hidden');
+    $songloader.attr('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+      $songloader.addClass('is-visible');
+    });
   }
 
   function closeLoader() {
     pendingDeck = null;
     $('.bl-turntable__deck').removeClass('is-pending');
-    $songloader.addClass('hidden');
+    $songloader.removeClass('is-visible');
+    $songloader.attr('aria-hidden', 'true');
   }
 
   function setCrossfade(ratio) {
@@ -6334,6 +6353,7 @@ function ensureLoggedIn() {
   if (typeof window.refreshStepOwnerColors === 'function') {
     window.refreshStepOwnerColors();
   }
+  updateTurntableCredits(currentUser);
 }
 
 
@@ -6388,6 +6408,7 @@ let sessionsCard = null;
     const trendsMEl = document.getElementById('trendsM')
 
     const beatloopDjBtn = document.getElementById('beatloopDjBtn')
+    const turntableCreditsButton = document.getElementById('turntableCredits')
     const djModal = document.getElementById('beatloopDj')
     const djOverlay = document.getElementById('beatloopDjOverlay')
     const djCloseBtn = document.getElementById('blDjClose')
@@ -6407,6 +6428,8 @@ let sessionsCard = null;
     const djActivePlaylistLabel = document.getElementById('blDjActivePlaylistLabel')
     const djPlaylistCount = document.getElementById('blDjPlaylistCount')
     const djClearPlaylistBtn = document.getElementById('blDjClearPlaylist')
+
+    let turntableCreditsAudio = null
 
     const djDeckA = {
       cover: document.getElementById('blDjDeckACover'),
@@ -7039,6 +7062,29 @@ let sessionsCard = null;
       notifyDjTimelinePlayback(false)
       document.removeEventListener('keydown', handleDjEscape)
     }
+
+    turntableCreditsButton?.addEventListener('click', () => {
+      const tagUrl = turntableCreditsButton.dataset.tagUrl
+      if (!tagUrl) return
+      try {
+        if (!turntableCreditsAudio) {
+          turntableCreditsAudio = new Audio()
+          turntableCreditsAudio.preload = 'auto'
+        }
+        if (turntableCreditsAudio.src !== tagUrl) {
+          turntableCreditsAudio.src = tagUrl
+        } else {
+          try { turntableCreditsAudio.currentTime = 0 } catch {}
+        }
+        turntableCreditsAudio.volume = 0.9
+        const playAttempt = turntableCreditsAudio.play()
+        if (playAttempt && typeof playAttempt.catch === 'function') {
+          playAttempt.catch(() => {})
+        }
+      } catch (err) {
+        console.warn('Unable to play sound tag', err)
+      }
+    })
 
     beatloopDjBtn?.addEventListener('click', () => {
       showDjModal()
@@ -19013,6 +19059,34 @@ void main()
     return 'Creator';
   }
 
+  function resolveTurntableTagUrl(user) {
+    if (!user) return '';
+    const source = user.tagUrl || (user.tag && user.tag.url) || '';
+    if (!source) return '';
+    try {
+      return resolveTrackMediaUrl(source);
+    } catch (err) {
+      try { return resolveTrackMediaUrl(String(source)); } catch {}
+    }
+    return typeof source === 'string' ? source : '';
+  }
+
+  function updateTurntableCredits(user) {
+    if (!turntableCreditsButton) return;
+    const displayName = computeWelcomeName(user);
+    turntableCreditsButton.textContent = displayName;
+    const tagUrl = resolveTurntableTagUrl(user);
+    if (tagUrl) {
+      turntableCreditsButton.dataset.tagUrl = tagUrl;
+      turntableCreditsButton.disabled = false;
+      turntableCreditsButton.setAttribute('aria-label', `Play ${displayName}'s sound tag`);
+    } else {
+      delete turntableCreditsButton.dataset.tagUrl;
+      turntableCreditsButton.disabled = true;
+      turntableCreditsButton.setAttribute('aria-label', `${displayName} has no sound tag yet`);
+    }
+  }
+
   function populateProfile(user) {
     if (!user) return;
     resetPendingMedia();
@@ -19032,6 +19106,7 @@ void main()
       profileAvatarImage.src = avatarUrl;
     }
     setProfileAvatarBackground(avatarUrl);
+    updateTurntableCredits(user);
     if (profileViewFirstName) profileViewFirstName.textContent = user.firstName ? user.firstName : '—';
     if (profileViewLastName) profileViewLastName.textContent = user.lastName ? user.lastName : '—';
     const display = computeWelcomeName({ ...user, displayName: user.displayName || '' });
@@ -20075,6 +20150,7 @@ void main()
     } catch (err) {
       console.warn('Unable to persist sanitized user profile', err);
     }
+    updateTurntableCredits(currentUser);
     refreshStepOwnerColors();
   };
 
