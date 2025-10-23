@@ -922,6 +922,24 @@
       flex: 1;
     }
 
+    .bl-dj__playlist-label {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bl-dj__playlist-thumb {
+      width: 32px;
+      height: 32px;
+      border-radius: 0.65rem;
+      object-fit: cover;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 8px 18px rgba(12, 12, 20, 0.45);
+      flex-shrink: 0;
+    }
+
     .bl-dj__playlist-select[aria-current="true"] {
       background: linear-gradient(135deg, rgba(124, 58, 237, 0.45), rgba(34, 211, 238, 0.45));
       color: #0b0b14;
@@ -948,7 +966,40 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .bl-dj__playlist-detail-title {
+      display: flex;
+      align-items: center;
       gap: 0.5rem;
+      min-width: 0;
+    }
+
+    .bl-dj__playlist-detail-title h5 {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .bl-dj__playlist-detail-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .bl-dj__playlist-cover-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .bl-dj__playlist-cover-wrap img {
+      width: 64px;
+      height: 64px;
+      border-radius: 0.9rem;
+      object-fit: cover;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 12px 28px rgba(10, 10, 20, 0.45);
     }
 
     .bl-dj__playlist-detail-header h5 {
@@ -3787,9 +3838,18 @@
             <ul id="blDjPlaylists" class="bl-dj__playlist-list"></ul>
             <div class="bl-dj__playlist-detail">
               <div class="bl-dj__playlist-detail-header">
-                <h5 id="blDjActivePlaylistLabel">Select a playlist to view tracks</h5>
-                <span id="blDjPlaylistCount" class="bl-dj__badge hidden">0</span>
-                <button id="blDjPlayPlaylist" type="button" class="bl-dj__cta-btn hidden">Play Playlist</button>
+                <div class="bl-dj__playlist-detail-title">
+                  <h5 id="blDjActivePlaylistLabel">Select a playlist to view tracks</h5>
+                  <span id="blDjPlaylistCount" class="bl-dj__badge hidden">0</span>
+                </div>
+                <div class="bl-dj__playlist-detail-actions">
+                  <button id="blDjRenamePlaylist" type="button" class="bl-dj__ghost-btn hidden">Rename</button>
+                  <button id="blDjPlayPlaylist" type="button" class="bl-dj__cta-btn hidden">Play Playlist</button>
+                </div>
+              </div>
+              <div id="blDjPlaylistCoverWrap" class="bl-dj__playlist-cover-wrap hidden">
+                <img id="blDjPlaylistCoverImage" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="Playlist cover" />
+                <button id="blDjPlaylistCoverButton" type="button" class="bl-dj__ghost-btn">Set cover</button>
               </div>
               <ul id="blDjPlaylistTracks" class="bl-dj__playlist-tracks"></ul>
               <p id="blDjPlaylistEmpty" class="bl-dj__empty">No tracks yet — add songs from the library.</p>
@@ -6545,7 +6605,16 @@ let sessionsCard = null;
     const djActivePlaylistLabel = document.getElementById('blDjActivePlaylistLabel')
     const djPlaylistCount = document.getElementById('blDjPlaylistCount')
     const djPlayPlaylistBtn = document.getElementById('blDjPlayPlaylist')
+    const djRenamePlaylistBtn = document.getElementById('blDjRenamePlaylist')
     const djClearPlaylistBtn = document.getElementById('blDjClearPlaylist')
+    const djPlaylistCoverWrap = document.getElementById('blDjPlaylistCoverWrap')
+    const djPlaylistCoverImage = document.getElementById('blDjPlaylistCoverImage')
+    const djPlaylistCoverButton = document.getElementById('blDjPlaylistCoverButton')
+    const djPlaylistCoverInput = document.createElement('input')
+    djPlaylistCoverInput.type = 'file'
+    djPlaylistCoverInput.accept = 'image/*'
+    djPlaylistCoverInput.className = 'hidden'
+    document.body.appendChild(djPlaylistCoverInput)
 
     let turntableCreditsAudio = null
 
@@ -6582,11 +6651,12 @@ let sessionsCard = null;
       trackIndex: new Map(),
       filteredTracks: [],
       playlists: [],
-      nextPlaylistId: 1,
       activePlaylistId: null,
       isOpen: false,
       crossfader: 0.5,
       autoPlay: null,
+      playlistsLoaded: false,
+      playlistLoading: false,
     }
 
     const userLibrary = new Map()
@@ -7155,6 +7225,80 @@ let sessionsCard = null;
       })
     }
 
+    function getDjPlaylistById(playlistId) {
+      if (!playlistId) return null
+      return djState.playlists.find((entry) => entry.id === playlistId) || null
+    }
+
+    function upsertDjPlaylistFromServer(payload) {
+      if (!payload || !payload.id) return null
+      const id = String(payload.id)
+      const normalizedTracks = Array.isArray(payload.tracks)
+        ? payload.tracks
+            .map((track) => {
+              const trackId = track?.id || track?.trackId || track?.metaId
+              return trackId ? String(trackId) : null
+            })
+            .filter(Boolean)
+        : []
+      const coverUrl = payload.cover ? resolveTrackMediaUrl(payload.cover) : ''
+      const playlistData = {
+        id,
+        name: payload.title || 'Untitled Playlist',
+        tracks: normalizedTracks,
+        cover: coverUrl || DEFAULT_TRACK_COVER,
+        trackCount: normalizedTracks.length,
+        user: payload.user || null,
+        updatedAt: resolveTrackCreatedAt(payload)
+      }
+      const existingIndex = djState.playlists.findIndex((entry) => entry.id === id)
+      if (existingIndex >= 0) {
+        djState.playlists[existingIndex] = { ...djState.playlists[existingIndex], ...playlistData }
+      } else {
+        djState.playlists.push(playlistData)
+      }
+      recordUserPlaylistEntry(payload)
+      return getDjPlaylistById(id)
+    }
+
+    async function loadDjPlaylists({ force = false } = {}) {
+      if (djState.playlistLoading) return
+      if (djState.playlistsLoaded && !force) return
+      djState.playlistLoading = true
+      try {
+        const payload = await apiFetchPlaylists()
+        djState.playlistsLoaded = true
+        if (payload && Array.isArray(payload.playlists)) {
+          const activeId = djState.activePlaylistId
+          djState.playlists = []
+          payload.playlists.forEach((playlist) => {
+            upsertDjPlaylistFromServer(playlist)
+          })
+          if (activeId && !djState.playlists.some((entry) => entry.id === activeId)) {
+            djState.activePlaylistId = null
+          }
+          if (!djState.activePlaylistId && djState.playlists.length) {
+            djState.activePlaylistId = djState.playlists[0].id
+          }
+          renderDjPlaylists()
+          renderDjPlaylistTracks()
+          renderDjSongTable()
+        }
+      } catch (error) {
+        if (error && typeof error.status === 'number' && (error.status === 401 || error.status === 403)) {
+          djState.playlistsLoaded = true
+        } else {
+          console.warn('DJ playlist fetch failed', error)
+        }
+      } finally {
+        djState.playlistLoading = false
+      }
+    }
+
+    function getActivePlaylist() {
+      return getDjPlaylistById(djState.activePlaylistId)
+    }
+
     function setActivePlaylist(playlistId) {
       if (!playlistId) {
         djState.activePlaylistId = null
@@ -7169,49 +7313,136 @@ let sessionsCard = null;
       renderDjSongTable()
     }
 
-    function removeDjPlaylist(playlistId) {
-      const index = djState.playlists.findIndex((playlist) => playlist.id === playlistId)
-      if (index < 0) return
-      djState.playlists.splice(index, 1)
+    async function removeDjPlaylist(playlistId) {
+      const playlist = getDjPlaylistById(playlistId)
+      if (!playlist) return
+      const wasAutoPlaying = Boolean(djState.autoPlay?.active && djState.autoPlay.playlistId === playlistId)
+      const previousPlaylists = djState.playlists.slice()
+      const previousActive = djState.activePlaylistId
+      djState.playlists = djState.playlists.filter((entry) => entry.id !== playlistId)
       if (djState.activePlaylistId === playlistId) {
         djState.activePlaylistId = null
       }
-      if (djState.autoPlay?.active && djState.autoPlay.playlistId === playlistId) {
+      if (wasAutoPlaying) {
         stopPlaylistAutoplay({ silent: true })
       }
       renderDjPlaylists()
       renderDjPlaylistTracks()
       renderDjSongTable()
-    }
-
-    function addTrackToPlaylist(trackId) {
-      if (!trackId) return
-      const playlist = djState.playlists.find((entry) => entry.id === djState.activePlaylistId)
-      if (!playlist) return
-      if (!playlist.tracks.includes(trackId)) {
-        playlist.tracks.push(trackId)
+      try {
+        await apiDeletePlaylist(playlistId)
+        removeUserPlaylistEntry(playlistId, playlist.user)
+      } catch (error) {
+        console.warn('Playlist delete failed', error)
+        djState.playlists = previousPlaylists
+        djState.activePlaylistId = previousActive
+        if (wasAutoPlaying) {
+          const restored = getDjPlaylistById(playlistId)
+          if (restored) {
+            startPlaylistAutoplay(restored)
+          }
+        }
+        renderDjPlaylists()
+        renderDjPlaylistTracks()
+        renderDjSongTable()
+        alert(error?.message || 'Could not delete playlist')
       }
-      renderDjPlaylistTracks()
-      renderDjPlaylists()
     }
 
-    function removeTrackFromPlaylist(playlistId, trackId) {
-      const playlist = djState.playlists.find((entry) => entry.id === playlistId)
+    async function addTrackToPlaylist(trackId) {
+      if (!trackId) return
+      const playlist = getActivePlaylist()
       if (!playlist) return
-      playlist.tracks = playlist.tracks.filter((id) => id !== trackId)
+      const normalizedTrackId = String(trackId)
+      if (playlist.tracks.includes(normalizedTrackId)) {
+        renderDjPlaylistTracks()
+        renderDjPlaylists()
+        return
+      }
+      const previous = playlist.tracks.slice()
+      playlist.tracks.push(normalizedTrackId)
       renderDjPlaylistTracks()
       renderDjPlaylists()
+      try {
+        const payload = await apiUpdatePlaylist({ playlistId: playlist.id, trackIds: playlist.tracks.slice() })
+        if (payload) {
+          upsertDjPlaylistFromServer(payload)
+          renderDjPlaylists()
+          renderDjPlaylistTracks()
+        }
+      } catch (error) {
+        console.warn('Playlist update failed', error)
+        const current = getDjPlaylistById(playlist.id)
+        if (current) current.tracks = previous
+        renderDjPlaylistTracks()
+        renderDjPlaylists()
+        alert(error?.message || 'Could not update playlist')
+      }
     }
 
-    function clearActivePlaylist() {
-      const playlist = djState.playlists.find((entry) => entry.id === djState.activePlaylistId)
+    async function removeTrackFromPlaylist(playlistId, trackId) {
+      const playlist = getDjPlaylistById(playlistId)
       if (!playlist) return
-      playlist.tracks = []
-      if (djState.autoPlay?.active && djState.autoPlay.playlistId === playlist.id) {
+      const previous = playlist.tracks.slice()
+      const normalizedId = String(trackId)
+      playlist.tracks = playlist.tracks.filter((id) => id !== normalizedId)
+      const wasAutoPlaying = Boolean(djState.autoPlay?.active && djState.autoPlay.playlistId === playlistId)
+      if (wasAutoPlaying) {
         stopPlaylistAutoplay({ silent: true })
       }
       renderDjPlaylistTracks()
       renderDjPlaylists()
+      try {
+        const payload = await apiUpdatePlaylist({ playlistId, trackIds: playlist.tracks.slice() })
+        if (payload) {
+          upsertDjPlaylistFromServer(payload)
+          renderDjPlaylists()
+          renderDjPlaylistTracks()
+        }
+      } catch (error) {
+        console.warn('Playlist track remove failed', error)
+        const current = getDjPlaylistById(playlistId)
+        if (current) current.tracks = previous
+        if (wasAutoPlaying) {
+          const restored = getDjPlaylistById(playlistId)
+          if (restored) startPlaylistAutoplay(restored)
+        }
+        renderDjPlaylistTracks()
+        renderDjPlaylists()
+        alert(error?.message || 'Could not update playlist')
+      }
+    }
+
+    async function clearActivePlaylist() {
+      const playlist = getActivePlaylist()
+      if (!playlist) return
+      const previous = playlist.tracks.slice()
+      const wasAutoPlaying = Boolean(djState.autoPlay?.active && djState.autoPlay.playlistId === playlist.id)
+      playlist.tracks = []
+      if (wasAutoPlaying) {
+        stopPlaylistAutoplay({ silent: true })
+      }
+      renderDjPlaylistTracks()
+      renderDjPlaylists()
+      try {
+        const payload = await apiUpdatePlaylist({ playlistId: playlist.id, trackIds: [] })
+        if (payload) {
+          upsertDjPlaylistFromServer(payload)
+          renderDjPlaylists()
+          renderDjPlaylistTracks()
+        }
+      } catch (error) {
+        console.warn('Playlist clear failed', error)
+        const current = getDjPlaylistById(playlist.id)
+        if (current) current.tracks = previous
+        if (wasAutoPlaying) {
+          const restored = getDjPlaylistById(playlist.id)
+          if (restored) startPlaylistAutoplay(restored)
+        }
+        renderDjPlaylistTracks()
+        renderDjPlaylists()
+        alert(error?.message || 'Could not update playlist')
+      }
     }
 
     function renderDjPlaylists() {
@@ -7231,8 +7462,19 @@ let sessionsCard = null;
         const selectBtn = document.createElement('button')
         selectBtn.type = 'button'
         selectBtn.className = 'bl-dj__playlist-select'
-        selectBtn.textContent = playlist.name || 'Untitled playlist'
         selectBtn.setAttribute('aria-current', playlist.id === djState.activePlaylistId ? 'true' : 'false')
+        const label = document.createElement('span')
+        label.className = 'bl-dj__playlist-label'
+        const thumb = document.createElement('img')
+        thumb.className = 'bl-dj__playlist-thumb'
+        thumb.src = playlist.cover || DJ_DEFAULT_COVER
+        thumb.alt = ''
+        thumb.onerror = () => { thumb.src = DJ_DEFAULT_COVER }
+        label.appendChild(thumb)
+        const labelText = document.createElement('span')
+        labelText.textContent = playlist.name || 'Untitled playlist'
+        label.appendChild(labelText)
+        selectBtn.appendChild(label)
         const count = document.createElement('span')
         count.className = 'bl-dj__badge'
         count.textContent = String(playlist.tracks.length)
@@ -7257,7 +7499,17 @@ let sessionsCard = null;
     function renderDjPlaylistTracks() {
       if (!djPlaylistTracks || !djPlaylistEmpty || !djActivePlaylistLabel) return
       djPlaylistTracks.innerHTML = ''
-      const playlist = djState.playlists.find((entry) => entry.id === djState.activePlaylistId)
+      if (djPlaylistCoverWrap) djPlaylistCoverWrap.classList.add('hidden')
+      if (djPlaylistCoverButton) djPlaylistCoverButton.disabled = true
+      if (djRenamePlaylistBtn) {
+        djRenamePlaylistBtn.classList.add('hidden')
+        djRenamePlaylistBtn.disabled = true
+      }
+      if (djPlaylistCoverImage) {
+        djPlaylistCoverImage.src = DJ_DEFAULT_COVER
+        djPlaylistCoverImage.onerror = () => { djPlaylistCoverImage.src = DJ_DEFAULT_COVER }
+      }
+      const playlist = getActivePlaylist()
       if (!playlist) {
         djPlaylistEmpty.classList.remove('hidden')
         djActivePlaylistLabel.textContent = 'Select a playlist to view tracks'
@@ -7266,6 +7518,11 @@ let sessionsCard = null;
           djPlayPlaylistBtn.classList.add('hidden')
           djPlayPlaylistBtn.disabled = true
           djPlayPlaylistBtn.setAttribute('aria-pressed', 'false')
+        }
+        if (djPlaylistCoverWrap) djPlaylistCoverWrap.classList.add('hidden')
+        if (djRenamePlaylistBtn) {
+          djRenamePlaylistBtn.classList.add('hidden')
+          djRenamePlaylistBtn.disabled = true
         }
         return
       }
@@ -7285,6 +7542,20 @@ let sessionsCard = null;
         djPlayPlaylistBtn.disabled = !hasTracks
         djPlayPlaylistBtn.textContent = isActive ? 'Stop Playlist' : 'Play Playlist'
         djPlayPlaylistBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+      }
+      if (djRenamePlaylistBtn) {
+        djRenamePlaylistBtn.classList.remove('hidden')
+        djRenamePlaylistBtn.disabled = false
+      }
+      if (djPlaylistCoverWrap) {
+        djPlaylistCoverWrap.classList.remove('hidden')
+      }
+      if (djPlaylistCoverButton) {
+        djPlaylistCoverButton.disabled = false
+      }
+      if (djPlaylistCoverImage) {
+        djPlaylistCoverImage.src = playlist.cover || DJ_DEFAULT_COVER
+        djPlaylistCoverImage.onerror = () => { djPlaylistCoverImage.src = DJ_DEFAULT_COVER }
       }
       if (!playlist.tracks.length) {
         djPlaylistEmpty.classList.remove('hidden')
@@ -7328,17 +7599,22 @@ let sessionsCard = null;
       })
     }
 
-    function createDjPlaylist(name) {
+    async function createDjPlaylist(name) {
       const trimmed = (name || '').trim()
       if (!trimmed) return null
-      const playlist = {
-        id: `pl-${Date.now()}-${djState.nextPlaylistId++}`,
-        name: trimmed,
-        tracks: [],
+      try {
+        const payload = await apiCreatePlaylist({ title: trimmed })
+        if (!payload) return null
+        const playlist = upsertDjPlaylistFromServer(payload)
+        if (playlist) {
+          setActivePlaylist(playlist.id)
+        }
+        return playlist
+      } catch (error) {
+        console.warn('Playlist create failed', error)
+        alert(error?.message || 'Could not create playlist')
+        return null
       }
-      djState.playlists.push(playlist)
-      setActivePlaylist(playlist.id)
-      return playlist
     }
 
     function refreshDjLibrary() {
@@ -7359,6 +7635,7 @@ let sessionsCard = null;
       djState.isOpen = true
       updateCrossfaderValue(djCrossfader?.value ?? 50)
       refreshDjLibrary()
+      loadDjPlaylists()
       document.addEventListener('keydown', handleDjEscape)
       if (window.__beatloopTurntable && typeof window.__beatloopTurntable.showTurntable === 'function') {
         try { window.__beatloopTurntable.showTurntable() } catch {}
@@ -7437,19 +7714,19 @@ let sessionsCard = null;
       applyDjSearchFilter()
     })
 
-    djCreatePlaylistBtn?.addEventListener('click', () => {
+    djCreatePlaylistBtn?.addEventListener('click', async () => {
       const value = djPlaylistNameInput?.value || ''
-      const created = createDjPlaylist(value)
+      const created = await createDjPlaylist(value)
       if (created && djPlaylistNameInput) {
         djPlaylistNameInput.value = ''
       }
     })
 
-    djPlaylistNameInput?.addEventListener('keydown', (event) => {
+    djPlaylistNameInput?.addEventListener('keydown', async (event) => {
       if (event.key === 'Enter') {
         event.preventDefault()
-        const created = createDjPlaylist(djPlaylistNameInput.value)
-        if (created) {
+        const created = await createDjPlaylist(djPlaylistNameInput.value)
+        if (created && djPlaylistNameInput) {
           djPlaylistNameInput.value = ''
         }
       }
@@ -7467,9 +7744,68 @@ let sessionsCard = null;
       }
     })
 
+    djPlaylistCoverButton?.addEventListener('click', () => {
+      if (!djState.activePlaylistId) return
+      djPlaylistCoverInput.click()
+    })
+
+    djPlaylistCoverInput.addEventListener('change', async (event) => {
+      const file = event.target.files && event.target.files[0]
+      event.target.value = ''
+      if (!file) return
+      const playlist = getActivePlaylist()
+      if (!playlist) return
+      try {
+        const payload = await apiUpdatePlaylistCover({ playlistId: playlist.id, file })
+        if (payload) {
+          upsertDjPlaylistFromServer(payload)
+          renderDjPlaylists()
+          renderDjPlaylistTracks()
+        }
+      } catch (error) {
+        console.warn('Playlist cover update failed', error)
+        alert(error?.message || 'Could not update playlist cover')
+      }
+    })
+
+    djRenamePlaylistBtn?.addEventListener('click', async () => {
+      const playlist = getActivePlaylist()
+      if (!playlist) return
+      const currentName = playlist.name || 'Untitled Playlist'
+      const nextName = window.prompt('Rename playlist', currentName)
+      if (nextName === null) return
+      const trimmed = nextName.trim()
+      if (!trimmed) {
+        alert('Playlist name cannot be empty')
+        return
+      }
+      djRenamePlaylistBtn.disabled = true
+      try {
+        const payload = await apiUpdatePlaylist({ playlistId: playlist.id, title: trimmed })
+        if (payload) {
+          const updated = upsertDjPlaylistFromServer(payload)
+          if (updated) {
+            setActivePlaylist(updated.id)
+          }
+          renderDjPlaylists()
+          renderDjPlaylistTracks()
+          renderDjSongTable()
+        }
+      } catch (error) {
+        console.warn('Playlist rename failed', error)
+        alert(error?.message || 'Could not rename playlist')
+      } finally {
+        const active = getActivePlaylist()
+        if (djRenamePlaylistBtn) {
+          djRenamePlaylistBtn.disabled = !active
+        }
+      }
+    })
+
     Object.values(djDecks).forEach(clearDeck)
     updateCrossfaderValue(djCrossfader?.value ?? 50)
     refreshDjLibrary()
+    loadDjPlaylists()
     updateDjTimelinePlaybackState()
 
     const renderedTrackIds = new Set()
@@ -7830,6 +8166,8 @@ let sessionsCard = null;
       profileRefs.albumGallery = document.getElementById('profileAlbumGallery')
       profileRefs.albumList = document.getElementById('profileAlbumList')
       profileRefs.albumsEmpty = document.getElementById('profileAlbumsEmpty')
+      profileRefs.playlistList = document.getElementById('profilePlaylistList')
+      profileRefs.playlistsEmpty = document.getElementById('profilePlaylistsEmpty')
       profileRefs.trackGalleryWrapper = document.getElementById('profileTrackGalleryWrapper')
       profileRefs.trackGallery = document.getElementById('profileTrackGallery')
       profileRefs.trackList = document.getElementById('profileTrackList')
@@ -7871,6 +8209,11 @@ let sessionsCard = null;
         profileRefs.albumList.classList.add('hidden')
       }
       if (profileRefs.albumsEmpty) profileRefs.albumsEmpty.classList.remove('hidden')
+      if (profileRefs.playlistList) {
+        profileRefs.playlistList.innerHTML = ''
+        profileRefs.playlistList.classList.add('hidden')
+      }
+      if (profileRefs.playlistsEmpty) profileRefs.playlistsEmpty.classList.remove('hidden')
       if (profileRefs.trackGallery) profileRefs.trackGallery.innerHTML = ''
       if (profileRefs.trackGalleryWrapper) profileRefs.trackGalleryWrapper.classList.add('hidden')
       if (profileRefs.trackList) {
@@ -7927,6 +8270,9 @@ let sessionsCard = null;
         : []
       const singles = Array.isArray(entry.tracks)
         ? entry.tracks.filter(track => !track.albumId).slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        : []
+      const playlists = Array.isArray(entry.playlists)
+        ? entry.playlists.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
         : []
 
       if (albums.length) {
@@ -8041,6 +8387,59 @@ let sessionsCard = null;
             profileRefs.albumList.appendChild(details)
           })
         }
+      }
+
+      if (playlists.length) {
+        if (profileRefs.playlistsEmpty) profileRefs.playlistsEmpty.classList.add('hidden')
+        if (profileRefs.playlistList) {
+          profileRefs.playlistList.classList.remove('hidden')
+          playlists.forEach((playlist) => {
+            const details = document.createElement('details')
+            details.className = 'profile-album-entry'
+            const summary = document.createElement('summary')
+            summary.className = 'profile-album-summary'
+            const coverThumb = document.createElement('img')
+            coverThumb.className = 'profile-album-cover'
+            coverThumb.src = playlist.cover || DEFAULT_TRACK_COVER
+            coverThumb.onerror = () => { coverThumb.src = DEFAULT_TRACK_COVER }
+            const summaryText = document.createElement('div')
+            summaryText.className = 'min-w-0 flex-1'
+            const titleEl = document.createElement('p')
+            titleEl.className = 'm-0 font-semibold text-white'
+            titleEl.textContent = playlist.title || 'Untitled Playlist'
+            const countEl = document.createElement('p')
+            countEl.className = 'm-0 text-sm text-white/60'
+            const trackCount = Array.isArray(playlist.tracks) ? playlist.tracks.length : 0
+            countEl.textContent = trackCount === 1 ? '1 track' : `${trackCount} tracks`
+            summaryText.appendChild(titleEl)
+            summaryText.appendChild(countEl)
+            summary.appendChild(coverThumb)
+            summary.appendChild(summaryText)
+            details.appendChild(summary)
+
+            if (Array.isArray(playlist.tracks) && playlist.tracks.length) {
+              const tracksWrap = document.createElement('div')
+              tracksWrap.className = 'profile-album-tracks'
+              playlist.tracks
+                .slice()
+                .sort((a, b) => (Number(a?.order) || 0) - (Number(b?.order) || 0))
+                .forEach((track, index) => {
+                  if (!track) return
+                  const trackRow = document.createElement('div')
+                  trackRow.className = 'profile-track-item profile-track-item--compact profile-album-track'
+                  const heading = document.createElement('h5')
+                  heading.textContent = `${index + 1}. ${track.title || 'Untitled'}`
+                  trackRow.appendChild(heading)
+                  tracksWrap.appendChild(trackRow)
+                })
+              details.appendChild(tracksWrap)
+            }
+
+            profileRefs.playlistList.appendChild(details)
+          })
+        }
+      } else if (profileRefs.playlistsEmpty) {
+        profileRefs.playlistsEmpty.classList.remove('hidden')
       }
 
       if (singles.length) {
@@ -8883,10 +9282,11 @@ function ensureLibraryEntryForUser(user, fallbackId = '') {
   const sanitized = sanitizeLibraryUserData(user, key)
   let entry = userLibrary.get(key)
   if (!entry) {
-    entry = { key, user: sanitized, tracks: [], albums: [] }
+    entry = { key, user: sanitized, tracks: [], albums: [], playlists: [] }
     userLibrary.set(key, entry)
   } else {
     entry.user = { ...entry.user, ...sanitized }
+    if (!Array.isArray(entry.playlists)) entry.playlists = []
   }
   return entry
 }
@@ -8992,6 +9392,60 @@ function recordUserAlbumEntry(album) {
   entry.albums.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
 }
 
+function recordUserPlaylistEntry(playlist) {
+  if (!playlist || !playlist.id) return
+  const entry = ensureLibraryEntryForUser(
+    playlist.user || { email: playlist.userEmail, displayName: playlist.artist },
+    playlist.ownerId || playlist.userId || ''
+  )
+  if (!entry) return
+  if (!Array.isArray(entry.playlists)) entry.playlists = []
+  const sanitizedTracks = Array.isArray(playlist.tracks)
+    ? playlist.tracks
+        .map((track, index) => {
+          if (!track || !track.id) return null
+          const order = Number.isFinite(track.order) ? track.order : index
+          const url = track.url ? resolveTrackMediaUrl(track.url) : ''
+          const cover = track.cover ? resolveTrackMediaUrl(track.cover) : ''
+          return {
+            id: track.id,
+            title: track.title || 'Untitled',
+            order,
+            url,
+            cover: cover || DEFAULT_TRACK_COVER
+          }
+        })
+        .filter(Boolean)
+    : []
+  const record = {
+    id: playlist.id,
+    title: playlist.title || 'Untitled Playlist',
+    cover: playlist.cover ? resolveTrackMediaUrl(playlist.cover) : DEFAULT_TRACK_COVER,
+    createdAt: resolveTrackCreatedAt(playlist),
+    tracks: sanitizedTracks
+  }
+  const existingIndex = entry.playlists.findIndex(item => String(item.id) === String(record.id))
+  if (existingIndex >= 0) {
+    entry.playlists[existingIndex] = { ...entry.playlists[existingIndex], ...record }
+  } else {
+    entry.playlists.push(record)
+  }
+  entry.playlists.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+}
+
+function removeUserPlaylistEntry(playlistId, user) {
+  if (!playlistId) return
+  const key = normalizeLibraryKeyFromUser(user, user?.id || user?._id || '')
+  if (!key) return
+  const entry = userLibrary.get(key)
+  if (!entry || !Array.isArray(entry.playlists)) return
+  const idString = String(playlistId)
+  const index = entry.playlists.findIndex((item) => String(item?.id) === idString)
+  if (index >= 0) {
+    entry.playlists.splice(index, 1)
+  }
+}
+
 function buildProfileLibraryParams(user) {
   const params = new URLSearchParams()
   if (!user || typeof user !== 'object') return params
@@ -9077,6 +9531,27 @@ async function hydrateProfileLibraryForUser(user) {
         tracks: normalizedTracks,
         user: album.user ? sanitizeLibraryUserData(album.user, key) : libraryUser,
         ownerId: album.ownerId || libraryUser.id || libraryUser._id || user.id || user._id || ''
+      })
+    })
+  }
+
+  if (Array.isArray(payload.playlists)) {
+    payload.playlists.forEach((playlist) => {
+      if (!playlist || !playlist.id) return
+      const coverUrl = playlist.cover ? resolveTrackMediaUrl(playlist.cover) : ''
+      const normalizedTracks = Array.isArray(playlist.tracks)
+        ? playlist.tracks.map((entry, index) => ({
+            ...entry,
+            order: Number.isFinite(entry?.order) ? entry.order : index,
+            url: entry?.url ? resolveTrackMediaUrl(entry.url) : ''
+          }))
+        : []
+      recordUserPlaylistEntry({
+        ...playlist,
+        cover: coverUrl || DEFAULT_TRACK_COVER,
+        tracks: normalizedTracks,
+        user: playlist.user ? sanitizeLibraryUserData(playlist.user, key) : libraryUser,
+        ownerId: playlist.ownerId || libraryUser.id || libraryUser._id || user.id || user._id || ''
       })
     })
   }
@@ -12025,6 +12500,92 @@ async function updateLeaderboard() {
       return true
     }
 
+    async function apiCreatePlaylist({ title = '' } = {}) {
+      const apiBase = resolveTrackApiBase()
+      const response = await fetch(`${apiBase}/api/playlists`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ title })
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const error = new Error(normalizeApiError('Playlist create failed', response, payload))
+        error.status = response.status
+        throw error
+      }
+      return payload?.playlist || null
+    }
+
+    async function apiFetchPlaylists() {
+      const apiBase = resolveTrackApiBase()
+      const response = await fetch(`${apiBase}/api/playlists`, {
+        headers: authHeaders()
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const error = new Error(normalizeApiError('Playlist list failed', response, payload))
+        error.status = response.status
+        throw error
+      }
+      return payload || {}
+    }
+
+    async function apiUpdatePlaylist({ playlistId, title, trackIds } = {}) {
+      if (!playlistId) throw new Error('Playlist ID required')
+      const body = {}
+      if (typeof title === 'string') body.title = title
+      if (Array.isArray(trackIds)) body.trackIds = trackIds
+      const apiBase = resolveTrackApiBase()
+      const response = await fetch(`${apiBase}/api/playlists/${playlistId}`, {
+        method: 'PATCH',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body)
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const error = new Error(normalizeApiError('Playlist update failed', response, payload))
+        error.status = response.status
+        throw error
+      }
+      return payload?.playlist || null
+    }
+
+    async function apiUpdatePlaylistCover({ playlistId, file }) {
+      if (!playlistId) throw new Error('Playlist ID required')
+      if (!file) throw new Error('Cover file required')
+      const apiBase = resolveTrackApiBase()
+      const fd = new FormData()
+      fd.append('cover', file, file.name || 'cover.png')
+      const response = await fetch(`${apiBase}/api/playlists/${playlistId}/cover`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: fd
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const error = new Error(normalizeApiError('Playlist cover update failed', response, payload))
+        error.status = response.status
+        throw error
+      }
+      return payload?.playlist || null
+    }
+
+    async function apiDeletePlaylist(playlistId) {
+      if (!playlistId) throw new Error('Playlist ID required')
+      const apiBase = resolveTrackApiBase()
+      const response = await fetch(`${apiBase}/api/playlists/${playlistId}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        const error = new Error(normalizeApiError('Playlist delete failed', response, payload))
+        error.status = response.status
+        throw error
+      }
+      return true
+    }
+
     async function apiFetchAlbum(albumId) {
       if (!albumId) return null
       const apiBase = resolveTrackApiBase()
@@ -12724,6 +13285,10 @@ async function updateLeaderboard() {
             <div id="profileAlbumGallery" class="cover-score"></div>
           </div>
           <div id="profileAlbumList" class="profile-album-list hidden"></div>
+
+          <h4 class="profile-library__heading mt-6">Playlists</h4>
+          <p id="profilePlaylistsEmpty" class="profile-empty">No playlists yet.</p>
+          <div id="profilePlaylistList" class="profile-album-list hidden"></div>
 
           <h4 class="profile-library__heading mt-6">Tracks</h4>
           <p id="profileTracksEmpty" class="profile-empty">No tracks yet.</p>

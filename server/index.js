@@ -634,6 +634,28 @@ AlbumSchema.index({ userId: 1, source: 1, sourceId: 1 }, { unique: true, sparse:
 
 const Album = mongoose.model('Album', AlbumSchema);
 
+const PlaylistTrackRefSchema = new mongoose.Schema({
+  trackId: { type: mongoose.Schema.Types.ObjectId, ref: 'Track', required: true },
+  order: { type: Number, default: 0 }
+}, { _id: false });
+
+const PlaylistSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  title: { type: String, default: '' },
+  coverUrl: { type: String, default: '' },
+  coverStorageKey: { type: String, default: '' },
+  trackIds: { type: [PlaylistTrackRefSchema], default: [] },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+PlaylistSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+const Playlist = mongoose.model('Playlist', PlaylistSchema);
+
 const SoundCloudAccountSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true, index: true },
   soundcloudUserId: { type: Number, index: true },
@@ -1784,6 +1806,54 @@ function presentAlbum(req, albumDoc, { ownerSummary = null, trackDocs = [] } = {
     user: ownerSummary,
     tracks,
     db: true
+  };
+}
+
+function presentPlaylistTrack(req, trackDoc, playlistDoc) {
+  if (!trackDoc) return null;
+  const audioUrl = presentStoredUploadUrl(req, trackDoc.audioUrl, trackDoc.audioUrl);
+  if (!audioUrl) return null;
+  const order = Array.isArray(playlistDoc?.trackIds)
+    ? playlistDoc.trackIds.find((entry) => entry?.trackId?.toString() === trackDoc._id?.toString())?.order || 0
+    : 0;
+  return {
+    id: trackDoc._id,
+    title: trackDoc.title || 'Untitled',
+    order,
+    url: audioUrl,
+    duration: Number.isFinite(trackDoc.audioDurationSec) ? trackDoc.audioDurationSec : null,
+    cover: presentStoredUploadUrl(req, trackDoc.coverUrl, trackDoc.coverUrl) || '',
+    ownerId: idToString(trackDoc.userId),
+    artist: trackDoc.artist || '',
+    streamUrl: trackDoc.streamUrl || audioUrl,
+    streamProtocol: trackDoc.streamProtocol || ''
+  };
+}
+
+function presentPlaylist(req, playlistDoc, { ownerSummary = null, trackDocs = [] } = {}) {
+  if (!playlistDoc) return null;
+  const cover = presentStoredUploadUrl(req, playlistDoc.coverUrl, playlistDoc.coverStorageKey);
+  const trackMap = new Map(trackDocs.map((doc) => [doc?._id?.toString(), doc]));
+  const tracks = Array.isArray(playlistDoc.trackIds)
+    ? playlistDoc.trackIds
+        .slice()
+        .sort((a, b) => (Number(a?.order) || 0) - (Number(b?.order) || 0))
+        .map((ref) => presentPlaylistTrack(req, trackMap.get(ref?.trackId?.toString()), playlistDoc))
+        .filter(Boolean)
+    : [];
+
+  return {
+    id: playlistDoc._id,
+    title: playlistDoc.title || 'Untitled Playlist',
+    cover,
+    coverStorageKey: playlistDoc.coverStorageKey || '',
+    createdAt: playlistDoc.createdAt,
+    updatedAt: playlistDoc.updatedAt,
+    userId: playlistDoc.userId,
+    ownerId: idToString(playlistDoc.userId),
+    user: ownerSummary,
+    tracks,
+    trackCount: tracks.length
   };
 }
 
@@ -3362,6 +3432,10 @@ app.get('/api/users/library', async (req, res) => {
       .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
       .lean();
 
+    const playlistDocs = await Playlist.find({ userId: userDoc._id })
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+      .lean();
+
     const albumTrackIdStrings = [];
     for (const albumDoc of albumDocs) {
       if (!Array.isArray(albumDoc.trackIds)) continue;
@@ -3371,9 +3445,19 @@ app.get('/api/users/library', async (req, res) => {
       }
     }
 
-    let albumTrackMap = new Map();
-    if (albumTrackIdStrings.length) {
-      const uniqueIds = Array.from(new Set(albumTrackIdStrings));
+    const playlistTrackIdStrings = [];
+    for (const playlistDoc of playlistDocs) {
+      if (!Array.isArray(playlistDoc.trackIds)) continue;
+      for (const ref of playlistDoc.trackIds) {
+        const id = toIdString(ref?.trackId);
+        if (id) playlistTrackIdStrings.push(id);
+      }
+    }
+
+    const combinedTrackIds = [...albumTrackIdStrings, ...playlistTrackIdStrings];
+    let trackDocMap = new Map();
+    if (combinedTrackIds.length) {
+      const uniqueIds = Array.from(new Set(combinedTrackIds));
       const objectIds = uniqueIds
         .map((value) => {
           try {
@@ -3385,7 +3469,7 @@ app.get('/api/users/library', async (req, res) => {
         .filter(Boolean);
       if (objectIds.length) {
         const docs = await Track.find({ _id: { $in: objectIds } }).lean();
-        albumTrackMap = new Map(docs.map((entry) => [toIdString(entry?._id), entry]));
+        trackDocMap = new Map(docs.map((entry) => [toIdString(entry?._id), entry]));
       }
     }
 
@@ -3393,14 +3477,25 @@ app.get('/api/users/library', async (req, res) => {
       .map((albumDoc) => {
         const trackDocsForAlbum = Array.isArray(albumDoc.trackIds)
           ? albumDoc.trackIds
-              .map((ref) => albumTrackMap.get(toIdString(ref?.trackId)))
+              .map((ref) => trackDocMap.get(toIdString(ref?.trackId)))
               .filter(Boolean)
           : [];
         return presentAlbum(req, albumDoc, { ownerSummary, trackDocs: trackDocsForAlbum });
       })
       .filter(Boolean);
 
-    res.json({ user: ownerSummary, tracks, albums });
+    const playlists = playlistDocs
+      .map((playlistDoc) => {
+        const trackDocsForPlaylist = Array.isArray(playlistDoc.trackIds)
+          ? playlistDoc.trackIds
+              .map((ref) => trackDocMap.get(toIdString(ref?.trackId)))
+              .filter(Boolean)
+          : [];
+        return presentPlaylist(req, playlistDoc, { ownerSummary, trackDocs: trackDocsForPlaylist });
+      })
+      .filter(Boolean);
+
+    res.json({ user: ownerSummary, tracks, albums, playlists });
   } catch (error) {
     console.error('User library fetch failed', error);
     res.status(500).json({ error: 'could not load user library' });
@@ -4862,6 +4957,315 @@ app.delete('/api/albums/:id', auth, async (req, res) => {
   } catch (deleteError) {
     console.error('Album delete failed', deleteError);
     res.status(500).json({ error: 'could not delete album' });
+  }
+});
+
+app.post('/api/playlists', auth, async (req, res) => {
+  const rawTitle = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+  const title = rawTitle ? rawTitle.slice(0, 160) : '';
+
+  try {
+    const playlistDoc = await Playlist.create({
+      userId: req.user._id,
+      title,
+      coverUrl: '',
+      coverStorageKey: '',
+      trackIds: []
+    });
+    const ownerSummary = await userSummary(req, req.user);
+    res.json({ playlist: presentPlaylist(req, playlistDoc, { ownerSummary, trackDocs: [] }) });
+  } catch (error) {
+    console.error('Playlist create failed', error);
+    res.status(500).json({ error: 'could not create playlist' });
+  }
+});
+
+app.get('/api/playlists', auth, async (req, res) => {
+  try {
+    const playlistDocs = await Playlist.find({ userId: req.user._id })
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+      .lean();
+
+    const trackIdStrings = [];
+    for (const playlistDoc of playlistDocs) {
+      if (!Array.isArray(playlistDoc.trackIds)) continue;
+      for (const ref of playlistDoc.trackIds) {
+        const id = toIdString(ref?.trackId);
+        if (id) trackIdStrings.push(id);
+      }
+    }
+
+    let trackMap = new Map();
+    if (trackIdStrings.length) {
+      const uniqueIds = Array.from(new Set(trackIdStrings));
+      const objectIds = uniqueIds
+        .map((value) => {
+          try {
+            return new mongoose.Types.ObjectId(value);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      if (objectIds.length) {
+        const docs = await Track.find({ _id: { $in: objectIds } }).lean();
+        trackMap = new Map(docs.map((entry) => [toIdString(entry?._id), entry]));
+      }
+    }
+
+    const ownerSummary = await userSummary(req, req.user);
+    const playlists = playlistDocs
+      .map((playlistDoc) => {
+        const trackDocs = Array.isArray(playlistDoc.trackIds)
+          ? playlistDoc.trackIds
+              .map((ref) => trackMap.get(toIdString(ref?.trackId)))
+              .filter(Boolean)
+          : [];
+        return presentPlaylist(req, playlistDoc, { ownerSummary, trackDocs });
+      })
+      .filter(Boolean);
+
+    res.json({ playlists });
+  } catch (error) {
+    console.error('Playlist list failed', error);
+    res.status(500).json({ error: 'could not load playlists' });
+  }
+});
+
+app.get('/api/playlists/:id', auth, async (req, res) => {
+  const playlistId = asObjectId(req.params?.id);
+  if (!playlistId) {
+    return res.status(400).json({ error: 'invalid playlist id' });
+  }
+
+  let playlistDoc = null;
+  try {
+    playlistDoc = await Playlist.findById(playlistId);
+  } catch (lookupError) {
+    console.error('Playlist lookup failed', lookupError);
+  }
+
+  if (!playlistDoc) {
+    return res.status(404).json({ error: 'playlist not found' });
+  }
+
+  if (!playlistDoc.userId || playlistDoc.userId.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ error: 'not your playlist' });
+  }
+
+  try {
+    const trackIds = Array.isArray(playlistDoc.trackIds)
+      ? playlistDoc.trackIds.map((entry) => asObjectId(entry?.trackId)).filter(Boolean)
+      : [];
+    const trackDocs = trackIds.length ? await Track.find({ _id: { $in: trackIds } }).lean() : [];
+    const ownerSummary = await userSummary(req, req.user);
+    res.json({ playlist: presentPlaylist(req, playlistDoc, { ownerSummary, trackDocs }) });
+  } catch (error) {
+    console.error('Playlist fetch failed', error);
+    res.status(500).json({ error: 'could not load playlist' });
+  }
+});
+
+app.patch('/api/playlists/:id', auth, async (req, res) => {
+  const playlistId = asObjectId(req.params?.id);
+  if (!playlistId) {
+    return res.status(400).json({ error: 'invalid playlist id' });
+  }
+
+  let playlistDoc = null;
+  try {
+    playlistDoc = await Playlist.findById(playlistId);
+  } catch (lookupError) {
+    console.error('Playlist lookup failed during update', lookupError);
+  }
+
+  if (!playlistDoc) {
+    return res.status(404).json({ error: 'playlist not found' });
+  }
+
+  if (!playlistDoc.userId || playlistDoc.userId.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ error: 'not your playlist' });
+  }
+
+  const body = req.body || {};
+  const nextTitle = typeof body.title === 'string' ? body.title.trim().slice(0, 160) : null;
+  if (nextTitle !== null) {
+    playlistDoc.title = nextTitle;
+  }
+
+  const tracksInput = Array.isArray(body.trackIds)
+    ? body.trackIds
+    : (Array.isArray(body.tracks) ? body.tracks : null);
+
+  let responseTrackMap = new Map();
+  if (tracksInput) {
+    const normalized = tracksInput
+      .map((entry, index) => {
+        if (!entry) return null;
+        if (typeof entry === 'string') {
+          return { id: entry, order: index };
+        }
+        if (typeof entry === 'object') {
+          const idValue = entry.id || entry.trackId || entry._id || entry;
+          if (!idValue) return null;
+          const orderValue = Number.isFinite(entry.order) ? Number(entry.order) : index;
+          return { id: idValue, order: orderValue };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    const uniqueTrackIds = Array.from(new Set(normalized.map((entry) => toIdString(entry.id)).filter(Boolean)));
+    const objectIds = uniqueTrackIds
+      .map((value) => {
+        try {
+          return new mongoose.Types.ObjectId(value);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    let trackDocs = [];
+    if (objectIds.length) {
+      trackDocs = await Track.find({ _id: { $in: objectIds }, userId: req.user._id }).lean();
+    }
+
+    const trackDocMap = new Map(trackDocs.map((doc) => [toIdString(doc?._id), doc]));
+    responseTrackMap = trackDocMap;
+    const nextTrackRefs = [];
+    normalized.forEach((entry, index) => {
+      const key = toIdString(entry.id);
+      if (!key) return;
+      const trackDoc = trackDocMap.get(key);
+      if (!trackDoc) return;
+      const orderValue = Number.isFinite(entry.order) ? entry.order : index;
+      nextTrackRefs.push({ trackId: trackDoc._id, order: Math.max(0, Number(orderValue) || 0) });
+    });
+    playlistDoc.trackIds = nextTrackRefs;
+  }
+
+  try {
+    await playlistDoc.save();
+  } catch (error) {
+    console.error('Playlist update failed', error);
+    return res.status(500).json({ error: 'could not update playlist' });
+  }
+
+  try {
+    const trackIds = Array.isArray(playlistDoc.trackIds)
+      ? playlistDoc.trackIds.map((entry) => asObjectId(entry?.trackId)).filter(Boolean)
+      : [];
+    let trackDocs = [];
+    if (trackIds.length) {
+      if (responseTrackMap.size) {
+        trackDocs = playlistDoc.trackIds
+          .map((entry) => responseTrackMap.get(toIdString(entry?.trackId)))
+          .filter(Boolean);
+      }
+      if (!trackDocs.length) {
+        trackDocs = await Track.find({ _id: { $in: trackIds } }).lean();
+      }
+    }
+    const ownerSummary = await userSummary(req, req.user);
+    res.json({ playlist: presentPlaylist(req, playlistDoc, { ownerSummary, trackDocs }) });
+  } catch (error) {
+    console.error('Playlist load after update failed', error);
+    res.status(500).json({ error: 'could not load playlist' });
+  }
+});
+
+app.patch('/api/playlists/:id/cover', auth, (req, res) => {
+  if (!ensureDurableUploadsEnabled(res)) {
+    return;
+  }
+
+  trackUpload.single('cover')(req, res, async (err) => {
+    if (err) {
+      const message = err.message || 'upload failed';
+      return res.status(400).json({ error: message });
+    }
+
+    const playlistId = asObjectId(req.params?.id);
+    if (!playlistId) {
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(400).json({ error: 'invalid playlist id' });
+    }
+
+    let playlistDoc = null;
+    try {
+      playlistDoc = await Playlist.findById(playlistId);
+    } catch (lookupError) {
+      console.error('Playlist lookup failed during cover update', lookupError);
+    }
+
+    if (!playlistDoc) {
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(404).json({ error: 'playlist not found' });
+    }
+
+    if (!playlistDoc.userId || playlistDoc.userId.toString() !== req.user._id.toString()) {
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(403).json({ error: 'not your playlist' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'missing file' });
+    }
+
+    if (req.file.size > 10 * 1024 * 1024) {
+      await deleteUploadKey(req.file.storageKey).catch(() => {});
+      return res.status(400).json({ error: 'cover art must be 10MB or less' });
+    }
+
+    try {
+      await deleteUploadKey(playlistDoc.coverStorageKey).catch(() => {});
+      playlistDoc.coverUrl = req.file.storageKey;
+      playlistDoc.coverStorageKey = req.file.storageKey;
+      await playlistDoc.save();
+
+      const trackIds = Array.isArray(playlistDoc.trackIds)
+        ? playlistDoc.trackIds.map((entry) => asObjectId(entry?.trackId)).filter(Boolean)
+        : [];
+      const trackDocs = trackIds.length ? await Track.find({ _id: { $in: trackIds } }).lean() : [];
+      const ownerSummary = await userSummary(req, req.user);
+      res.json({ playlist: presentPlaylist(req, playlistDoc, { ownerSummary, trackDocs }) });
+    } catch (updateError) {
+      console.error('Playlist cover update failed', updateError);
+      if (req.file?.storageKey) await deleteUploadKey(req.file.storageKey).catch(() => {});
+      res.status(500).json({ error: 'could not update playlist cover' });
+    }
+  });
+});
+
+app.delete('/api/playlists/:id', auth, async (req, res) => {
+  const playlistId = asObjectId(req.params?.id);
+  if (!playlistId) {
+    return res.status(400).json({ error: 'invalid playlist id' });
+  }
+
+  let playlistDoc = null;
+  try {
+    playlistDoc = await Playlist.findById(playlistId);
+  } catch (lookupError) {
+    console.error('Playlist lookup failed during delete', lookupError);
+  }
+
+  if (!playlistDoc) {
+    return res.status(404).json({ error: 'playlist not found' });
+  }
+
+  if (!playlistDoc.userId || playlistDoc.userId.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ error: 'not your playlist' });
+  }
+
+  try {
+    await deleteUploadKey(playlistDoc.coverStorageKey).catch(() => {});
+    await Playlist.deleteOne({ _id: playlistDoc._id });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Playlist delete failed', error);
+    res.status(500).json({ error: 'could not delete playlist' });
   }
 });
 
