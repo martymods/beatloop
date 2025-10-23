@@ -3778,6 +3778,7 @@
               <div class="bl-dj__playlist-detail-header">
                 <h5 id="blDjActivePlaylistLabel">Select a playlist to view tracks</h5>
                 <span id="blDjPlaylistCount" class="bl-dj__badge hidden">0</span>
+                <button id="blDjPlayPlaylist" type="button" class="bl-dj__cta-btn hidden">Play Playlist</button>
               </div>
               <ul id="blDjPlaylistTracks" class="bl-dj__playlist-tracks"></ul>
               <p id="blDjPlaylistEmpty" class="bl-dj__empty">No tracks yet — add songs from the library.</p>
@@ -3788,14 +3789,14 @@
         <section class="bl-dj__panel bl-dj__decks">
           <div class="bl-dj__deck" data-deck="A">
             <div class="bl-dj__deck-header">
-              <h4>Deck A</h4>
+              <h4>Deck 1</h4>
               <button id="blDjDeckAClear" type="button" class="bl-dj__ghost-btn">Unload</button>
             </div>
             <div class="bl-dj__deck-meta">
-              <img id="blDjDeckACover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck A cover" />
+              <img id="blDjDeckACover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck 1 cover" />
               <div>
                 <p id="blDjDeckATitle" class="bl-dj__deck-title">No track loaded</p>
-                <p id="blDjDeckAArtist" class="bl-dj__deck-artist">Select a song to load Deck A.</p>
+                <p id="blDjDeckAArtist" class="bl-dj__deck-artist">Select a song to load Deck 1.</p>
               </div>
             </div>
             <div class="bl-dj__deck-controls">
@@ -3816,14 +3817,14 @@
 
           <div class="bl-dj__deck" data-deck="B">
             <div class="bl-dj__deck-header">
-              <h4>Deck B</h4>
+              <h4>Deck 2</h4>
               <button id="blDjDeckBClear" type="button" class="bl-dj__ghost-btn">Unload</button>
             </div>
             <div class="bl-dj__deck-meta">
-              <img id="blDjDeckBCover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck B cover" />
+              <img id="blDjDeckBCover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck 2 cover" />
               <div>
                 <p id="blDjDeckBTitle" class="bl-dj__deck-title">No track loaded</p>
-                <p id="blDjDeckBArtist" class="bl-dj__deck-artist">Select a song to load Deck B.</p>
+                <p id="blDjDeckBArtist" class="bl-dj__deck-artist">Select a song to load Deck 2.</p>
               </div>
             </div>
             <div class="bl-dj__deck-controls">
@@ -3872,6 +3873,40 @@
       url: 'https://www.michelacosta.com/html5/showtek.mp3'
     }
   };
+
+  const dynamicTurntableTrackIndex = new Map();
+  let nextTurntableTrackId = Object.keys(tracks).reduce((max, key) => {
+    const value = Number(key);
+    return Number.isFinite(value) ? Math.max(max, value) : max;
+  }, 0) + 1;
+
+  function resolveTurntableTrackTitle(track) {
+    if (!track) return 'Untitled';
+    const title = typeof track.title === 'string' ? track.title.trim() : '';
+    const artist = typeof track.artist === 'string' ? track.artist.trim() : '';
+    if (title && artist) return `${title} — ${artist}`;
+    return title || artist || 'Untitled';
+  }
+
+  function ensureTurntableTrack(track) {
+    if (!track || !track.url) return null;
+    const key = String(track.url);
+    if (dynamicTurntableTrackIndex.has(key)) {
+      const existingId = dynamicTurntableTrackIndex.get(key);
+      tracks[existingId] = {
+        title: resolveTurntableTrackTitle(track),
+        url: track.url,
+      };
+      return existingId;
+    }
+    const trackId = nextTurntableTrackId++;
+    dynamicTurntableTrackIndex.set(key, trackId);
+    tracks[trackId] = {
+      title: resolveTurntableTrackTitle(track),
+      url: track.url,
+    };
+    return trackId;
+  }
 
   const $root = $('#beatloopDj');
   const $turntable = $('#beatloopTurntable');
@@ -6427,6 +6462,7 @@ let sessionsCard = null;
     const djPlaylistEmpty = document.getElementById('blDjPlaylistEmpty')
     const djActivePlaylistLabel = document.getElementById('blDjActivePlaylistLabel')
     const djPlaylistCount = document.getElementById('blDjPlaylistCount')
+    const djPlayPlaylistBtn = document.getElementById('blDjPlayPlaylist')
     const djClearPlaylistBtn = document.getElementById('blDjClearPlaylist')
 
     let turntableCreditsAudio = null
@@ -6468,6 +6504,7 @@ let sessionsCard = null;
       activePlaylistId: null,
       isOpen: false,
       crossfader: 0.5,
+      autoPlay: null,
     }
 
     const userLibrary = new Map()
@@ -6491,6 +6528,14 @@ let sessionsCard = null;
     const djDecks = {
       A: createDjDeck('A', djDeckA),
       B: createDjDeck('B', djDeckB),
+    }
+
+    const DJ_TO_TURNTABLE_DECK = { A: 'left', B: 'right' }
+
+    function getDeckDisplayName(label) {
+      if (label === 'A' || label === '1') return 'Deck 1'
+      if (label === 'B' || label === '2') return 'Deck 2'
+      return `Deck ${label}`
     }
 
     function getDjTrackById(trackId) {
@@ -6570,9 +6615,9 @@ let sessionsCard = null;
         if (normalized === 50) {
           djCrossfaderValue.textContent = 'Center'
         } else if (normalized < 50) {
-          djCrossfaderValue.textContent = `Deck A ${String(50 - normalized)}%`
+          djCrossfaderValue.textContent = `Deck 1 ${String(50 - normalized)}%`
         } else {
-          djCrossfaderValue.textContent = `Deck B ${String(normalized - 50)}%`
+          djCrossfaderValue.textContent = `Deck 2 ${String(normalized - 50)}%`
         }
       }
       applyCrossfader()
@@ -6589,8 +6634,9 @@ let sessionsCard = null;
       updateDjTimelinePlaybackState()
     }
 
-    function clearDeck(deck) {
+    function clearDeck(deck, options = {}) {
       if (!deck || !deck.elements) return
+      const { fromAutoPlay = false } = options
       deck.track = null
       deck.duration = 0
       const { elements } = deck
@@ -6607,7 +6653,7 @@ let sessionsCard = null;
         elements.title.textContent = 'No track loaded'
       }
       if (elements.artist) {
-        elements.artist.textContent = `Select a song to load Deck ${deck.label}.`
+        elements.artist.textContent = `Select a song to load ${getDeckDisplayName(deck.label)}.`
       }
       if (elements.seek) {
         elements.seek.value = '0'
@@ -6621,6 +6667,13 @@ let sessionsCard = null;
       }
       setDeckPlayingState(deck, false)
       applyCrossfader()
+      if (!fromAutoPlay && djState.autoPlay?.active) {
+        stopPlaylistAutoplay()
+      }
+      const turntableId = DJ_TO_TURNTABLE_DECK[deck.label]
+      if (turntableId && decks[turntableId]) {
+        resetDeckUi(decks[turntableId])
+      }
     }
 
     function updateDeckUi(deck) {
@@ -6656,18 +6709,111 @@ let sessionsCard = null;
       applyCrossfader()
     }
 
-    function loadTrackToDeck(deckKey, track) {
+    function syncTurntableDeck(deckKey, track) {
+      const turntableId = DJ_TO_TURNTABLE_DECK[deckKey]
+      if (!turntableId) return
+      const turntableTrackId = ensureTurntableTrack(track)
+      if (!turntableTrackId) return
+      loadTrack(turntableId, turntableTrackId)
+    }
+
+    function loadTrackToDeck(deckKey, track, options = {}) {
       if (!deckKey || !track) return
       const deck = djDecks[deckKey]
       if (!deck) return
+      if (!options.fromAutoPlay && djState.autoPlay?.active) {
+        stopPlaylistAutoplay()
+      }
       deck.track = track
       updateDeckUi(deck)
+      syncTurntableDeck(deckKey, track)
+    }
+
+    function playDeckAudio(deck) {
+      const audio = deck?.elements?.audio
+      if (!audio) return
+      if (audio.paused || audio.ended) {
+        const playAttempt = audio.play()
+        if (playAttempt && typeof playAttempt.catch === 'function') {
+          playAttempt.catch(() => {})
+        }
+      }
+    }
+
+    function stopPlaylistAutoplay(options = {}) {
+      if (!djState.autoPlay) return
+      djState.autoPlay = null
+      if (!options.silent) {
+        renderDjPlaylistTracks()
+      }
+    }
+
+    function loadNextAutoPlayTrack(deckKey) {
+      if (!djState.autoPlay?.active) return false
+      const queue = djState.autoPlay.queue
+      if (!Array.isArray(queue) || djState.autoPlay.nextIndex >= queue.length) {
+        return false
+      }
+      const track = queue[djState.autoPlay.nextIndex]
+      djState.autoPlay.nextIndex += 1
+      if (!track) return false
+      loadTrackToDeck(deckKey, track, { fromAutoPlay: true })
+      return true
+    }
+
+    function startPlaylistAutoplay(playlist) {
+      if (!playlist || !Array.isArray(playlist.tracks)) return
+      const queue = playlist.tracks
+        .map((trackId) => getDjTrackById(trackId))
+        .filter((entry) => Boolean(entry?.url))
+      if (!queue.length) return
+      if (djState.autoPlay?.active && djState.autoPlay.playlistId !== playlist.id) {
+        stopPlaylistAutoplay({ silent: true })
+      }
+      djState.autoPlay = {
+        active: true,
+        playlistId: playlist.id,
+        queue,
+        nextIndex: 0,
+      }
+      stopAllDjDecks()
+      clearDeck(djDecks.A, { fromAutoPlay: true })
+      clearDeck(djDecks.B, { fromAutoPlay: true })
+      loadNextAutoPlayTrack('A')
+      playDeckAudio(djDecks.A)
+      loadNextAutoPlayTrack('B')
+      updateCrossfaderValue(50)
+      renderDjPlaylistTracks()
+    }
+
+    function handleDjDeckEnded(deck) {
+      if (!deck || !djState.autoPlay?.active) return
+      const otherKey = deck.label === 'A' ? 'B' : 'A'
+      const otherDeck = djDecks[otherKey]
+      let advanced = false
+      if (otherDeck?.track) {
+        playDeckAudio(otherDeck)
+        advanced = true
+      } else if (loadNextAutoPlayTrack(otherKey)) {
+        playDeckAudio(otherDeck)
+        advanced = true
+      }
+      if (!advanced) {
+        stopPlaylistAutoplay()
+        return
+      }
+      if (!loadNextAutoPlayTrack(deck.label)) {
+        clearDeck(deck, { fromAutoPlay: true })
+      }
     }
 
     function toggleDeckPlayback(deck) {
       if (!deck || !deck.elements?.audio || !deck.track) return
       const audio = deck.elements.audio
       if (audio.paused || audio.ended) {
+        if (djState.autoPlay?.active) {
+          stopPlaylistAutoplay()
+        }
         const playPromise = audio.play()
         if (playPromise && typeof playPromise.catch === 'function') {
           playPromise.catch(() => {})
@@ -6715,6 +6861,7 @@ let sessionsCard = null;
         audio.addEventListener('ended', () => {
           setDeckPlayingState(deck, false)
           refreshDeckProgress(deck)
+          handleDjDeckEnded(deck)
         })
         audio.addEventListener('play', () => {
           setDeckPlayingState(deck, true)
@@ -6826,13 +6973,13 @@ let sessionsCard = null;
         const loadABtn = document.createElement('button')
         loadABtn.type = 'button'
         loadABtn.className = 'bl-dj__ghost-btn'
-        loadABtn.textContent = 'Load A'
+        loadABtn.textContent = 'Load 1'
         loadABtn.addEventListener('click', () => loadTrackToDeck('A', track))
 
         const loadBBtn = document.createElement('button')
         loadBBtn.type = 'button'
         loadBBtn.className = 'bl-dj__ghost-btn'
-        loadBBtn.textContent = 'Load B'
+        loadBBtn.textContent = 'Load 2'
         loadBBtn.addEventListener('click', () => loadTrackToDeck('B', track))
 
         const addBtn = document.createElement('button')
@@ -6865,6 +7012,9 @@ let sessionsCard = null;
       } else if (djState.playlists.some((playlist) => playlist.id === playlistId)) {
         djState.activePlaylistId = playlistId
       }
+      if (djState.autoPlay?.active && djState.autoPlay.playlistId !== djState.activePlaylistId) {
+        stopPlaylistAutoplay({ silent: true })
+      }
       renderDjPlaylists()
       renderDjPlaylistTracks()
       renderDjSongTable()
@@ -6876,6 +7026,9 @@ let sessionsCard = null;
       djState.playlists.splice(index, 1)
       if (djState.activePlaylistId === playlistId) {
         djState.activePlaylistId = null
+      }
+      if (djState.autoPlay?.active && djState.autoPlay.playlistId === playlistId) {
+        stopPlaylistAutoplay({ silent: true })
       }
       renderDjPlaylists()
       renderDjPlaylistTracks()
@@ -6905,6 +7058,9 @@ let sessionsCard = null;
       const playlist = djState.playlists.find((entry) => entry.id === djState.activePlaylistId)
       if (!playlist) return
       playlist.tracks = []
+      if (djState.autoPlay?.active && djState.autoPlay.playlistId === playlist.id) {
+        stopPlaylistAutoplay({ silent: true })
+      }
       renderDjPlaylistTracks()
       renderDjPlaylists()
     }
@@ -6957,6 +7113,11 @@ let sessionsCard = null;
         djPlaylistEmpty.classList.remove('hidden')
         djActivePlaylistLabel.textContent = 'Select a playlist to view tracks'
         djPlaylistCount?.classList.add('hidden')
+        if (djPlayPlaylistBtn) {
+          djPlayPlaylistBtn.classList.add('hidden')
+          djPlayPlaylistBtn.disabled = true
+          djPlayPlaylistBtn.setAttribute('aria-pressed', 'false')
+        }
         return
       }
       djActivePlaylistLabel.textContent = playlist.name || 'Untitled playlist'
@@ -6967,6 +7128,14 @@ let sessionsCard = null;
         } else {
           djPlaylistCount.classList.add('hidden')
         }
+      }
+      if (djPlayPlaylistBtn) {
+        djPlayPlaylistBtn.classList.remove('hidden')
+        const hasTracks = playlist.tracks.length > 0
+        const isActive = Boolean(djState.autoPlay?.active && djState.autoPlay.playlistId === playlist.id)
+        djPlayPlaylistBtn.disabled = !hasTracks
+        djPlayPlaylistBtn.textContent = isActive ? 'Stop Playlist' : 'Play Playlist'
+        djPlayPlaylistBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false')
       }
       if (!playlist.tracks.length) {
         djPlaylistEmpty.classList.remove('hidden')
@@ -6986,13 +7155,13 @@ let sessionsCard = null;
         const loadABtn = document.createElement('button')
         loadABtn.type = 'button'
         loadABtn.className = 'bl-dj__ghost-btn'
-        loadABtn.textContent = 'Load A'
+        loadABtn.textContent = 'Load 1'
         loadABtn.addEventListener('click', () => loadTrackToDeck('A', track))
 
         const loadBBtn = document.createElement('button')
         loadBBtn.type = 'button'
         loadBBtn.className = 'bl-dj__ghost-btn'
-        loadBBtn.textContent = 'Load B'
+        loadBBtn.textContent = 'Load 2'
         loadBBtn.addEventListener('click', () => loadTrackToDeck('B', track))
 
         const removeBtn = document.createElement('button')
@@ -7056,6 +7225,8 @@ let sessionsCard = null;
       djModal.classList.add('hidden')
       djState.isOpen = false
       stopAllDjDecks()
+      stopPlaylistAutoplay({ silent: true })
+      renderDjPlaylistTracks()
       if (window.__beatloopTurntable && typeof window.__beatloopTurntable.stop === 'function') {
         try { window.__beatloopTurntable.stop(true) } catch {}
       }
@@ -7096,13 +7267,17 @@ let sessionsCard = null;
     djOverlay?.addEventListener('click', hideDjModal)
     djStopAllBtn?.addEventListener('click', () => {
       stopAllDjDecks()
+      stopPlaylistAutoplay({ silent: true })
       if (window.__beatloopTurntable && typeof window.__beatloopTurntable.stop === 'function') {
         try { window.__beatloopTurntable.stop(true) } catch {}
       }
+      renderDjPlaylistTracks()
     })
     turntableCloseBtn?.addEventListener('click', hideDjModal)
     turntableStopBtn?.addEventListener('click', () => {
       stopAllDjDecks()
+      stopPlaylistAutoplay({ silent: true })
+      renderDjPlaylistTracks()
     })
 
     djCrossfader?.addEventListener('input', (event) => {
@@ -7132,6 +7307,16 @@ let sessionsCard = null;
     })
 
     djClearPlaylistBtn?.addEventListener('click', clearActivePlaylist)
+    djPlayPlaylistBtn?.addEventListener('click', () => {
+      const playlist = djState.playlists.find((entry) => entry.id === djState.activePlaylistId)
+      if (!playlist) return
+      const isActive = Boolean(djState.autoPlay?.active && djState.autoPlay.playlistId === playlist.id)
+      if (isActive) {
+        stopPlaylistAutoplay()
+      } else {
+        startPlaylistAutoplay(playlist)
+      }
+    })
 
     Object.values(djDecks).forEach(clearDeck)
     updateCrossfaderValue(djCrossfader?.value ?? 50)
