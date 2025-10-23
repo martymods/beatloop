@@ -809,11 +809,28 @@
       box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.35);
     }
 
+    .bl-dj__table-wrap {
+      position: relative;
+      max-height: 24rem;
+      overflow-y: auto;
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(12, 12, 22, 0.55);
+      backdrop-filter: blur(12px);
+    }
+
+    .bl-dj__table-wrap::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .bl-dj__table-wrap::-webkit-scrollbar-thumb {
+      background: rgba(124, 58, 237, 0.35);
+      border-radius: 999px;
+    }
+
     .bl-dj__table {
       width: 100%;
       border-collapse: collapse;
-      border-radius: 1rem;
-      overflow: hidden;
     }
 
     .bl-dj__table thead {
@@ -863,6 +880,12 @@
       color: rgba(244, 244, 255, 0.6);
     }
 
+    .bl-dj__track-meta {
+      margin: 0;
+      font-size: 0.7rem;
+      color: rgba(244, 244, 255, 0.55);
+    }
+
     .bl-dj__actions-column {
       width: 220px;
     }
@@ -878,6 +901,13 @@
       margin: 0.25rem 0 0;
       font-size: 0.8rem;
       color: rgba(244, 244, 255, 0.6);
+    }
+
+    .bl-dj__sentinel {
+      padding: 0.75rem 1rem 1.5rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: rgba(244, 244, 255, 0.55);
     }
 
     .bl-dj__playlist {
@@ -3806,12 +3836,12 @@
         <section class="bl-dj__panel bl-dj__library">
           <header class="bl-dj__panel-header">
             <h4>Library</h4>
-            <p class="bl-dj__panel-hint">Search tracks and load them onto either deck.</p>
+            <p class="bl-dj__panel-hint">Search your stored tracks and load them onto either deck.</p>
           </header>
           <div class="bl-dj__search">
             <input id="blDjSearch" type="search" placeholder="Search title or artist" autocomplete="off" />
           </div>
-          <div class="bl-dj__table-wrap">
+          <div id="blDjTableWrap" class="bl-dj__table-wrap">
             <table class="bl-dj__table">
               <thead>
                 <tr>
@@ -3823,6 +3853,7 @@
               <tbody id="blDjSongTable"></tbody>
             </table>
             <p id="blDjEmptyLibrary" class="bl-dj__empty hidden">Your library is loading… add tracks or refresh to see them here.</p>
+            <div id="blDjTableSentinel" class="bl-dj__sentinel hidden" aria-hidden="true">Scroll for more tracks</div>
           </div>
 
           <section class="bl-dj__panel bl-dj__playlist">
@@ -6594,8 +6625,10 @@ let sessionsCard = null;
     const djCrossfaderValue = document.getElementById('blDjCrossfaderValue')
     const turntableStopBtn = document.getElementById('blTurntableStopAll')
     const turntableCloseBtn = document.getElementById('blTurntableClose')
+    const djTableWrap = document.getElementById('blDjTableWrap')
     const djSongTable = document.getElementById('blDjSongTable')
     const djEmptyLibrary = document.getElementById('blDjEmptyLibrary')
+    const djTableSentinel = document.getElementById('blDjTableSentinel')
     const djSearchInput = document.getElementById('blDjSearch')
     const djPlaylistNameInput = document.getElementById('blDjPlaylistName')
     const djCreatePlaylistBtn = document.getElementById('blDjCreatePlaylist')
@@ -6646,6 +6679,52 @@ let sessionsCard = null;
 
     const DJ_DEFAULT_COVER = DEFAULT_TRACK_COVER
 
+    const DJ_LIBRARY_PAGE_SIZE = 12
+    const DJ_STORAGE_TRACK_BASE_URL = 'https://beatloop-media.r2.cloudflarestorage.com'
+
+    function createStorageTrack(fileName, contentType, size, modified) {
+      const encodedName = encodeURIComponent(fileName)
+      return {
+        id: `storage:${fileName}`,
+        title: fileName,
+        artist: 'Timeline archive',
+        cover: DJ_DEFAULT_COVER,
+        url: `${DJ_STORAGE_TRACK_BASE_URL}/tracks/${encodedName}`,
+        storageMeta: {
+          contentType,
+          size,
+          modified,
+          key: `tracks/${fileName}`,
+        },
+      }
+    }
+
+    const DJ_STORAGE_TRACKS = [
+      createStorageTrack('1760878373127-6a05e8f22038e39a.ogg', 'audio/ogg', '940.65 kB', '19 Oct 2025 08:52:53 EDT'),
+      createStorageTrack('1760878837845-8aab031bef3bed6f.ogg', 'audio/ogg', '3.33 MB', '19 Oct 2025 09:00:38 EDT'),
+      createStorageTrack('1760880527076-7e7a8e92b161e614.mp3', 'audio/mpeg', '3.83 MB', '19 Oct 2025 09:28:47 EDT'),
+      createStorageTrack('1760881244552-5a7b194a543832b1.mp3', 'audio/mpeg', '2.2 MB', '19 Oct 2025 09:40:45 EDT'),
+      createStorageTrack('1760888505026-95e8f6e25843086f.mp3', 'audio/mpeg', '3.83 MB', '19 Oct 2025 11:41:45 EDT'),
+      createStorageTrack('1760953335740-73123ecf5b7debf0.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 05:42:16 EDT'),
+      createStorageTrack('1760968554067-d34ad0b98cf09e87.ogg', 'audio/ogg', '6.43 MB', '20 Oct 2025 09:55:55 EDT'),
+      createStorageTrack('1760969201816-39e419a6a1d67e91.mp3', 'audio/mpeg', '2.11 MB', '20 Oct 2025 10:06:42 EDT'),
+      createStorageTrack('1760978826324-cd09ba829a93ad84.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 12:47:07 EDT'),
+      createStorageTrack('1760978829329-661b13e59b1e5883.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 12:47:10 EDT'),
+      createStorageTrack('1760978831577-59dda06294a0b8ca.mp3', 'audio/mpeg', '2.11 MB', '20 Oct 2025 12:47:13 EDT'),
+      createStorageTrack('1760978834884-4a2a2e9ca89724f6.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 12:47:15 EDT'),
+      createStorageTrack('1760978836823-89fcd1f0c607a712.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 12:47:17 EDT'),
+      createStorageTrack('1760978839598-ea26431214deafb8.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 12:47:20 EDT'),
+      createStorageTrack('1760981428999-48bfda6a58a161d8.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 13:30:29 EDT'),
+      createStorageTrack('1760981431077-16b7e4857f89d5f3.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 13:30:31 EDT'),
+      createStorageTrack('1760981432851-c6776373192a4e3f.mp3', 'audio/mpeg', '2.11 MB', '20 Oct 2025 13:30:33 EDT'),
+      createStorageTrack('1760981434390-2053f2309e062095.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 13:30:34 EDT'),
+      createStorageTrack('1760981436009-49c1c4b2f7b6cb93.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 13:30:36 EDT'),
+      createStorageTrack('1760981437282-998cf1606f009c04.mp3', 'audio/mpeg', '2.2 MB', '20 Oct 2025 13:30:37 EDT'),
+      createStorageTrack('1761002233047-703240c6c3a76ef0.ogg', 'audio/ogg', '112.51 kB', '20 Oct 2025 19:17:14 EDT'),
+      createStorageTrack('1761003624392-43e21c24df5bd610.mp3', 'audio/mpeg', '3.85 MB', '20 Oct 2025 19:40:25 EDT'),
+      createStorageTrack('1761043453720-7bc76508e0ca2dcf.mp3', 'audio/mpeg', '2.14 MB', '21 Oct 2025 06:44:14 EDT'),
+    ]
+
     const djState = {
       tracks: [],
       trackIndex: new Map(),
@@ -6657,6 +6736,8 @@ let sessionsCard = null;
       autoPlay: null,
       playlistsLoaded: false,
       playlistLoading: false,
+      renderedTrackCount: 0,
+      tableObserver: null,
     }
 
     const userLibrary = new Map()
@@ -7093,37 +7174,45 @@ let sessionsCard = null;
           url: normalizedUrl,
           cover: track.cover || DEFAULT_TRACK_COVER,
           artist: track.artist || 'beatloop creator',
+          storageMeta: track.storageMeta || null,
         }
         library.push(normalized)
         index.set(normalized.id, normalized)
       }
 
-      userLibrary.forEach((entry) => {
-        if (!entry || !Array.isArray(entry.tracks)) return
-        const fallbackArtist = entry.user?.displayName || entry.user?.name || 'beatloop creator'
-        entry.tracks.forEach((track) => {
-          if (!track || !track.id || !track.url) return
-          pushTrack({
-            id: track.id,
-            title: track.title || 'Untitled',
-            url: track.url,
-            cover: track.cover || DEFAULT_TRACK_COVER,
-            artist: track.artist || fallbackArtist,
+      if (DJ_STORAGE_TRACKS.length) {
+        DJ_STORAGE_TRACKS.forEach((track) => pushTrack(track))
+      } else {
+        userLibrary.forEach((entry) => {
+          if (!entry || !Array.isArray(entry.tracks)) return
+          const fallbackArtist = entry.user?.displayName || entry.user?.name || 'beatloop creator'
+          entry.tracks.forEach((track) => {
+            if (!track || !track.id || !track.url) return
+            pushTrack({
+              id: track.id,
+              title: track.title || 'Untitled',
+              url: track.url,
+              cover: track.cover || DEFAULT_TRACK_COVER,
+              artist: track.artist || fallbackArtist,
+            })
           })
         })
-      })
 
-      buildTurntableLibraryTracks().forEach((track) => {
-        pushTrack(track)
-      })
+        buildTurntableLibraryTracks().forEach((track) => {
+          pushTrack(track)
+        })
 
-      library.sort((a, b) => a.title.localeCompare(b.title))
+        library.sort((a, b) => a.title.localeCompare(b.title))
+      }
+
       djState.tracks = library
       djState.trackIndex = index
-      applyDjSearchFilter()
+      djState.renderedTrackCount = 0
+      applyDjSearchFilter({ reset: true })
     }
 
-    function applyDjSearchFilter() {
+    function applyDjSearchFilter(options = {}) {
+      const { reset = true } = options
       const query = (djSearchInput?.value || '').trim().toLowerCase()
       if (!query) {
         djState.filteredTracks = djState.tracks.slice()
@@ -7133,13 +7222,21 @@ let sessionsCard = null;
           return haystack.includes(query)
         })
       }
-      renderDjSongTable()
+      renderDjSongTable({ reset })
     }
 
-    function renderDjSongTable() {
+    function renderDjSongTable(options = {}) {
+      const { reset = false, append = false } = options
       if (!djSongTable) return
-      djSongTable.innerHTML = ''
       const rows = djState.filteredTracks
+      if (reset || (!append && djState.renderedTrackCount === 0)) {
+        djSongTable.innerHTML = ''
+        djState.renderedTrackCount = 0
+        if (djTableWrap) {
+          try { djTableWrap.scrollTop = 0 } catch {}
+        }
+      }
+
       if (!rows.length) {
         if (djEmptyLibrary) {
           const query = (djSearchInput?.value || '').trim()
@@ -7150,14 +7247,27 @@ let sessionsCard = null;
           }
           djEmptyLibrary.classList.remove('hidden')
         }
+        if (djTableSentinel) {
+          djTableSentinel.classList.add('hidden')
+        }
+        if (djState.tableObserver) {
+          djState.tableObserver.disconnect()
+          djState.tableObserver = null
+        }
         return
       }
+
       if (djEmptyLibrary) {
         djEmptyLibrary.textContent = 'Your library is loading… add tracks or refresh to see them here.'
         djEmptyLibrary.classList.add('hidden')
       }
+
       const hasPlaylist = Boolean(djState.activePlaylistId)
-      rows.forEach((track, index) => {
+      const startIndex = djState.renderedTrackCount
+      const endIndex = Math.min(rows.length, startIndex + DJ_LIBRARY_PAGE_SIZE)
+
+      for (let index = startIndex; index < endIndex; index += 1) {
+        const track = rows[index]
         const row = document.createElement('tr')
         const indexCell = document.createElement('td')
         indexCell.textContent = String(index + 1)
@@ -7175,11 +7285,23 @@ let sessionsCard = null;
         const title = document.createElement('p')
         title.className = 'bl-dj__track-title'
         title.textContent = track.title || 'Untitled'
+        meta.appendChild(title)
         const artist = document.createElement('p')
         artist.className = 'bl-dj__track-artist'
         artist.textContent = track.artist || 'beatloop creator'
-        meta.appendChild(title)
         meta.appendChild(artist)
+        if (track.storageMeta) {
+          const detailParts = []
+          if (track.storageMeta.contentType) detailParts.push(track.storageMeta.contentType)
+          if (track.storageMeta.size) detailParts.push(track.storageMeta.size)
+          if (track.storageMeta.modified) detailParts.push(track.storageMeta.modified)
+          if (detailParts.length) {
+            const details = document.createElement('p')
+            details.className = 'bl-dj__track-meta'
+            details.textContent = detailParts.join(' • ')
+            meta.appendChild(details)
+          }
+        }
         trackWrap.appendChild(meta)
         trackCell.appendChild(trackWrap)
         row.appendChild(trackCell)
@@ -7222,7 +7344,38 @@ let sessionsCard = null;
 
         row.addEventListener('dblclick', () => loadTrackToDeck('A', track))
         djSongTable.appendChild(row)
-      })
+      }
+
+      djState.renderedTrackCount = endIndex
+
+      if (djTableSentinel) {
+        if (djState.renderedTrackCount >= rows.length) {
+          djTableSentinel.classList.add('hidden')
+          if (djState.tableObserver) {
+            djState.tableObserver.disconnect()
+            djState.tableObserver = null
+          }
+        } else {
+          djTableSentinel.textContent = 'Scroll for more tracks'
+          djTableSentinel.classList.remove('hidden')
+          ensureDjTableObserver()
+        }
+      }
+    }
+
+    function ensureDjTableObserver() {
+      if (!djTableWrap || !djTableSentinel) return null
+      if (djState.tableObserver) return djState.tableObserver
+      const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && djState.renderedTrackCount < djState.filteredTracks.length) {
+            renderDjSongTable({ append: true })
+          }
+        }
+      }, { root: djTableWrap, threshold: 0.6 })
+      observer.observe(djTableSentinel)
+      djState.tableObserver = observer
+      return observer
     }
 
     function getDjPlaylistById(playlistId) {
@@ -7282,7 +7435,7 @@ let sessionsCard = null;
           }
           renderDjPlaylists()
           renderDjPlaylistTracks()
-          renderDjSongTable()
+          renderDjSongTable({ reset: true })
         }
       } catch (error) {
         if (error && typeof error.status === 'number' && (error.status === 401 || error.status === 403)) {
@@ -7310,7 +7463,7 @@ let sessionsCard = null;
       }
       renderDjPlaylists()
       renderDjPlaylistTracks()
-      renderDjSongTable()
+      renderDjSongTable({ reset: true })
     }
 
     async function removeDjPlaylist(playlistId) {
@@ -7328,7 +7481,7 @@ let sessionsCard = null;
       }
       renderDjPlaylists()
       renderDjPlaylistTracks()
-      renderDjSongTable()
+      renderDjSongTable({ reset: true })
       try {
         await apiDeletePlaylist(playlistId)
         removeUserPlaylistEntry(playlistId, playlist.user)
@@ -7344,7 +7497,7 @@ let sessionsCard = null;
         }
         renderDjPlaylists()
         renderDjPlaylistTracks()
-        renderDjSongTable()
+        renderDjSongTable({ reset: true })
         alert(error?.message || 'Could not delete playlist')
       }
     }
@@ -7711,7 +7864,7 @@ let sessionsCard = null;
     })
 
     djSearchInput?.addEventListener('input', () => {
-      applyDjSearchFilter()
+      applyDjSearchFilter({ reset: true })
     })
 
     djCreatePlaylistBtn?.addEventListener('click', async () => {
@@ -7789,7 +7942,7 @@ let sessionsCard = null;
           }
           renderDjPlaylists()
           renderDjPlaylistTracks()
-          renderDjSongTable()
+          renderDjSongTable({ reset: true })
         }
       } catch (error) {
         console.warn('Playlist rename failed', error)
