@@ -3793,7 +3793,7 @@
               <button id="blDjDeckAClear" type="button" class="bl-dj__ghost-btn">Unload</button>
             </div>
             <div class="bl-dj__deck-meta">
-              <img id="blDjDeckACover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck 1 cover" />
+              <img id="blDjDeckACover" src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22512%22%20height%3D%22512%22%20viewBox%3D%220%200%20128%20128%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20x2%3D%221%22%20y1%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%237c3aed%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%2322d3ee%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2218%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20fill%3D%22%23fff%22%3E%3Ccircle%20cx%3D%2246%22%20cy%3D%2286%22%20r%3D%2212%22/%3E%3Cpath%20d%3D%22M82%2024v56.6a12%2012%200%201%201-4-8.6V34l-26%206v36.6a12%2012%200%201%201-4-8.6V36z%22/%3E%3C/g%3E%3C/svg%3E" alt="Deck 1 cover" />
               <div>
                 <p id="blDjDeckATitle" class="bl-dj__deck-title">No track loaded</p>
                 <p id="blDjDeckAArtist" class="bl-dj__deck-artist">Select a song to load Deck 1.</p>
@@ -3821,7 +3821,7 @@
               <button id="blDjDeckBClear" type="button" class="bl-dj__ghost-btn">Unload</button>
             </div>
             <div class="bl-dj__deck-meta">
-              <img id="blDjDeckBCover" src="https://www.beatloop.co/img/cover-default.svg" alt="Deck 2 cover" />
+              <img id="blDjDeckBCover" src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22512%22%20height%3D%22512%22%20viewBox%3D%220%200%20128%20128%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20x2%3D%221%22%20y1%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%237c3aed%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%2322d3ee%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2218%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20fill%3D%22%23fff%22%3E%3Ccircle%20cx%3D%2246%22%20cy%3D%2286%22%20r%3D%2212%22/%3E%3Cpath%20d%3D%22M82%2024v56.6a12%2012%200%201%201-4-8.6V34l-26%206v36.6a12%2012%200%201%201-4-8.6V36z%22/%3E%3C/g%3E%3C/svg%3E" alt="Deck 2 cover" />
               <div>
                 <p id="blDjDeckBTitle" class="bl-dj__deck-title">No track loaded</p>
                 <p id="blDjDeckBArtist" class="bl-dj__deck-artist">Select a song to load Deck 2.</p>
@@ -3874,6 +3874,10 @@
       url: 'https://www.michelacosta.com/html5/showtek.mp3'
     }
   };
+
+  if (typeof window !== 'undefined') {
+    window.__beatloopTurntableTracks = turntableTracks;
+  }
 
   const dynamicTurntableTrackIndex = new Map();
   let nextTurntableTrackId = Object.keys(turntableTracks).reduce((max, key) => {
@@ -6539,7 +6543,7 @@ let sessionsCard = null;
       clearBtn: document.getElementById('blDjDeckBClear'),
     }
 
-    const DJ_DEFAULT_COVER = 'https://www.beatloop.co/img/cover-default.svg'
+    const DJ_DEFAULT_COVER = DEFAULT_TRACK_COVER
 
     const djState = {
       tracks: [],
@@ -6954,7 +6958,10 @@ let sessionsCard = null;
 
     function buildTurntableLibraryTracks() {
       const library = []
-      Object.entries(turntableTracks).forEach(([id, entry]) => {
+      const baseTurntableTracks = (typeof window !== 'undefined' && window.__beatloopTurntableTracks)
+        ? window.__beatloopTurntableTracks
+        : {}
+      Object.entries(baseTurntableTracks).forEach(([id, entry]) => {
         if (!entry || !entry.url) return
         const { title, artist } = deriveTurntableLibraryMeta(entry)
         library.push({
