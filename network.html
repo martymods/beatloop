@@ -3889,6 +3889,20 @@
     return title || artist || 'Untitled';
   }
 
+  function resolveTurntableTrackArtist(track) {
+    if (!track) return '';
+    if (typeof track.artist === 'string' && track.artist.trim()) {
+      return track.artist.trim();
+    }
+    if (track.user && typeof track.user.displayName === 'string' && track.user.displayName.trim()) {
+      return track.user.displayName.trim();
+    }
+    if (typeof track.owner === 'string' && track.owner.trim()) {
+      return track.owner.trim();
+    }
+    return '';
+  }
+
   function ensureTurntableTrack(track) {
     if (!track || !track.url) return null;
     const key = String(track.url);
@@ -3896,6 +3910,7 @@
       const existingId = dynamicTurntableTrackIndex.get(key);
       tracks[existingId] = {
         title: resolveTurntableTrackTitle(track),
+        artist: resolveTurntableTrackArtist(track),
         url: track.url,
       };
       return existingId;
@@ -3904,6 +3919,7 @@
     dynamicTurntableTrackIndex.set(key, trackId);
     tracks[trackId] = {
       title: resolveTurntableTrackTitle(track),
+      artist: resolveTurntableTrackArtist(track),
       url: track.url,
     };
     return trackId;
@@ -4167,18 +4183,7 @@
   }
 
   function requestSyncDislike() {
-    const title = '¡Desprecio infinito!';
-    const options = {
-      body: 'No nos gustan los DJs que usan el SYNC',
-      icon: 'https://www.michelacosta.com/yo.png'
-    };
-    try {
-      if ('Notification' in window && Notification.requestPermission) {
-        Notification.requestPermission(() => {
-          try { new Notification(title, options); } catch (err) {}
-        });
-      }
-    } catch (err) {}
+    // Notifications temporarily disabled to avoid immersion-breaking popups.
   }
 
   function openLoader(deckId) {
@@ -6917,31 +6922,94 @@ let sessionsCard = null;
 
     Object.values(djDecks).forEach(bindDeckEvents)
 
+    function deriveTurntableLibraryMeta(entry) {
+      const rawTitle = typeof entry?.title === 'string' ? entry.title.trim() : ''
+      const rawArtist = typeof entry?.artist === 'string' ? entry.artist.trim() : ''
+      let title = rawTitle || 'Untitled'
+      let artist = rawArtist
+      if (!artist && rawTitle) {
+        const separators = [' — ', ' – ', ' - ']
+        for (const separator of separators) {
+          if (!rawTitle.includes(separator)) continue
+          const [artistPart, ...rest] = rawTitle.split(separator)
+          const candidateArtist = artistPart.trim()
+          const candidateTitle = rest.join(separator).trim()
+          if (candidateTitle) {
+            title = candidateTitle
+          }
+          if (candidateArtist) {
+            artist = candidateArtist
+            break
+          }
+        }
+      }
+      if (!artist) {
+        artist = 'Turntable library'
+      }
+      if (!title) {
+        title = 'Untitled'
+      }
+      return { title, artist }
+    }
+
+    function buildTurntableLibraryTracks() {
+      const library = []
+      Object.entries(tracks).forEach(([id, entry]) => {
+        if (!entry || !entry.url) return
+        const { title, artist } = deriveTurntableLibraryMeta(entry)
+        library.push({
+          id: `turntable-${id}`,
+          title,
+          artist,
+          url: entry.url,
+          cover: entry.cover || DEFAULT_TRACK_COVER,
+        })
+      })
+      return library
+    }
+
     function collectDjTracks() {
-      const tracks = []
+      const library = []
       const index = new Map()
-      const seen = new Set()
+      const seenUrls = new Set()
+
+      const pushTrack = (track) => {
+        if (!track || !track.id) return
+        const normalizedUrl = typeof track.url === 'string' ? track.url.trim() : ''
+        if (!normalizedUrl || seenUrls.has(normalizedUrl)) return
+        seenUrls.add(normalizedUrl)
+        const normalized = {
+          id: track.id,
+          title: track.title || 'Untitled',
+          url: normalizedUrl,
+          cover: track.cover || DEFAULT_TRACK_COVER,
+          artist: track.artist || 'beatloop creator',
+        }
+        library.push(normalized)
+        index.set(normalized.id, normalized)
+      }
+
       userLibrary.forEach((entry) => {
         if (!entry || !Array.isArray(entry.tracks)) return
-        const artist = entry.user?.displayName || entry.user?.name || 'beatloop creator'
+        const fallbackArtist = entry.user?.displayName || entry.user?.name || 'beatloop creator'
         entry.tracks.forEach((track) => {
           if (!track || !track.id || !track.url) return
-          if (seen.has(track.id)) return
-          seen.add(track.id)
-          const normalized = {
+          pushTrack({
             id: track.id,
             title: track.title || 'Untitled',
             url: track.url,
             cover: track.cover || DEFAULT_TRACK_COVER,
-            artist,
-            ownerKey: entry.key,
-          }
-          tracks.push(normalized)
-          index.set(normalized.id, normalized)
+            artist: track.artist || fallbackArtist,
+          })
         })
       })
-      tracks.sort((a, b) => a.title.localeCompare(b.title))
-      djState.tracks = tracks
+
+      buildTurntableLibraryTracks().forEach((track) => {
+        pushTrack(track)
+      })
+
+      library.sort((a, b) => a.title.localeCompare(b.title))
+      djState.tracks = library
       djState.trackIndex = index
       applyDjSearchFilter()
     }
