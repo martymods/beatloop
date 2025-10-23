@@ -171,23 +171,25 @@ export const TrackInfo: FunctionComponent<TrackInfoProps> = (props: TrackInfoPro
               className={styles.menu}
             />
           </Popover>
-          <Slider
-            min={MIN_VOLUME_DB}
-            max={MAX_VOLUME_DB}
-            labelValues={[]}
-            vertical={false}
-            intent="primary"
-            labelRenderer={renderVolumeLabel}
-            className={styles.volume}
-            value={volume}
-            onChange={(val) => {
-              changeVolume(val);
-            }}
-            onRelease={(val) => {
-              changeVolume(val);
-            }}
-            showTrackFill={false}
-          />
+          <div className={styles.volumeWrapper}>
+            <Slider
+              min={MIN_VOLUME_DB}
+              max={MAX_VOLUME_DB}
+              labelValues={[]}
+              vertical={false}
+              intent="primary"
+              labelRenderer={renderVolumeLabel}
+              className={styles.volume}
+              value={volume}
+              onChange={(val) => {
+                changeVolume(val);
+              }}
+              onRelease={(val) => {
+                changeVolume(val);
+              }}
+              showTrackFill={false}
+            />
+          </div>
         </div>
       </div>
     </div>
