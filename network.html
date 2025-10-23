@@ -279,29 +279,26 @@
       color: #fff;
     }
 
-    #beatloopTurntable #turntableCredits {
+    #beatloopTurntable #credits {
       position: absolute;
       top: 80px;
       left: 352px;
-      font-size: 55px;
       margin: 0;
+      font-size: 55px;
       font-family: 'Kristi', sans-serif;
       z-index: 5;
-      background: none;
-      border: none;
+    }
+
+    #beatloopTurntable #credits a {
+      text-decoration: none;
       color: #ddd;
-      padding: 0;
-      cursor: pointer;
+      transition: text-shadow 0.25s ease;
     }
 
-    #beatloopTurntable #turntableCredits:hover:not(:disabled) {
+    #beatloopTurntable #credits:hover a,
+    #beatloopTurntable #credits a:focus-visible {
       text-shadow: 0 0 10px #3FAEFD, 0 0 10px #3FAEFD;
-    }
-
-    #beatloopTurntable #turntableCredits:disabled {
-      opacity: 0.6;
-      cursor: default;
-      text-shadow: none;
+      outline: none;
     }
 
     #beatloopTurntable section#left,
@@ -324,10 +321,34 @@
     #beatloopTurntable .volume-container {
       position: absolute;
       width: 48px;
-      height: 88px;
       border-radius: 24px;
       background: rgba(0, 0, 0, 0.6);
       border: 2px solid #111;
+      box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.65);
+    }
+
+    #beatloopTurntable #left .tempo-container {
+      left: 35px;
+      top: 187px;
+      height: 127px;
+    }
+
+    #beatloopTurntable #right .tempo-container {
+      left: 818px;
+      top: 187px;
+      height: 127px;
+    }
+
+    #beatloopTurntable #left .volume-container {
+      left: 389px;
+      top: 428px;
+      height: 128px;
+    }
+
+    #beatloopTurntable #right .volume-container {
+      left: 465px;
+      top: 428px;
+      height: 128px;
     }
 
     #beatloopTurntable #left .tempo,
@@ -352,37 +373,22 @@
     }
 
     #beatloopTurntable #left .tempo,
-    #beatloopTurntable #right .tempo {
-      width: 48px;
-      height: 20px;
-      background-image: url('https://www.michelacosta.com/images/OBlswus.png');
-    }
-
-    #beatloopTurntable #left .tempo {
-      left: 35px;
-      top: 91px;
-    }
-
-    #beatloopTurntable #right .tempo {
-      left: 818px;
-      top: 91px;
-    }
-
+    #beatloopTurntable #right .tempo,
     #beatloopTurntable #left .volume,
     #beatloopTurntable #right .volume {
       width: 48px;
       height: 20px;
+      left: 0;
+      top: 0;
       background-image: url('https://www.michelacosta.com/images/OBlswus.png');
+      cursor: grab;
     }
 
-    #beatloopTurntable #left .volume {
-      left: 389px;
-      top: 278px;
-    }
-
-    #beatloopTurntable #right .volume {
-      left: 465px;
-      top: 278px;
+    #beatloopTurntable #left .tempo:active,
+    #beatloopTurntable #right .tempo:active,
+    #beatloopTurntable #left .volume:active,
+    #beatloopTurntable #right .volume:active {
+      cursor: grabbing;
     }
 
     #beatloopTurntable #left .jog,
@@ -392,6 +398,8 @@
       background-image: url('https://www.michelacosta.com/images/eOI2jNr.png');
       animation: girar infinite linear;
       animation-duration: 5s;
+      border-radius: 50%;
+      overflow: hidden;
     }
 
     #beatloopTurntable #left .jog {
@@ -410,6 +418,21 @@
 
     #beatloopTurntable .paused {
       animation-play-state: paused !important;
+    }
+
+    #beatloopTurntable .jog .wave {
+      position: absolute;
+      inset: 46px;
+      border-radius: 50%;
+      background: radial-gradient(circle at center, rgba(63, 174, 253, 0.55), rgba(17, 24, 39, 0.25));
+      box-shadow: 0 0 35px rgba(63, 174, 253, 0.4);
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+    }
+
+    #beatloopTurntable .bl-turntable__deck.is-playing .jog .wave {
+      opacity: 1;
     }
 
     #beatloopTurntable #left .play,
@@ -669,7 +692,7 @@
     }
 
     #beatloopTurntable #songloader.is-visible {
-      top: 0;
+      top: 20px;
       opacity: 1;
       pointer-events: auto;
     }
@@ -3636,7 +3659,7 @@
         </div>
         <p>Cerrar tutorial</p>
       </div>
-      <button id="turntableCredits" type="button" aria-label="Play your sound tag" disabled>Creator</button>
+      <div id="credits"><a href="https://www.michelacosta.com" target="_blank" rel="noopener">Míchel Acosta</a></div>
       <div id="tutorial-button">
         <div id="beatloopDjToggle" role="button" aria-label="Open Beatloop DJ — Live Mixer" tabindex="0">?</div>
       </div>
@@ -3648,7 +3671,7 @@
           <div class="play"></div>
           <div class="less"></div>
           <div class="more"></div>
-          <div class="jog paused"></div>
+          <div class="jog paused"><div class="wave" aria-hidden="true"></div></div>
           <div class="volume-container"><div class="volume"></div></div>
           <div class="info">
             <div class="song">Load a track to get spinning</div>
@@ -3664,7 +3687,7 @@
           <div class="play"></div>
           <div class="less"></div>
           <div class="more"></div>
-          <div class="jog paused"></div>
+          <div class="jog paused"><div class="wave" aria-hidden="true"></div></div>
           <div class="volume-container"><div class="volume"></div></div>
           <div class="info">
             <div class="song">Load a track to get spinning</div>
@@ -3884,10 +3907,48 @@
   const $turntableCloseBtn = $('#blTurntableClose');
   const $crossfadeHandle = $('#crossfade');
   const $crossfadeTrack = $crossfadeHandle.parent();
+  const $tutorialContainer = $('#tutorial-container');
+  const $tutorialToggle = $('#tutorial-button > div');
+  const $tutorialClose = $('#tutorial-container > p');
 
   let pendingDeck = null;
   let crossfadeRatio = 0.5;
   let playbackActive = false;
+
+  const notificationIcon = 'https://www.michelacosta.com/yo.png';
+
+  function requestBrowserNotification(title, message) {
+    if (!('Notification' in window)) return;
+    const options = { body: message, icon: notificationIcon };
+    try {
+      if (Notification.permission === 'granted') {
+        new Notification(title, options);
+        return;
+      }
+      if (typeof Notification.requestPermission === 'function') {
+        const permissionResult = Notification.requestPermission((status) => {
+          if (status === 'granted') {
+            try { new Notification(title, options); } catch (err) {}
+          }
+        });
+        if (permissionResult && typeof permissionResult.then === 'function') {
+          permissionResult.then((status) => {
+            if (status === 'granted') {
+              try { new Notification(title, options); } catch (err) {}
+            }
+          }).catch(() => {});
+        }
+      }
+    } catch (err) {}
+  }
+
+  function requestSongNotification() {
+    requestBrowserNotification('¡No has cargado una canción!', 'Carga una canción en este canal pulsando el botón "LOAD"');
+  }
+
+  function askToPauseNotification() {
+    requestBrowserNotification('¡Tienes que parar la reproducción!', 'Para la reproducción antes de cargar otro tema');
+  }
 
   const decks = {
     left: initDeck('left'),
@@ -3963,7 +4024,10 @@
     const running = deck.audio && !deck.audio.paused && !deck.audio.ended;
     deck.$jog.toggleClass('running', running);
     deck.$jog.toggleClass('paused', !running);
-    const tempoMultiplier = deck.audio ? Math.max(deck.audio.playbackRate || 1, 0.25) : 1;
+    const inferredTempo = 1 + (Number(deck.tempoPct) || 0) / 100;
+    const tempoMultiplier = deck.audio
+      ? Math.max(deck.audio.playbackRate || inferredTempo || 1, 0.25)
+      : Math.max(inferredTempo || 1, 0.25);
     deck.$jog.css('animation-duration', `${(5 / tempoMultiplier).toFixed(2)}s`);
   }
 
@@ -4093,6 +4157,7 @@
 
   function togglePlayback(deck) {
     if (!deck.audio) {
+      requestSongNotification();
       openLoader(deck.id);
       return;
     }
@@ -4108,6 +4173,7 @@
 
   function nudge(deck, direction) {
     if (!deck.audio) {
+      requestSongNotification();
       openLoader(deck.id);
       return;
     }
@@ -4127,18 +4193,7 @@
   }
 
   function requestSyncDislike() {
-    const title = '¡Desprecio infinito!';
-    const options = {
-      body: 'No nos gustan los DJs que usan el SYNC',
-      icon: 'https://www.michelacosta.com/yo.png'
-    };
-    try {
-      if ('Notification' in window && Notification.requestPermission) {
-        Notification.requestPermission(() => {
-          try { new Notification(title, options); } catch (err) {}
-        });
-      }
-    } catch (err) {}
+    requestBrowserNotification('¡Desprecio infinito!', 'No nos gustan los DJs que usan el SYNC');
   }
 
   function openLoader(deckId) {
@@ -4206,7 +4261,13 @@
     });
 
     deck.$play.on('click', () => togglePlayback(deck));
-    deck.$load.on('click', () => openLoader(deck.id));
+    deck.$load.on('click', () => {
+      if (deck.audio && !deck.audio.paused && !deck.audio.ended) {
+        askToPauseNotification();
+        return;
+      }
+      openLoader(deck.id);
+    });
     deck.$less.on('click', () => nudge(deck, -1));
     deck.$more.on('click', () => nudge(deck, 1));
     deck.$sync.on('click', requestSyncDislike);
@@ -4249,6 +4310,14 @@
   });
 
   $songloaderClose.on('click', closeLoader);
+
+  $tutorialToggle.on('click', () => {
+    $tutorialContainer.stop(true, true).fadeIn(200);
+  });
+
+  $tutorialClose.on('click', () => {
+    $tutorialContainer.stop(true, true).fadeOut(200);
+  });
 
   $toggleButton.on('click', () => {
     showMixerView();
