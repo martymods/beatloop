@@ -3909,6 +3909,10 @@
     return trackId;
   }
 
+  if (typeof window !== 'undefined') {
+    window.ensureTurntableTrack = ensureTurntableTrack;
+  }
+
   const $root = $('#beatloopDj');
   const $turntable = $('#beatloopTurntable');
   const $mixer = $('#beatloopDjMixer');
