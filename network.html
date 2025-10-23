@@ -19217,6 +19217,63 @@ void main()
     }
   }
 
+  let profileUserFetchPromise = null;
+
+  function resolveAuthApiBase() {
+    if (typeof getApiBase === 'function') {
+      try {
+        const base = getApiBase();
+        if (base) return base;
+      } catch {}
+    }
+    if (typeof window !== 'undefined' && typeof window.API_BASE === 'string' && window.API_BASE) {
+      return window.API_BASE;
+    }
+    if (typeof API_BASE_DEFAULT !== 'undefined' && API_BASE_DEFAULT) {
+      return API_BASE_DEFAULT;
+    }
+    return '';
+  }
+
+  async function fetchProfileUserFromApi() {
+    const token = AUTH?.token || localStorage.getItem('jwt') || '';
+    if (!hasAuthToken(token)) return null;
+    const base = resolveAuthApiBase();
+    if (!base) return null;
+    try {
+      const response = await fetch(`${base}/api/auth/me`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null);
+      const fetchedUser = payload?.user || null;
+      if (!fetchedUser) return null;
+      try { localStorage.setItem('user', JSON.stringify(fetchedUser)); } catch {}
+      try { persistUserDirectoryEntry?.(fetchedUser); } catch (err) { console.warn('Unable to persist sanitized user profile', err); }
+      window.currentUser = { ...(window.currentUser || {}), ...fetchedUser };
+      if (typeof window.recordCurrentUserId === 'function') {
+        try { window.recordCurrentUserId(fetchedUser); } catch {}
+      }
+      setProfileAvatarBackground(fetchedUser.avatar || fetchedUser.avatarUrl || '');
+      return fetchedUser;
+    } catch (err) {
+      console.warn('Failed to fetch current user profile', err);
+      return null;
+    }
+  }
+
+  async function ensureProfileUserLoaded() {
+    const stored = getStoredProfileUser();
+    if (stored) return stored;
+    if (window.currentUser) return window.currentUser;
+    if (!profileUserFetchPromise) {
+      profileUserFetchPromise = fetchProfileUserFromApi().finally(() => {
+        profileUserFetchPromise = null;
+      });
+    }
+    return profileUserFetchPromise;
+  }
+
   function sanitizeProfileUser(user) {
     if (!user || typeof user !== 'object') return null;
     const avatar = sanitizeAvatar(user.avatar || user.avatarUrl);
@@ -19459,14 +19516,19 @@ void main()
     if (profileState.user) populateProfile(profileState.user);
   }
 
-  function openProfileOverlay() {
-    const rawUser = getStoredProfileUser();
+  async function openProfileOverlay() {
+    let rawUser = getStoredProfileUser() || window.currentUser || null;
+    if (!rawUser) {
+      rawUser = await ensureProfileUserLoaded();
+    }
     const user = sanitizeProfileUser(rawUser || window.currentUser || null);
     if (!user) {
       alert('Please sign in to view your profile.');
       return;
     }
     profileState.user = user;
+    try { localStorage.setItem('user', JSON.stringify(user)); } catch {}
+    try { persistUserDirectoryEntry?.(user); } catch (err) { console.warn('Unable to persist sanitized user profile', err); }
     applyStudioPanelPrefs();
     populateProfile(user);
     setProfileTab('details', { silent: true });
