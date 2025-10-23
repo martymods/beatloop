@@ -5,25 +5,42 @@ import {
   DialogBody,
   DialogFooter,
   Drawer,
+  InputGroup,
   Menu,
   MenuDivider,
   MenuItem,
   Navbar,
+  NonIdealState,
   Popover,
   ProgressBar,
+  Spinner,
   TextArea,
 } from '@blueprintjs/core';
 import { Project } from './ui/Project';
 import { Project as ProjectObj } from './core/Project';
-import { createProject, loadProject, saveAsProject, saveProject } from './controller/Projects';
+import { createProject, saveAsProject, saveProject } from './controller/Projects';
 import { copy, cut, doDelete, paste, redo, undo } from './controller/Edit';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Engine } from './core/Engine';
 import { BUFFER_SIZE, SAMPLE_RATE } from './core/Config';
 
 import styles from './App.module.css';
 import { AudioFileManager } from './core/AudioFileManager';
 import { AudioContextContext, AudioFileManagerContext, EngineContext } from './ui/Context';
+import { PUBLIC_URL } from './core/Common';
+
+type LibraryNode = {
+  path: string;
+  name: string;
+  children?: LibraryNode[];
+};
+
+type LibraryItem = {
+  id: string;
+  path: string;
+  name: string;
+  group: string;
+};
 
 // MIT License
 const LICENSE =
@@ -55,6 +72,11 @@ function App() {
   const [mixerVisible, setMixerVisible] = useState(false);
   const [browserVisible, setBrowserVisible] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLibraryDialog, setShowLibraryDialog] = useState(false);
+  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
+  const [libraryQuery, setLibraryQuery] = useState('');
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
 
   const [audioInitError, setAudioInitError] = useState<string | null>(null);
   const continueChangeProject = useRef<() => void>();
@@ -131,6 +153,89 @@ function App() {
       action();
     }
   }
+
+  const ensureLibraryLoaded = useCallback(async () => {
+    if (libraryItems.length > 0 || libraryLoading) {
+      return;
+    }
+
+    try {
+      setLibraryLoading(true);
+      setLibraryError(null);
+
+      const response = await fetch(`${PUBLIC_URL.toString()}/library.json`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Unable to load library inventory (${response.status})`);
+      }
+
+      const json = (await response.json()) as LibraryNode;
+
+      const collected: LibraryItem[] = [];
+      const visit = (node: LibraryNode, parents: string[]) => {
+        if (node.children && node.children.length > 0) {
+          const nextParents = node.name ? [...parents, node.name] : parents;
+          node.children.forEach((child) => visit(child, nextParents));
+        } else if (node.name) {
+          const parentName = parents.length > 0 ? parents[parents.length - 1] : 'Library';
+          collected.push({
+            id: node.path,
+            path: node.path,
+            name: node.name,
+            group: parentName,
+          });
+        }
+      };
+
+      visit(json, []);
+      setLibraryItems(collected);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to load library inventory';
+      setLibraryError(message);
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, [libraryItems.length, libraryLoading]);
+
+  useEffect(() => {
+    if (showLibraryDialog) {
+      ensureLibraryLoaded();
+    }
+  }, [ensureLibraryLoaded, showLibraryDialog]);
+
+  useEffect(() => {
+    if (!showLibraryDialog) {
+      setLibraryQuery('');
+    }
+  }, [showLibraryDialog]);
+
+  const filteredLibrary = useMemo(() => {
+    if (!libraryQuery) {
+      return libraryItems;
+    }
+    const query = libraryQuery.trim().toLowerCase();
+    return libraryItems.filter((item) => {
+      return (
+        item.name.toLowerCase().includes(query) ||
+        item.group.toLowerCase().includes(query) ||
+        item.path.toLowerCase().includes(query)
+      );
+    });
+  }, [libraryItems, libraryQuery]);
+
+  const handleLibraryItemClick = useCallback(
+    (item: LibraryItem) => {
+      console.log('[App] Selected library item', item.path);
+      setBrowserVisible(true);
+      setShowLibraryDialog(false);
+    },
+    [setBrowserVisible],
+  );
 
   if (!audioContext || !engineInstance) {
     return (
@@ -261,7 +366,8 @@ function App() {
                     onClick={() => {
                       changeProject(() => {
                         engineRef.current?.stop();
-                        loadProject(audioFileManager.current);
+                        setShowLibraryDialog(true);
+                        ensureLibraryLoaded();
                       });
                     }}
                   />
@@ -355,6 +461,62 @@ function App() {
           setBrowserVisible={setBrowserVisible}
         />
       </div>
+      <Dialog
+        icon="music"
+        title="Load a Song"
+        className={styles.libraryDialog}
+        isOpen={showLibraryDialog}
+        onClose={() => setShowLibraryDialog(false)}
+      >
+        <DialogBody>
+          <p className={styles.libraryIntro}>
+            Browse the available beats and stems. Select a title to reveal it in the library panel so you can drag it
+            straight into your mix.
+          </p>
+          <InputGroup
+            leftIcon="search"
+            placeholder="Search by title, folder or path..."
+            value={libraryQuery}
+            onChange={(event) => setLibraryQuery(event.currentTarget.value)}
+            className={styles.librarySearch}
+          />
+          <div className={styles.libraryList}>
+            {libraryLoading ? (
+              <div className={styles.librarySpinner}>
+                <Spinner intent="primary" />
+              </div>
+            ) : libraryError ? (
+              <NonIdealState icon="error" title="Couldn't load songs" description={libraryError} />
+            ) : filteredLibrary.length === 0 ? (
+              <NonIdealState
+                icon="search"
+                title="No matches"
+                description="Try a different search term to find a song title."
+              />
+            ) : (
+              filteredLibrary.map((item) => {
+                const title = item.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+                return (
+                  <Button
+                    key={item.id}
+                    minimal
+                    alignText="left"
+                    icon="music"
+                    className={styles.libraryItem}
+                    onClick={() => handleLibraryItemClick(item)}
+                  >
+                    <span className={styles.libraryItemText}>
+                      <span className={styles.libraryItemTitle}>{title}</span>
+                      <span className={styles.libraryItemMeta}>{item.group}</span>
+                    </span>
+                  </Button>
+                );
+              })
+            )}
+          </div>
+        </DialogBody>
+        <DialogFooter actions={<Button text="Close" onClick={() => setShowLibraryDialog(false)} />} />
+      </Dialog>
       <Drawer
         isOpen={showSettings}
         position="right"
