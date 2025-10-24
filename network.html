@@ -6685,9 +6685,215 @@ let sessionsCard = null;
     const DJ_LIBRARY_PAGE_SIZE = 12
     const DJ_STORAGE_TRACK_BASE_URL = 'https://beatloop-media.r2.cloudflarestorage.com'
 
+    const djStorageTracksByKey = new Map()
+    const djStorageTracksById = new Map()
+    const djStorageTracksByUrl = new Map()
+    const djKnownTrackMetaById = new Map()
+    const djKnownTrackMetaByUrl = new Map()
+    const djStorageTrackHydration = new Map()
+
+    function normalizeTrackUrlKey(value) {
+      if (!value || typeof value !== 'string') return ''
+      const trimmed = value.trim()
+      if (!trimmed) return ''
+      try {
+        const resolved = resolveTrackMediaUrl(trimmed)
+        return resolved ? resolved.trim() : trimmed
+      } catch (err) {
+        console.warn('Failed to normalize track URL', err)
+        return trimmed
+      }
+    }
+
+    function extractStorageTrackId(source) {
+      if (!source || typeof source !== 'string') return ''
+      const normalized = source.replace(/^tracks\//i, '').replace(/^track\//i, '')
+      const match = normalized.match(/^(\d{6,})/)
+      return match ? match[1] : ''
+    }
+
+    function registerStorageTrack(track) {
+      if (!track) return
+      const storageKey = track.storageMeta?.key || ''
+      const trackId = track.storageTrackId ? String(track.storageTrackId) : ''
+      const urlKey = normalizeTrackUrlKey(track.url)
+
+      if (track.__storageMetaKey && track.__storageMetaKey !== storageKey) {
+        djStorageTracksByKey.delete(track.__storageMetaKey)
+      }
+      if (track.__storageTrackId && track.__storageTrackId !== trackId) {
+        djStorageTracksById.delete(track.__storageTrackId)
+      }
+      if (track.__storageUrlKey && track.__storageUrlKey !== urlKey) {
+        djStorageTracksByUrl.delete(track.__storageUrlKey)
+      }
+
+      if (storageKey) {
+        djStorageTracksByKey.set(storageKey, track)
+        track.__storageMetaKey = storageKey
+      }
+      if (trackId) {
+        djStorageTracksById.set(trackId, track)
+        track.__storageTrackId = trackId
+      }
+      if (urlKey) {
+        djStorageTracksByUrl.set(urlKey, track)
+        track.__storageUrlKey = urlKey
+      }
+    }
+
+    function applyMetadataToStorageTrack(track, meta) {
+      if (!track || !meta) return false
+      let changed = false
+      if (meta.title && meta.title !== track.title) {
+        track.title = meta.title
+        changed = true
+      }
+      if (meta.artist && meta.artist !== track.artist) {
+        track.artist = meta.artist
+        changed = true
+      }
+      if (meta.cover && meta.cover !== track.cover) {
+        track.cover = meta.cover
+        changed = true
+      }
+      if (meta.url && meta.url !== track.url) {
+        track.url = meta.url
+        changed = true
+      }
+      if (meta.id && String(meta.id) !== String(track.storageTrackId || '')) {
+        track.storageTrackId = String(meta.id)
+        changed = true
+      }
+      if (changed) registerStorageTrack(track)
+      return changed
+    }
+
+    function maybeRefreshDjLibrary() {
+      if (typeof window !== 'undefined' && typeof window.__beatloopDjRefreshLibrary === 'function') {
+        try { window.__beatloopDjRefreshLibrary() } catch (err) {
+          console.warn('DJ library refresh failed', err)
+        }
+      }
+    }
+
+    function normalizeDjKnownTrackMeta(meta) {
+      if (!meta || typeof meta !== 'object') return null
+      const id = meta.id || meta._id || meta.trackId || meta.metaId || meta.storageTrackId || null
+      const urlSource = meta.url || meta.audioUrl || meta.source || ''
+      const coverSource = meta.cover || meta.coverUrl || meta.cover_url || ''
+      const artistCandidate = meta.artist
+        || (meta.user && (meta.user.displayName || meta.user.name || meta.user.email))
+        || ''
+      const normalized = {
+        id: id ? String(id) : '',
+        url: urlSource ? resolveTrackMediaUrl(urlSource) : '',
+        cover: coverSource ? resolveTrackMediaUrl(coverSource) : DEFAULT_TRACK_COVER,
+        artist: artistCandidate || 'beatloop creator',
+        title: meta.title || meta.name || 'Untitled',
+      }
+      if (!normalized.url) {
+        const storageUrl = meta.storageMeta?.url || meta.storageUrl || ''
+        if (storageUrl && typeof storageUrl === 'string') {
+          try {
+            normalized.url = resolveTrackMediaUrl(storageUrl)
+          } catch {}
+        }
+      }
+      if (!normalized.cover) normalized.cover = DEFAULT_TRACK_COVER
+      return normalized
+    }
+
+    function registerDjKnownTrackMeta(meta) {
+      const normalized = normalizeDjKnownTrackMeta(meta)
+      if (!normalized) return null
+      if (normalized.id) {
+        djKnownTrackMetaById.set(normalized.id, normalized)
+      }
+      const urlKey = normalizeTrackUrlKey(normalized.url)
+      if (urlKey) {
+        djKnownTrackMetaByUrl.set(urlKey, normalized)
+      }
+      let updated = false
+      if (urlKey && djStorageTracksByUrl.has(urlKey)) {
+        const track = djStorageTracksByUrl.get(urlKey)
+        updated = applyMetadataToStorageTrack(track, normalized) || updated
+      }
+      if (normalized.id && djStorageTracksById.has(normalized.id)) {
+        const track = djStorageTracksById.get(normalized.id)
+        updated = applyMetadataToStorageTrack(track, normalized) || updated
+      }
+      if (!updated && normalized.id) {
+        const storageKey = Array.from(djStorageTracksByKey.keys()).find((key) => {
+          const candidate = djStorageTracksByKey.get(key)
+          if (!candidate) return false
+          return String(candidate.storageTrackId || '') === normalized.id
+        })
+        if (storageKey) {
+          const track = djStorageTracksByKey.get(storageKey)
+          updated = applyMetadataToStorageTrack(track, normalized) || updated
+        }
+      }
+      if (updated) maybeRefreshDjLibrary()
+      return normalized
+    }
+
+    function hydrateStorageTrackMeta(track) {
+      if (!track) return null
+      const urlKey = normalizeTrackUrlKey(track.url)
+      if (urlKey && djKnownTrackMetaByUrl.has(urlKey)) {
+        applyMetadataToStorageTrack(track, djKnownTrackMetaByUrl.get(urlKey))
+        return Promise.resolve(djKnownTrackMetaByUrl.get(urlKey))
+      }
+      const storageKey = track.storageMeta?.key || ''
+      const trackId = track.storageTrackId || extractStorageTrackId(storageKey)
+      if (trackId) {
+        track.storageTrackId = trackId
+        registerStorageTrack(track)
+        if (djKnownTrackMetaById.has(trackId)) {
+          applyMetadataToStorageTrack(track, djKnownTrackMetaById.get(trackId))
+          return Promise.resolve(djKnownTrackMetaById.get(trackId))
+        }
+        if (djStorageTrackHydration.has(trackId)) {
+          return djStorageTrackHydration.get(trackId)
+        }
+        const request = (async () => {
+          try {
+            const apiBase = resolveTrackApiBase()
+            const response = await fetch(`${apiBase}/api/tracks/${encodeURIComponent(trackId)}`, {
+              headers: authHeaders(),
+            })
+            let payload = {}
+            try { payload = await response.json().catch(() => ({})) } catch (_) { payload = {} }
+            if (!response.ok) {
+              const detail = payload?.error || payload?.message || ''
+              console.warn('DJ storage track metadata fetch failed', { trackId, status: response.status, detail })
+              return null
+            }
+            const candidate = payload?.track || payload?.data || payload?.result || payload
+            if (!candidate) return null
+            candidate.id = candidate.id || trackId
+            const normalized = registerDjKnownTrackMeta(candidate)
+            return normalized
+          } catch (error) {
+            console.warn('DJ storage track metadata fetch threw', error)
+            return null
+          } finally {
+            djStorageTrackHydration.delete(trackId)
+          }
+        })()
+        djStorageTrackHydration.set(trackId, request)
+        return request
+      }
+      registerStorageTrack(track)
+      return Promise.resolve(null)
+    }
+
     function createStorageTrack(fileName, contentType, size, modified) {
       const encodedName = encodeURIComponent(fileName)
-      return {
+      const storageKey = `tracks/${fileName}`
+      const trackId = extractStorageTrackId(storageKey)
+      const track = {
         id: `storage:${fileName}`,
         title: fileName,
         artist: 'Timeline archive',
@@ -6697,9 +6903,13 @@ let sessionsCard = null;
           contentType,
           size,
           modified,
-          key: `tracks/${fileName}`,
+          key: storageKey,
         },
+        storageTrackId: trackId || null,
       }
+      registerStorageTrack(track)
+      hydrateStorageTrackMeta(track)
+      return track
     }
 
     const DJ_STORAGE_TRACKS = [
@@ -9467,6 +9677,11 @@ function recordUserTrackEntry(track) {
   if (!track || !track.id || !track.url) return
   const entry = ensureLibraryEntryForUser(track.user || { email: track.userEmail, displayName: track.artist }, track.ownerId || track.owner || '')
   if (!entry) return
+  const fallbackArtist = track.artist
+    || entry.user?.displayName
+    || entry.user?.name
+    || (typeof track.userEmail === 'string' ? track.userEmail.split('@')[0] : '')
+    || 'beatloop creator'
   const record = {
     id: track.id,
     title: track.title || 'Untitled',
@@ -9475,7 +9690,8 @@ function recordUserTrackEntry(track) {
     caption: track.caption || '',
     createdAt: resolveTrackCreatedAt(track),
     albumId: track.albumId || null,
-    albumTrackOrder: Number.isFinite(track.albumTrackOrder) ? track.albumTrackOrder : null
+    albumTrackOrder: Number.isFinite(track.albumTrackOrder) ? track.albumTrackOrder : null,
+    artist: fallbackArtist
   }
   const existingIndex = entry.tracks.findIndex(item => item.id === record.id)
   if (existingIndex >= 0) {
@@ -9484,6 +9700,13 @@ function recordUserTrackEntry(track) {
     entry.tracks.push(record)
   }
   entry.tracks.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+  registerDjKnownTrackMeta({
+    id: record.id,
+    title: record.title,
+    url: record.url,
+    cover: record.cover,
+    artist: fallbackArtist
+  })
   if (typeof window !== 'undefined' && typeof window.__beatloopDjRefreshLibrary === 'function') {
     try { window.__beatloopDjRefreshLibrary() } catch (err) { console.warn('DJ library refresh failed', err) }
   }
