@@ -6707,15 +6707,23 @@ let sessionsCard = null;
 
     function extractStorageTrackId(source) {
       if (!source || typeof source !== 'string') return ''
-      const normalized = source.replace(/^tracks\//i, '').replace(/^track\//i, '')
-      const match = normalized.match(/^(\d{6,})/)
-      return match ? match[1] : ''
+      const withoutPrefix = source
+        .replace(/^tracks?\//i, '')
+        .replace(/^\/+/, '')
+      const withoutFragment = withoutPrefix
+        .replace(/[#?].*$/, '')
+      const withoutExtension = withoutFragment.replace(/\.[^.]+$/, '')
+      const trimmed = withoutExtension.trim()
+      if (trimmed) return trimmed
+      const fallbackMatch = withoutFragment.match(/(\d{6,})/)
+      return fallbackMatch ? fallbackMatch[1] : ''
     }
 
     function registerStorageTrack(track) {
       if (!track) return
       const storageKey = track.storageMeta?.key || ''
       const trackId = track.storageTrackId ? String(track.storageTrackId) : ''
+      const legacyTrackId = trackId ? ((trackId.match(/^(\d{6,})/) || [])[1] || '') : ''
       const urlKey = normalizeTrackUrlKey(track.url)
 
       if (track.__storageMetaKey && track.__storageMetaKey !== storageKey) {
@@ -6723,6 +6731,9 @@ let sessionsCard = null;
       }
       if (track.__storageTrackId && track.__storageTrackId !== trackId) {
         djStorageTracksById.delete(track.__storageTrackId)
+      }
+      if (track.__storageTrackIdLegacy && track.__storageTrackIdLegacy !== legacyTrackId) {
+        djStorageTracksById.delete(track.__storageTrackIdLegacy)
       }
       if (track.__storageUrlKey && track.__storageUrlKey !== urlKey) {
         djStorageTracksByUrl.delete(track.__storageUrlKey)
@@ -6735,6 +6746,12 @@ let sessionsCard = null;
       if (trackId) {
         djStorageTracksById.set(trackId, track)
         track.__storageTrackId = trackId
+      }
+      if (legacyTrackId) {
+        djStorageTracksById.set(legacyTrackId, track)
+        track.__storageTrackIdLegacy = legacyTrackId
+      } else {
+        track.__storageTrackIdLegacy = null
       }
       if (urlKey) {
         djStorageTracksByUrl.set(urlKey, track)
@@ -6892,9 +6909,10 @@ let sessionsCard = null;
     function createStorageTrack(fileName, contentType, size, modified) {
       const encodedName = encodeURIComponent(fileName)
       const storageKey = `tracks/${fileName}`
-      const trackId = extractStorageTrackId(storageKey)
+      const trackId = extractStorageTrackId(fileName)
+      const displayId = trackId || fileName
       const track = {
-        id: `storage:${fileName}`,
+        id: `storage:${displayId}`,
         title: fileName,
         artist: 'Timeline archive',
         cover: DJ_DEFAULT_COVER,
