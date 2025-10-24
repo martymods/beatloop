@@ -6684,6 +6684,25 @@ let sessionsCard = null;
 
     const DJ_LIBRARY_PAGE_SIZE = 12
     const DJ_STORAGE_TRACK_BASE_URL = 'https://beatloop-media.r2.cloudflarestorage.com'
+    const DJ_STORAGE_TRACK_DEFAULT_ARTIST = 'Beatloop archive'
+    const DJ_STORAGE_TRACK_FALLBACKS = new Map([
+      ['1760878373127', { title: 'Music0', artist: 'wooh' }],
+      ['1760878837845', { title: 'Music_Track1', artist: 'beat maker guy' }],
+      ['1760881244552', { title: 'Unsettling 1', artist: 'Game Time USA' }],
+      ['1760888505026', { title: 'Sickly People', artist: 'Game Time USA' }],
+      ['1760953335740', { title: 'Unsettling 4', artist: 'classic game' }],
+      ['1760968554067', { title: 'Bingo', artist: 'Warm Shoes' }],
+      ['1760969201816', { title: 'Posin Jam', artist: 'Warm Shoes' }],
+      ['1760981428999', { title: 'Unsettling 1', artist: 'Warm Shoes' }],
+      ['1760981431077', { title: 'Unsettling 2', artist: 'Warm Shoes' }],
+      ['1760981432851', { title: 'Unsettling 3', artist: 'Warm Shoes' }],
+      ['1760981434390', { title: 'Unsettling 4', artist: 'Warm Shoes' }],
+      ['1760981436009', { title: 'Unsettling 5', artist: 'Warm Shoes' }],
+      ['1760981437282', { title: 'Unsettling 6', artist: 'Warm Shoes' }],
+      ['1761002233047', { title: 'money', artist: 'Warm Shoes' }],
+      ['1761003624392', { title: 'yes', artist: 'beat maker guy' }],
+      ['1761043453720', { title: 'After the Dream', artist: 'New Bright Water' }],
+    ])
 
     const djStorageTracksByKey = new Map()
     const djStorageTracksById = new Map()
@@ -6906,6 +6925,61 @@ let sessionsCard = null;
       return Promise.resolve(null)
     }
 
+    function formatStorageTrackPlaceholder(fileName, trackId) {
+      if (trackId) {
+        const numeric = String(trackId).replace(/\D+/g, '')
+        const suffix = numeric.slice(-4)
+        if (suffix) {
+          return `Uploaded Track #${suffix}`
+        }
+      }
+      if (!fileName) return 'Uploaded Track'
+      const base = fileName
+        .replace(/\.[^.]+$/, '')
+        .replace(/[_-]+/g, ' ')
+        .trim()
+      if (base && !/^\d+$/.test(base) && base.length <= 40) {
+        return base
+      }
+      return 'Uploaded Track'
+    }
+
+    function applyStorageTrackFallbackMetadata(track, fileName) {
+      if (!track) return
+      const trackId = track.storageTrackId || extractStorageTrackId(fileName)
+      const fallbackId = trackId && DJ_STORAGE_TRACK_FALLBACKS.has(trackId)
+        ? trackId
+        : ((trackId && (String(trackId).match(/(\d{6,})/) || [])[1]) || '')
+      const fallback = fallbackId ? DJ_STORAGE_TRACK_FALLBACKS.get(fallbackId) : null
+      if (fallback) {
+        if (fallback.title) {
+          track.title = fallback.title
+        }
+        if (fallback.artist) {
+          track.artist = fallback.artist
+        }
+        if (fallback.cover) {
+          track.cover = fallback.cover
+        }
+        registerDjKnownTrackMeta({
+          id: fallbackId || trackId,
+          title: track.title,
+          artist: track.artist,
+          cover: track.cover,
+          url: track.url,
+        })
+        return
+      }
+      if (track.title) {
+        track.title = formatStorageTrackPlaceholder(track.title === fileName ? fileName : track.title, trackId)
+      } else {
+        track.title = formatStorageTrackPlaceholder(fileName, trackId)
+      }
+      if (!track.artist || track.artist === 'Timeline archive') {
+        track.artist = DJ_STORAGE_TRACK_DEFAULT_ARTIST
+      }
+    }
+
     function createStorageTrack(fileName, contentType, size, modified) {
       const encodedName = encodeURIComponent(fileName)
       const storageKey = `tracks/${fileName}`
@@ -6913,8 +6987,8 @@ let sessionsCard = null;
       const displayId = trackId || fileName
       const track = {
         id: `storage:${displayId}`,
-        title: fileName,
-        artist: 'Timeline archive',
+        title: formatStorageTrackPlaceholder(fileName, trackId),
+        artist: DJ_STORAGE_TRACK_DEFAULT_ARTIST,
         cover: DJ_DEFAULT_COVER,
         url: `${DJ_STORAGE_TRACK_BASE_URL}/tracks/${encodedName}`,
         storageMeta: {
@@ -6925,6 +6999,7 @@ let sessionsCard = null;
         },
         storageTrackId: trackId || null,
       }
+      applyStorageTrackFallbackMetadata(track, fileName)
       registerStorageTrack(track)
       hydrateStorageTrackMeta(track)
       return track
