@@ -8019,6 +8019,26 @@ let sessionsCard = null;
 
     function refreshDjLibrary() {
       collectDjTracks()
+      if (!DJ_STORAGE_TRACKS.length) return
+      const hydrationPromises = DJ_STORAGE_TRACKS.map((track) => {
+        try {
+          const result = hydrateStorageTrackMeta(track)
+          if (result && typeof result.then === 'function') {
+            return result
+          }
+        } catch (error) {
+          console.warn('Unable to hydrate DJ storage track metadata', error)
+        }
+        return null
+      }).filter(Boolean)
+      if (!hydrationPromises.length) return
+      Promise.allSettled(hydrationPromises).then(() => {
+        try {
+          collectDjTracks()
+        } catch (error) {
+          console.warn('DJ library refresh after hydration failed', error)
+        }
+      })
     }
 
     window.__beatloopDjRefreshLibrary = refreshDjLibrary
