@@ -12784,7 +12784,8 @@ async function updateLeaderboard() {
     }
 
     function authHeaders(extra = {}) {
-      const headers = typeof AUTH?.hdr === 'function' ? AUTH.hdr() : {}
+      const auth = typeof window !== 'undefined' ? window.AUTH : undefined
+      const headers = auth && typeof auth.hdr === 'function' ? auth.hdr() : {}
       return { ...headers, ...extra }
     }
 
