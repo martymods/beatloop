@@ -4244,9 +4244,12 @@
 
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', () => {
-      handlePause();
       try { audio.currentTime = 0; } catch (err) {}
       updateSeek(deck);
+      const loopPromise = audio.play();
+      if (loopPromise && typeof loopPromise.catch === 'function') {
+        loopPromise.catch(() => {});
+      }
     });
 
     updateSeek(deck);
@@ -7093,9 +7096,25 @@ let sessionsCard = null;
         })
         audio.addEventListener('timeupdate', () => refreshDeckProgress(deck))
         audio.addEventListener('ended', () => {
-          setDeckPlayingState(deck, false)
+          if (djState.autoPlay?.active) {
+            setDeckPlayingState(deck, false)
+            refreshDeckProgress(deck)
+            handleDjDeckEnded(deck)
+            return
+          }
+
+          if (!deck.track) {
+            setDeckPlayingState(deck, false)
+            refreshDeckProgress(deck)
+            return
+          }
+
+          try { audio.currentTime = 0 } catch {}
           refreshDeckProgress(deck)
-          handleDjDeckEnded(deck)
+          const replayPromise = audio.play()
+          if (replayPromise && typeof replayPromise.catch === 'function') {
+            replayPromise.catch(() => {})
+          }
         })
         audio.addEventListener('play', () => {
           setDeckPlayingState(deck, true)
