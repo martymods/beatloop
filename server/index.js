@@ -746,6 +746,11 @@ const trackCoverDir = path.join(uploadsRoot, 'covers');
 const messageAttachmentDir = path.join(uploadsRoot, 'messages');
 const PROXIED_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio', 'media']);
 const DURABLE_STORAGE_PREFIXES = new Set(['tracks', 'covers', 'messages', 'avatars', 'tags', 'studio', 'media']);
+
+const UPLOAD_FALLBACKS = new Map([
+  ['avatars', path.join(projectRoot, 'img', 'avatar-default.svg')],
+  ['covers', path.join(projectRoot, 'img', 'covers', 'stack.jpg')]
+]);
 fs.mkdirSync(trackAudioDir, { recursive: true });
 fs.mkdirSync(trackCoverDir, { recursive: true });
 fs.mkdirSync(messageAttachmentDir, { recursive: true });
@@ -787,6 +792,26 @@ const DURABLE_UPLOAD_HEADER_PASSTHROUGH = [
   'vary'
 ];
 
+function sendUploadFallback(prefix, res, next) {
+  const fallbackPath = UPLOAD_FALLBACKS.get(prefix);
+  if (!fallbackPath) {
+    res.status(404).end();
+    return;
+  }
+
+  if (!fs.existsSync(fallbackPath)) {
+    res.status(404).end();
+    return;
+  }
+
+  setUploadHeaders(res, fallbackPath);
+  res.sendFile(fallbackPath, (err) => {
+    if (err) {
+      next(err);
+    }
+  });
+}
+
 app.get('/uploads/:prefix/*', async (req, res, next) => {
   const { prefix } = req.params;
   if (!PROXIED_STORAGE_PREFIXES.has(prefix) || !durableUploadsAvailable) {
@@ -796,18 +821,18 @@ app.get('/uploads/:prefix/*', async (req, res, next) => {
   const remainder = (req.params[0] || '').replace(/^\/+/, '');
   const key = normalizeUploadKey(prefix, remainder);
   if (!key) {
-    return res.status(404).end();
+    return sendUploadFallback(prefix, res, next);
   }
 
   const durableUrl = durablePublicUrlForKey(key);
   if (!durableUrl) {
-    return res.status(404).end();
+    return sendUploadFallback(prefix, res, next);
   }
 
   try {
     const response = await fetch(durableUrl);
     if (response.status === 404) {
-      return res.status(404).end();
+      return sendUploadFallback(prefix, res, next);
     }
 
     if (!(response.ok || response.status === 304)) {
