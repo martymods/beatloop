@@ -1,5 +1,13 @@
 import Link from 'next/link';
 
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
+const API_FALLBACK_BASES = (process.env.NEXT_PUBLIC_API_FALLBACK_BASE_URLS || 'https://beatloop-api.onrender.com')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
+  .map((value) => value.replace(/\/$/, ''));
+const SOUNDCLOUD_MANAGE_URL = `${(API_BASE || API_FALLBACK_BASES[0] || '').replace(/\/$/, '')}/integrations/soundcloud`;
+
 export default function Home() {
   return (
     <main>
@@ -25,7 +33,7 @@ export default function Home() {
             SoundCloud so your listeners get instant playback without re-uploading files.
           </p>
           <Link
-            href="/integrations/soundcloud"
+            href={SOUNDCLOUD_MANAGE_URL}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
