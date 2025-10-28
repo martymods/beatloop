@@ -4719,6 +4719,8 @@
       return trimmed.replace(/\/+$/, '');
     };
 
+    const CANONICAL_ASSETS_BASE = 'https://www.beatloop.co';
+
     const metaAssetsBase = (() => {
       try { return document.querySelector('meta[name="beatloop-assets-base"]')?.content || null; } catch { return null; }
     })();
@@ -4729,7 +4731,7 @@
         const host = (window.location.hostname || '').toLowerCase();
 
         if (!origin || origin === 'null' || origin === 'undefined') {
-          return 'https://www.beatloop.co';
+          return CANONICAL_ASSETS_BASE;
         }
 
         if (host === 'localhost' || host === '127.0.0.1') {
@@ -4738,19 +4740,19 @@
         }
 
         if (host.includes('beatloop-api')) {
-          return 'https://www.beatloop.co';
+          return CANONICAL_ASSETS_BASE;
         }
 
         return origin;
       } catch {}
-      return 'https://www.beatloop.co';
+      return CANONICAL_ASSETS_BASE;
     })();
 
     const LOCAL_DEV_HOSTS = new Set(['localhost', '127.0.0.1', '']);
     const CURRENT_HOST = (window.location.hostname || '').toLowerCase();
     const IS_LOCAL_DEV_ENV = LOCAL_DEV_HOSTS.has(CURRENT_HOST) || window.location.protocol === 'file:';
 
-    const DEFAULT_ASSET_BASES = ['https://www.beatloop.co', 'https://beatloop.co'];
+    const DEFAULT_ASSET_BASES = [CANONICAL_ASSETS_BASE, 'https://beatloop.co'];
     const normalizedMetaAssetsBase = normalizeAssetBase(metaAssetsBase);
     const normalizedDerivedAssetsBase = normalizeAssetBase(derivedAssetsBase);
 
@@ -4802,13 +4804,34 @@
     const ASSETS_BASE = ASSET_BASE_CANDIDATES.length ? ASSET_BASE_CANDIDATES[0] : '';
     window.ASSETS_BASE = ASSETS_BASE;
 
+    const CANONICAL_SOUNDCLOUD_DASHBOARD_BASE = 'https://beatloop-api.onrender.com';
+    const SOUND_CLOUD_DASHBOARD_PATH = '/api/integrations/soundcloud/';
+    const resolveSoundCloudDashboardBase = () => {
+      try {
+        const metaNames = ['beatloop-soundcloud-dashboard-base', 'beatloop-api-base'];
+        for (const name of metaNames) {
+          const content = document.querySelector(`meta[name="${name}"]`)?.content;
+          const normalized = normalizeAssetBase(content);
+          if (normalized) return normalized;
+        }
+      } catch {}
+
+      const apiBaseCandidate = normalizeAssetBase(
+        typeof window.getApiBase === 'function'
+          ? window.getApiBase()
+          : (window.API_BASE || API_BASE_DEFAULT)
+      );
+      if (apiBaseCandidate) return apiBaseCandidate;
+
+      return CANONICAL_SOUNDCLOUD_DASHBOARD_BASE;
+    };
+
     const applySoundCloudDashboardHref = () => {
       try {
         const link = document.getElementById('soundcloudDashboardLink');
         if (!link) return;
-        const normalizedBase = typeof ASSETS_BASE === 'string' ? ASSETS_BASE.trim().replace(/\/+$/, '') : '';
-        const resolvedBase = normalizedBase || 'https://www.beatloop.co';
-        link.href = `${resolvedBase}/integrations/soundcloud/`;
+        const base = resolveSoundCloudDashboardBase();
+        link.href = `${base}${SOUND_CLOUD_DASHBOARD_PATH}`;
       } catch (err) {
         console.warn('Unable to resolve SoundCloud dashboard link', err);
       }
@@ -18841,7 +18864,7 @@ void main()
                 </div>
                 <a
                   id="soundcloudDashboardLink"
-                  href="https://www.beatloop.co/integrations/soundcloud/"
+                  href="https://beatloop-api.onrender.com/api/integrations/soundcloud/"
                   target="_blank"
                   rel="noopener"
                   class="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary/80"
