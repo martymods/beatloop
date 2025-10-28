@@ -4802,6 +4802,19 @@
     const ASSETS_BASE = ASSET_BASE_CANDIDATES.length ? ASSET_BASE_CANDIDATES[0] : '';
     window.ASSETS_BASE = ASSETS_BASE;
 
+    const applySoundCloudDashboardHref = () => {
+      try {
+        const link = document.getElementById('soundcloudDashboardLink');
+        if (!link) return;
+        const normalizedBase = typeof ASSETS_BASE === 'string' ? ASSETS_BASE.trim().replace(/\/+$/, '') : '';
+        const resolvedBase = normalizedBase || 'https://www.beatloop.co';
+        link.href = `${resolvedBase}/integrations/soundcloud/`;
+      } catch (err) {
+        console.warn('Unable to resolve SoundCloud dashboard link', err);
+      }
+    };
+    applySoundCloudDashboardHref();
+
     const BEATLOOP_HOST_CHECK = host => {
       if (!host || typeof host !== 'string') return false;
       const lower = host.toLowerCase();
@@ -18820,6 +18833,23 @@ void main()
                   </div>
                   <p class="mt-3 text-xs text-white/50">Choose the accent color shown on your profile.</p>
                 </div>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-black/40 p-4">
+                <div class="flex flex-col gap-2">
+                  <p class="text-xs uppercase tracking-wide text-white/50">SoundCloud integration</p>
+                  <p class="text-sm text-white/70">Open the SoundCloud dashboard to manage imports for your Beatloop catalog.</p>
+                </div>
+                <a
+                  id="soundcloudDashboardLink"
+                  href="https://www.beatloop.co/integrations/soundcloud/"
+                  target="_blank"
+                  rel="noopener"
+                  class="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary/80"
+                >
+                  <span aria-hidden="true">🌐</span>
+                  <span>Manage SoundCloud imports</span>
+                </a>
+                <p class="mt-3 text-xs text-white/40">Requires your Beatloop API token stored locally.</p>
               </div>
               <div class="flex justify-end">
                 <button id="profileSaveButton" type="button" class="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary/80">✅ Save changes</button>
