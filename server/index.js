@@ -234,23 +234,26 @@ if (!globalThis.fetch) {
 }
 
 /* ============================ ENV ============================ */
-const {
-  PORT = 10000,                              // Render uses this
-  JWT_SECRET = 'dev_secret_change_me',
-  MONGODB_URI,
-  PUBLIC_BASE_URL = `http://localhost:${PORT}`,
-  FRONTEND_ORIGINS = 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,https://beatloop.co,http://localhost:8080',
-  API_FALLBACK_BASE_URLS = 'https://beatloop-api.onrender.com',
-  RENDER_EXTERNAL_URL,
-  SOUNDCLOUD_CLIENT_ID = '',
-  SOUNDCLOUD_CLIENT_SECRET = '',
-  SOUNDCLOUD_REDIRECT_URI = '',
-  SOUNDCLOUD_SUCCESS_REDIRECT = '',
-  SOUNDCLOUD_FAILURE_REDIRECT = '',
-  OPENAI_API_KEY = '',
-  MEDIA_TMZ_FEED_URL = 'https://www.tmz.com/category/hip-hop/feed/',
-  MEDIA_CACHE_TTL_MS = '600000'
-} = process.env;
+const env = process.env;
+
+const PORT = Number(env.PORT) || 10000; // Render uses this
+const JWT_SECRET = env.JWT_SECRET ?? 'dev_secret_change_me';
+const MONGODB_URI = env.MONGODB_URI;
+const PUBLIC_BASE_URL = env.PUBLIC_BASE_URL ?? `http://localhost:${PORT}`;
+const FRONTEND_ORIGINS = env.FRONTEND_ORIGINS
+  ?? 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,https://beatloop.co,http://localhost:8080';
+const API_FALLBACK_BASE_URLS = env.API_FALLBACK_BASE_URLS ?? 'https://beatloop-api.onrender.com';
+const RENDER_EXTERNAL_URL = env.RENDER_EXTERNAL_URL;
+
+const SOUNDCLOUD_CLIENT_ID = env.SOUNDCLOUD_CLIENT_ID || env.SC_CLIENT_ID || '';
+const SOUNDCLOUD_CLIENT_SECRET = env.SOUNDCLOUD_CLIENT_SECRET || env.SC_CLIENT_SECRET || '';
+const SOUNDCLOUD_REDIRECT_URI = env.SOUNDCLOUD_REDIRECT_URI || env.SC_REDIRECT_URI || '';
+const SOUNDCLOUD_SUCCESS_REDIRECT = env.SOUNDCLOUD_SUCCESS_REDIRECT || env.SC_SUCCESS_REDIRECT || '';
+const SOUNDCLOUD_FAILURE_REDIRECT = env.SOUNDCLOUD_FAILURE_REDIRECT || env.SC_FAILURE_REDIRECT || '';
+
+const OPENAI_API_KEY = env.OPENAI_API_KEY || '';
+const MEDIA_TMZ_FEED_URL = env.MEDIA_TMZ_FEED_URL || 'https://www.tmz.com/category/hip-hop/feed/';
+const MEDIA_CACHE_TTL_MS = env.MEDIA_CACHE_TTL_MS || '600000';
 
 const RENDER_ENV_MARKERS = [
   'RENDER',
@@ -3004,7 +3007,7 @@ app.get('/api/integrations/soundcloud/authorize', auth, (req, res) => {
   res.json({ url: authorizeUrl.toString(), state });
 });
 
-app.get('/api/integrations/soundcloud/callback', async (req, res) => {
+async function handleSoundCloudCallback(req, res) {
   if (!soundCloudConfigured()) {
     return res.status(503).send('SoundCloud integration disabled');
   }
@@ -3095,7 +3098,10 @@ app.get('/api/integrations/soundcloud/callback', async (req, res) => {
     }
     res.status(500).send('SoundCloud authorization failed');
   }
-});
+}
+
+app.get('/api/integrations/soundcloud/callback', handleSoundCloudCallback);
+app.get('/integrations/soundcloud/callback', handleSoundCloudCallback);
 
 app.post('/api/integrations/soundcloud/disconnect', auth, async (req, res) => {
   if (!soundCloudConfigured()) {
