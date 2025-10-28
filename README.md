@@ -45,5 +45,6 @@ Configure the following environment variables so the server can initialize durab
 - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (or `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`) – credentials with write access to the bucket.
 - Optional: `AWS_SESSION_TOKEN` for temporary credentials.
 - Optional: `S3_ENDPOINT` and `S3_FORCE_PATH_STYLE` for non-AWS providers.
+- `SOUNDCLOUD_REDIRECT_URI` (or `SC_REDIRECT_URI`) – set to `https://beatloop-api.onrender.com/integrations/soundcloud/callback` so the SoundCloud OAuth flow returns to the API. Make sure the same callback URL is registered in the SoundCloud developer console.
 
 Without these variables, the API will terminate on startup in production and upload routes will respond with `503` errors.
