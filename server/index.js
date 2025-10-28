@@ -247,7 +247,7 @@ const RENDER_EXTERNAL_URL = env.RENDER_EXTERNAL_URL;
 
 const SOUNDCLOUD_CLIENT_ID = env.SOUNDCLOUD_CLIENT_ID || env.SC_CLIENT_ID || '';
 const SOUNDCLOUD_CLIENT_SECRET = env.SOUNDCLOUD_CLIENT_SECRET || env.SC_CLIENT_SECRET || '';
-const SOUNDCLOUD_REDIRECT_URI = env.SOUNDCLOUD_REDIRECT_URI || env.SC_REDIRECT_URI || '';
+let SOUNDCLOUD_REDIRECT_URI = env.SOUNDCLOUD_REDIRECT_URI || env.SC_REDIRECT_URI || '';
 const SOUNDCLOUD_SUCCESS_REDIRECT = env.SOUNDCLOUD_SUCCESS_REDIRECT || env.SC_SUCCESS_REDIRECT || '';
 const SOUNDCLOUD_FAILURE_REDIRECT = env.SOUNDCLOUD_FAILURE_REDIRECT || env.SC_FAILURE_REDIRECT || '';
 
@@ -1961,6 +1961,46 @@ function normalizeSoundCloudRedirect(value) {
     return parsed.toString();
   } catch {
     return '';
+  }
+}
+
+const SOUNDCLOUD_CALLBACK_PATH = '/integrations/soundcloud/callback';
+
+function sanitizeSoundCloudRedirectBase(value) {
+  if (!value || typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed, PUBLIC_BASE_URL);
+    if (!/^https?:$/.test(parsed.protocol)) return '';
+    const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
+    return `${parsed.protocol}//${parsed.host}${pathname}`.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+if (!SOUNDCLOUD_REDIRECT_URI) {
+  const fallbackBases = [
+    env.PUBLIC_BASE_URL,
+    env.RENDER_EXTERNAL_URL,
+    env.API_ACTIVE_BASE_URL,
+    ...(env.API_FALLBACK_BASE_URLS || '').split(/[\s,]+/),
+    'https://beatloop-api.onrender.com'
+  ];
+
+  for (const base of fallbackBases) {
+    const sanitizedBase = sanitizeSoundCloudRedirectBase(base);
+    if (!sanitizedBase) continue;
+    const candidate = normalizeSoundCloudRedirect(`${sanitizedBase}${SOUNDCLOUD_CALLBACK_PATH}`);
+    if (candidate) {
+      SOUNDCLOUD_REDIRECT_URI = candidate;
+      break;
+    }
+  }
+
+  if (!SOUNDCLOUD_REDIRECT_URI) {
+    SOUNDCLOUD_REDIRECT_URI = `https://beatloop-api.onrender.com${SOUNDCLOUD_CALLBACK_PATH}`;
   }
 }
 
