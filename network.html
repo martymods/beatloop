@@ -6,7 +6,7 @@
   <title>beatloop — Creator Network</title>
   <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
   <meta name="beatloop-api-base" content="https://beatloop-api.onrender.com" />
-  <meta name="beatloop-assets-base" content="https://www.beatloop.co" />
+  <meta name="beatloop-assets-base" content="https://beatloop-api.onrender.com" />
 
   <link rel="stylesheet" href="./styles/tailwind.css" />
   <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
@@ -4719,6 +4719,8 @@
       return trimmed.replace(/\/+$/, '');
     };
 
+    const CANONICAL_ASSETS_BASE = 'https://beatloop-api.onrender.com';
+
     const metaAssetsBase = (() => {
       try { return document.querySelector('meta[name="beatloop-assets-base"]')?.content || null; } catch { return null; }
     })();
@@ -4729,7 +4731,7 @@
         const host = (window.location.hostname || '').toLowerCase();
 
         if (!origin || origin === 'null' || origin === 'undefined') {
-          return 'https://www.beatloop.co';
+          return CANONICAL_ASSETS_BASE;
         }
 
         if (host === 'localhost' || host === '127.0.0.1') {
@@ -4738,19 +4740,19 @@
         }
 
         if (host.includes('beatloop-api')) {
-          return 'https://www.beatloop.co';
+          return CANONICAL_ASSETS_BASE;
         }
 
         return origin;
       } catch {}
-      return 'https://www.beatloop.co';
+      return CANONICAL_ASSETS_BASE;
     })();
 
     const LOCAL_DEV_HOSTS = new Set(['localhost', '127.0.0.1', '']);
     const CURRENT_HOST = (window.location.hostname || '').toLowerCase();
     const IS_LOCAL_DEV_ENV = LOCAL_DEV_HOSTS.has(CURRENT_HOST) || window.location.protocol === 'file:';
 
-    const DEFAULT_ASSET_BASES = ['https://www.beatloop.co', 'https://beatloop.co'];
+    const DEFAULT_ASSET_BASES = [CANONICAL_ASSETS_BASE, 'https://www.beatloop.co', 'https://beatloop.co'];
     const normalizedMetaAssetsBase = normalizeAssetBase(metaAssetsBase);
     const normalizedDerivedAssetsBase = normalizeAssetBase(derivedAssetsBase);
 
@@ -4807,7 +4809,7 @@
         const link = document.getElementById('soundcloudDashboardLink');
         if (!link) return;
         const normalizedBase = typeof ASSETS_BASE === 'string' ? ASSETS_BASE.trim().replace(/\/+$/, '') : '';
-        const resolvedBase = normalizedBase || 'https://www.beatloop.co';
+        const resolvedBase = normalizedBase || CANONICAL_ASSETS_BASE;
         link.href = `${resolvedBase}/integrations/soundcloud/`;
       } catch (err) {
         console.warn('Unable to resolve SoundCloud dashboard link', err);
@@ -18841,7 +18843,7 @@ void main()
                 </div>
                 <a
                   id="soundcloudDashboardLink"
-                  href="https://www.beatloop.co/integrations/soundcloud/"
+                  href="https://beatloop-api.onrender.com/integrations/soundcloud/"
                   target="_blank"
                   rel="noopener"
                   class="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary/80"
