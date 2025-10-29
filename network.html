@@ -6,7 +6,8 @@
   <title>beatloop — Creator Network</title>
   <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
   <meta name="beatloop-api-base" content="https://beatloop-api.onrender.com" />
-  <meta name="beatloop-assets-base" content="https://beatloop-api.onrender.com" />
+  <meta name="beatloop-assets-base" content="https://cdn.beatloop.co" />
+  <meta name="beatloop-verified-media-hosts" content="cdn.beatloop.co assets.beatloop.co" />
 
   <link rel="stylesheet" href="./styles/tailwind.css" />
   <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
@@ -4752,7 +4753,13 @@
     const CURRENT_HOST = (window.location.hostname || '').toLowerCase();
     const IS_LOCAL_DEV_ENV = LOCAL_DEV_HOSTS.has(CURRENT_HOST) || window.location.protocol === 'file:';
 
-    const DEFAULT_ASSET_BASES = [CANONICAL_ASSETS_BASE, 'https://www.beatloop.co', 'https://beatloop.co'];
+    const DEFAULT_ASSET_BASES = [
+      'https://cdn.beatloop.co',
+      'https://assets.beatloop.co',
+      CANONICAL_ASSETS_BASE,
+      'https://www.beatloop.co',
+      'https://beatloop.co'
+    ];
     const normalizedMetaAssetsBase = normalizeAssetBase(metaAssetsBase);
     const normalizedDerivedAssetsBase = normalizeAssetBase(derivedAssetsBase);
 
@@ -4804,6 +4811,65 @@
     const ASSETS_BASE = ASSET_BASE_CANDIDATES.length ? ASSET_BASE_CANDIDATES[0] : '';
     window.ASSETS_BASE = ASSETS_BASE;
 
+    const uploadFallbackRegistry = new Map();
+
+    const registerUploadFallbacks = (candidates) => {
+      if (!Array.isArray(candidates) || !candidates.length) return;
+      const unique = [];
+      const seen = new Set();
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        const normalized = normalizeAssetBase(candidate) || candidate;
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        unique.push(normalized);
+      }
+      for (let i = 0; i < unique.length; i += 1) {
+        const current = unique[i];
+        const remaining = unique.slice(i + 1);
+        if (current && remaining.length) {
+          uploadFallbackRegistry.set(current, remaining);
+        }
+      }
+    };
+
+    const consumeNextUploadFallback = (current) => {
+      if (!current || typeof current !== 'string') return '';
+      const list = uploadFallbackRegistry.get(current);
+      if (!list || !list.length) return '';
+      const [next, ...rest] = list;
+      if (rest.length) {
+        uploadFallbackRegistry.set(current, rest);
+      } else {
+        uploadFallbackRegistry.delete(current);
+      }
+      return next || '';
+    };
+
+    const applyUploadFallbackHandler = (element, { fallbackSrc, onFallback } = {}) => {
+      if (!element) return;
+      if (element.__uploadFallbackHandler) {
+        element.removeEventListener('error', element.__uploadFallbackHandler);
+      }
+      const handleError = () => {
+        const current = element.currentSrc || element.src || '';
+        const next = consumeNextUploadFallback(current);
+        if (next && next !== current) {
+          element.src = next;
+          return;
+        }
+        if (typeof onFallback === 'function') {
+          onFallback();
+        } else if (fallbackSrc && element.src !== fallbackSrc) {
+          element.src = fallbackSrc;
+        }
+        element.removeEventListener('error', handleError);
+        element.__uploadFallbackHandler = null;
+      };
+      element.__uploadFallbackHandler = handleError;
+      element.addEventListener('error', handleError);
+    };
+
     const applySoundCloudDashboardHref = () => {
       try {
         const link = document.getElementById('soundcloudDashboardLink');
@@ -4854,7 +4920,9 @@
 
     const DEFAULT_VERIFIED_MEDIA_UPLOAD_HOSTS = [
       'beatloop-api.onrender.com',
-      'api.beatloop.co'
+      'api.beatloop.co',
+      'cdn.beatloop.co',
+      'assets.beatloop.co'
     ];
 
     const normalizeHostForComparison = (value) => {
@@ -5172,12 +5240,22 @@
 
     const resolveUploadUrl = (path) => {
       const candidates = buildUploadUrlCandidates(path);
+      const normalizedCandidates = [];
+      const seen = new Set();
       for (const candidate of candidates) {
         if (!candidate) continue;
         const normalized = ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(candidate));
-        if (normalized) return normalized;
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        normalizedCandidates.push(normalized);
       }
-      return ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(path));
+      registerUploadFallbacks(normalizedCandidates);
+      if (normalizedCandidates.length) {
+        return normalizedCandidates[0];
+      }
+      const direct = ensureHttpsMediaUrl(maybeRewriteToActiveApiBase(path));
+      if (direct) return direct;
+      return path;
     };
 
     const resolveTrackMediaUrl = (raw) => {
@@ -7247,7 +7325,7 @@ let sessionsCard = null;
       }
       if (elements.cover) {
         elements.cover.src = track.cover || DJ_DEFAULT_COVER
-        elements.cover.onerror = () => { elements.cover.src = DJ_DEFAULT_COVER }
+        applyUploadFallbackHandler(elements.cover, { fallbackSrc: DJ_DEFAULT_COVER })
       }
       if (elements.audio) {
         try { elements.audio.pause() } catch {}
@@ -7616,7 +7694,7 @@ let sessionsCard = null;
         const img = document.createElement('img')
         img.src = track.cover || DJ_DEFAULT_COVER
         img.alt = ''
-        img.onerror = () => { img.src = DJ_DEFAULT_COVER }
+        applyUploadFallbackHandler(img, { fallbackSrc: DJ_DEFAULT_COVER })
         trackWrap.appendChild(img)
         const meta = document.createElement('div')
         const title = document.createElement('p')
@@ -7959,7 +8037,7 @@ let sessionsCard = null;
         thumb.className = 'bl-dj__playlist-thumb'
         thumb.src = playlist.cover || DJ_DEFAULT_COVER
         thumb.alt = ''
-        thumb.onerror = () => { thumb.src = DJ_DEFAULT_COVER }
+        applyUploadFallbackHandler(thumb, { fallbackSrc: DJ_DEFAULT_COVER })
         label.appendChild(thumb)
         const labelText = document.createElement('span')
         labelText.textContent = playlist.name || 'Untitled playlist'
@@ -7997,7 +8075,7 @@ let sessionsCard = null;
       }
       if (djPlaylistCoverImage) {
         djPlaylistCoverImage.src = DJ_DEFAULT_COVER
-        djPlaylistCoverImage.onerror = () => { djPlaylistCoverImage.src = DJ_DEFAULT_COVER }
+        applyUploadFallbackHandler(djPlaylistCoverImage, { fallbackSrc: DJ_DEFAULT_COVER })
       }
       const playlist = getActivePlaylist()
       if (!playlist) {
@@ -8045,7 +8123,7 @@ let sessionsCard = null;
       }
       if (djPlaylistCoverImage) {
         djPlaylistCoverImage.src = playlist.cover || DJ_DEFAULT_COVER
-        djPlaylistCoverImage.onerror = () => { djPlaylistCoverImage.src = DJ_DEFAULT_COVER }
+        applyUploadFallbackHandler(djPlaylistCoverImage, { fallbackSrc: DJ_DEFAULT_COVER })
       }
       if (!playlist.tracks.length) {
         djPlaylistEmpty.classList.remove('hidden')
@@ -8806,7 +8884,7 @@ let sessionsCard = null;
             const coverThumb = document.createElement('img')
             coverThumb.className = 'profile-album-cover'
             coverThumb.src = album.cover || DEFAULT_TRACK_COVER
-            coverThumb.onerror = () => { coverThumb.src = DEFAULT_TRACK_COVER }
+            applyUploadFallbackHandler(coverThumb, { fallbackSrc: DEFAULT_TRACK_COVER })
             coverThumb.alt = album.title || 'Album art'
             const summaryText = document.createElement('div')
             summaryText.className = 'min-w-0 flex-1'
@@ -8839,7 +8917,7 @@ let sessionsCard = null;
                   const coverThumb = document.createElement('img')
                   coverThumb.className = 'profile-track-cover'
                   coverThumb.src = track.cover || album.cover || DEFAULT_TRACK_COVER
-                  coverThumb.onerror = () => { coverThumb.src = DEFAULT_TRACK_COVER }
+                  applyUploadFallbackHandler(coverThumb, { fallbackSrc: DEFAULT_TRACK_COVER })
                   coverThumb.alt = displayTitle
                   header.appendChild(coverThumb)
 
@@ -8908,10 +8986,10 @@ let sessionsCard = null;
             details.className = 'profile-album-entry'
             const summary = document.createElement('summary')
             summary.className = 'profile-album-summary'
-            const coverThumb = document.createElement('img')
-            coverThumb.className = 'profile-album-cover'
-            coverThumb.src = playlist.cover || DEFAULT_TRACK_COVER
-            coverThumb.onerror = () => { coverThumb.src = DEFAULT_TRACK_COVER }
+           const coverThumb = document.createElement('img')
+           coverThumb.className = 'profile-album-cover'
+           coverThumb.src = playlist.cover || DEFAULT_TRACK_COVER
+            applyUploadFallbackHandler(coverThumb, { fallbackSrc: DEFAULT_TRACK_COVER })
             const summaryText = document.createElement('div')
             summaryText.className = 'min-w-0 flex-1'
             const titleEl = document.createElement('p')
@@ -8972,10 +9050,10 @@ let sessionsCard = null;
             const header = document.createElement('div')
             header.className = 'profile-track-header'
 
-            const coverThumb = document.createElement('img')
-            coverThumb.className = 'profile-track-cover'
-            coverThumb.src = track.cover || DEFAULT_TRACK_COVER
-            coverThumb.onerror = () => { coverThumb.src = DEFAULT_TRACK_COVER }
+           const coverThumb = document.createElement('img')
+           coverThumb.className = 'profile-track-cover'
+           coverThumb.src = track.cover || DEFAULT_TRACK_COVER
+            applyUploadFallbackHandler(coverThumb, { fallbackSrc: DEFAULT_TRACK_COVER })
             coverThumb.alt = track.title || 'Track cover'
             header.appendChild(coverThumb)
 
@@ -9156,7 +9234,7 @@ let sessionsCard = null;
       }
       if (profileRefs.avatarImage) {
         profileRefs.avatarImage.src = sanitizedAvatar || fallbackAvatar
-        profileRefs.avatarImage.onerror = () => { profileRefs.avatarImage.src = fallbackAvatar }
+        applyUploadFallbackHandler(profileRefs.avatarImage, { fallbackSrc: fallbackAvatar })
       }
 
       const displayName = activeProfileUser.displayName || activeProfileUser.name || activeProfileUser.email || 'Beatloop creator'
@@ -9444,7 +9522,7 @@ let sessionsCard = null;
         row.className = 'flex items-start gap-2 mb-2'
         const avatar = document.createElement('img')
         avatar.src = sanitizeAvatar(c.avatar)
-        avatar.onerror = () => { avatar.src = fallbackAvatar }
+        applyUploadFallbackHandler(avatar, { fallbackSrc: fallbackAvatar })
         avatar.alt = 'avatar'
         avatar.className = 'h-6 w-6 rounded-full ring-1 ring-white/10 object-cover'
         row.appendChild(avatar)
@@ -9474,7 +9552,7 @@ let sessionsCard = null;
           wrapper.appendChild(halo)
           const pinAvatar = document.createElement('img')
           pinAvatar.src = sanitizeAvatar(c.avatar)
-          pinAvatar.onerror = () => { pinAvatar.src = fallbackAvatar }
+          applyUploadFallbackHandler(pinAvatar, { fallbackSrc: fallbackAvatar })
           pinAvatar.alt = ''
           pinAvatar.setAttribute('aria-hidden', 'true')
           pinAvatar.className = 'bl-comment-avatar'
@@ -10204,7 +10282,7 @@ function createPost(track, { prepend = false } = {}) {
   const author = normalized.user || {}
   const authorAvatar = sanitizeAvatar(author.avatar || fallbackAvatar)
   avatar.src = authorAvatar
-  avatar.onerror = () => { avatar.src = fallbackAvatar }
+  applyUploadFallbackHandler(avatar, { fallbackSrc: fallbackAvatar })
   avatar.alt = 'avatar'
   avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
   avatar.classList.add('cursor-pointer')
@@ -10279,7 +10357,7 @@ function createPost(track, { prepend = false } = {}) {
       trackRow.className = 'flex items-center gap-3'
       const coverImg = document.createElement('img')
       coverImg.src = normalized.cover || DEFAULT_TRACK_COVER
-      coverImg.onerror = () => { coverImg.src = DEFAULT_TRACK_COVER }
+      applyUploadFallbackHandler(coverImg, { fallbackSrc: DEFAULT_TRACK_COVER })
       coverImg.alt = 'cover'
       coverImg.className = 'h-12 w-12 rounded-xl ring-1 ring-white/10 object-cover'
       if (normalized.isOwner) {
@@ -11294,7 +11372,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
 
   const avatar = document.createElement('img')
   avatar.src = avatarSrc
-  avatar.onerror = () => { avatar.src = fallbackAvatar }
+  applyUploadFallbackHandler(avatar, { fallbackSrc: fallbackAvatar })
   avatar.alt = 'avatar'
   avatar.className = 'h-10 w-10 rounded-full ring-1 ring-white/10 object-cover'
   avatar.classList.add('cursor-pointer')
@@ -11366,7 +11444,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
   const coverImg = document.createElement('img')
   const resolveCover = () => normalized.cover || DEFAULT_TRACK_COVER
   coverImg.src = resolveCover()
-  coverImg.onerror = () => { coverImg.src = DEFAULT_TRACK_COVER }
+  applyUploadFallbackHandler(coverImg, { fallbackSrc: DEFAULT_TRACK_COVER })
   coverImg.alt = 'Album cover'
   coverImg.className = 'h-32 w-32 rounded-xl object-cover ring-1 ring-white/10'
   albumTop.appendChild(coverImg)
@@ -11727,7 +11805,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
 
     const thumb = document.createElement('img')
     thumb.src = resolveCover()
-    thumb.onerror = () => { thumb.src = DEFAULT_TRACK_COVER }
+    applyUploadFallbackHandler(thumb, { fallbackSrc: DEFAULT_TRACK_COVER })
     thumb.alt = 'Album art'
     thumb.className = 'h-12 w-12 flex-shrink-0 rounded-lg object-cover ring-1 ring-white/10'
     headerRow.appendChild(thumb)
@@ -12380,7 +12458,7 @@ function createAlbumPost(album, { prepend = false } = {}) {
 
         const av = document.createElement('img')
         av.src = user.avatar || fallbackAvatar
-        av.onerror = () => { av.src = fallbackAvatar }
+        applyUploadFallbackHandler(av, { fallbackSrc: fallbackAvatar })
 
         const info = document.createElement('div')
         info.className = 'bl-who-meta'
@@ -12678,7 +12756,7 @@ async function updateLeaderboard() {
       avatarWrap.className = 'bl-leaderboard-avatar'
       const img = document.createElement('img')
       img.src = entry.track.cover || DEFAULT_TRACK_COVER
-      img.onerror = () => { img.src = DEFAULT_TRACK_COVER }
+      applyUploadFallbackHandler(img, { fallbackSrc: DEFAULT_TRACK_COVER })
       avatarWrap.appendChild(img)
 
       const crown = document.createElement('span')
@@ -12764,7 +12842,7 @@ async function updateLeaderboard() {
       const cover = document.createElement('img')
       cover.className = 'bl-leaderboard-cover'
       cover.src = entry.track.cover || DEFAULT_TRACK_COVER
-      cover.onerror = () => { cover.src = DEFAULT_TRACK_COVER }
+      applyUploadFallbackHandler(cover, { fallbackSrc: DEFAULT_TRACK_COVER })
       const titles = document.createElement('div')
       titles.className = 'bl-leaderboard-trackTitles'
       const title = document.createElement('strong')
@@ -13736,7 +13814,7 @@ async function updateLeaderboard() {
       // Set composer avatar
       if (composerAvatarEl) {
         composerAvatarEl.src = sanitizeAvatar(currentUser && currentUser.avatar)
-        composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar }
+        applyUploadFallbackHandler(composerAvatarEl, { fallbackSrc: fallbackAvatar })
       }
       // Render suggestions / trends / leaderboard for both mobile & desktop blocks
       renderWhoToFollowInto(whoToFollowEl)
@@ -20598,7 +20676,7 @@ void main()
     if (profileWelcomeName) profileWelcomeName.textContent = `Welcome, ${computeWelcomeName(user)}`;
     const avatarUrl = sanitizeAvatar(user.avatar);
     if (profileAvatarImage) {
-      profileAvatarImage.onerror = () => { profileAvatarImage.onerror = null; profileAvatarImage.src = fallbackAvatar; };
+      applyUploadFallbackHandler(profileAvatarImage, { fallbackSrc: fallbackAvatar });
       profileAvatarImage.src = avatarUrl;
     }
     setProfileAvatarBackground(avatarUrl);
@@ -21643,7 +21721,7 @@ void main()
     }
     if (composerAvatarEl) {
       composerAvatarEl.src = sanitizeAvatar(u.avatar);
-      composerAvatarEl.onerror = () => { composerAvatarEl.src = fallbackAvatar; };
+      applyUploadFallbackHandler(composerAvatarEl, { fallbackSrc: fallbackAvatar });
     }
     try {
       localStorage.setItem('user', JSON.stringify(currentUser));
