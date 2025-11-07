@@ -5,7 +5,7 @@ const {
   MONGODB_URI,
   PUBLIC_BASE_URL,
   API_ACTIVE_BASE_URL,
-  API_FALLBACK_BASE_URLS = 'https://beatloop-api.onrender.com',
+  API_FALLBACK_BASE_URLS = 'https://beatloop-api-omr4.onrender.com,https://beatloop-api.onrender.com',
   RENDER_EXTERNAL_URL
 } = process.env;
 

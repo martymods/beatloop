@@ -62,7 +62,7 @@ type CommentDraft = {
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
 const API_FALLBACK_BASES = (process.env.NEXT_PUBLIC_API_FALLBACK_BASE_URLS ||
-  'https://beatloop-api.onrender.com')
+  'https://beatloop-api-omr4.onrender.com,https://beatloop-api.onrender.com')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean)

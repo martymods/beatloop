@@ -242,7 +242,8 @@ const MONGODB_URI = env.MONGODB_URI;
 const PUBLIC_BASE_URL = env.PUBLIC_BASE_URL ?? `http://localhost:${PORT}`;
 const FRONTEND_ORIGINS = env.FRONTEND_ORIGINS
   ?? 'https://beatloop-eotg.onrender.com,https://www.beatloop.co,https://beatloop.co,http://localhost:8080';
-const API_FALLBACK_BASE_URLS = env.API_FALLBACK_BASE_URLS ?? 'https://beatloop-api.onrender.com';
+const API_FALLBACK_BASE_URLS = env.API_FALLBACK_BASE_URLS
+  ?? 'https://beatloop-api-omr4.onrender.com,https://beatloop-api.onrender.com';
 const RENDER_EXTERNAL_URL = env.RENDER_EXTERNAL_URL;
 
 const SOUNDCLOUD_CLIENT_ID = env.SOUNDCLOUD_CLIENT_ID || env.SC_CLIENT_ID || '';
@@ -2011,6 +2012,7 @@ if (!SOUNDCLOUD_REDIRECT_URI) {
     env.RENDER_EXTERNAL_URL,
     env.API_ACTIVE_BASE_URL,
     ...(env.API_FALLBACK_BASE_URLS || '').split(/[\s,]+/),
+    'https://beatloop-api-omr4.onrender.com',
     'https://beatloop-api.onrender.com'
   ];
 
@@ -2025,7 +2027,7 @@ if (!SOUNDCLOUD_REDIRECT_URI) {
   }
 
   if (!SOUNDCLOUD_REDIRECT_URI) {
-    SOUNDCLOUD_REDIRECT_URI = `https://beatloop-api.onrender.com${SOUNDCLOUD_CALLBACK_PATH}`;
+    SOUNDCLOUD_REDIRECT_URI = `https://beatloop-api-omr4.onrender.com${SOUNDCLOUD_CALLBACK_PATH}`;
   }
 }
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>beatloop — Creator Network</title>
   <meta name="description" content="Join the beatloop community to share tracks, comment on moments, and scroll through an endless feed of music and creators." />
-  <meta name="beatloop-api-base" content="https://beatloop-api.onrender.com" />
+  <meta name="beatloop-api-base" content="https://beatloop-api-omr4.onrender.com" />
   <meta name="beatloop-assets-base" content="https://cdn.beatloop.co" />
   <meta name="beatloop-verified-media-hosts" content="cdn.beatloop.co assets.beatloop.co" />
 
@@ -4579,6 +4579,7 @@
     };
     registerLocationOrigin();
     registerApiBase('https://api.beatloop.co');
+    registerApiBase('https://beatloop-api-omr4.onrender.com');
     registerApiBase('https://beatloop-api.onrender.com');
     registerApiBase('http://localhost:10000');
 
@@ -4666,10 +4667,13 @@
               return false;
             }
           })();
-          const isLegacyApiHost = (() => {
+          const isDedicatedApiHost = (() => {
             try {
               const { hostname } = new URL(candidate);
-              return hostname && hostname.toLowerCase() === 'beatloop-api.onrender.com';
+              if (!hostname) return false;
+              const normalized = hostname.toLowerCase();
+              return normalized === 'beatloop-api-omr4.onrender.com'
+                || normalized === 'beatloop-api.onrender.com';
             } catch {
               return false;
             }
@@ -4689,7 +4693,7 @@
 
           const shouldTreatLegacy404AsUnreachable = response.status === 404
             && isLegacyStudioPath
-            && isLegacyApiHost;
+            && isDedicatedApiHost;
 
           if (shouldTreatLegacy404AsUnreachable) {
             unreachableApiBases.add(candidate);
@@ -4720,7 +4724,7 @@
       return trimmed.replace(/\/+$/, '');
     };
 
-    const CANONICAL_ASSETS_BASE = 'https://beatloop-api.onrender.com';
+    const CANONICAL_ASSETS_BASE = 'https://beatloop-api-omr4.onrender.com';
 
     const metaAssetsBase = (() => {
       try { return document.querySelector('meta[name="beatloop-assets-base"]')?.content || null; } catch { return null; }
@@ -4757,6 +4761,7 @@
       'https://cdn.beatloop.co',
       'https://assets.beatloop.co',
       CANONICAL_ASSETS_BASE,
+      'https://beatloop-api.onrender.com',
       'https://www.beatloop.co',
       'https://beatloop.co'
     ];
@@ -4886,7 +4891,7 @@
     const BEATLOOP_HOST_CHECK = host => {
       if (!host || typeof host !== 'string') return false;
       const lower = host.toLowerCase();
-      if (lower === 'beatloop-api.onrender.com') return true;
+      if (lower === 'beatloop-api-omr4.onrender.com' || lower === 'beatloop-api.onrender.com') return true;
       return lower === 'beatloop.co' || lower === 'www.beatloop.co' || lower.endsWith('.beatloop.co');
     };
 
@@ -4919,6 +4924,7 @@
     const MEDIA_UPLOAD_PATH_PREFIX = /^\/?(?:uploads|api\/uploads)\//i;
 
     const DEFAULT_VERIFIED_MEDIA_UPLOAD_HOSTS = [
+      'beatloop-api-omr4.onrender.com',
       'beatloop-api.onrender.com',
       'api.beatloop.co',
       'cdn.beatloop.co',
@@ -5060,6 +5066,7 @@
         const parsed = new URL(value);
         const hostname = (parsed.hostname || '').toLowerCase();
         const isApiHost = hostname === 'api.beatloop.co'
+          || hostname === 'beatloop-api-omr4.onrender.com'
           || hostname === 'beatloop-api.onrender.com';
         if (!isApiHost) return value;
 
@@ -18921,7 +18928,7 @@ void main()
                 </div>
                 <a
                   id="soundcloudDashboardLink"
-                  href="https://beatloop-api.onrender.com/integrations/soundcloud/"
+                  href="https://beatloop-api-omr4.onrender.com/integrations/soundcloud/"
                   target="_blank"
                   rel="noopener"
                   class="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-primary/80"
