@@ -223,6 +223,7 @@
   <script>
     const API_FALLBACKS = [
       'https://api.beatloop.co',
+      'https://beatloop-api-omr4.onrender.com',
       'https://beatloop-api.onrender.com'
     ];
 
@@ -245,6 +246,7 @@
 
       if (/\.beatloop\.co$/i.test(host)) {
         candidates.add('https://api.beatloop.co');
+        candidates.add('https://beatloop-api-omr4.onrender.com');
         candidates.add('https://beatloop-api.onrender.com');
       }
 

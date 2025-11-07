@@ -11,7 +11,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:image" content="/img/og-cover.jpg" />
   <meta name="theme-color" content="#7c3aed" />
-  <meta name="beatloop-api-base" content="https://beatloop-api.onrender.com" />
+  <meta name="beatloop-api-base" content="https://beatloop-api-omr4.onrender.com" />
 
   <link rel="stylesheet" href="./styles/tailwind.css" />
 
@@ -396,7 +396,8 @@
     const API_FALLBACKS = [
       // Preferred public API host
       'https://api.beatloop.co',
-      // Legacy Render host kept as a fallback for older infrastructure
+      // Dedicated Render host (primary) with legacy fallback retained for compatibility
+      'https://beatloop-api-omr4.onrender.com',
       'https://beatloop-api.onrender.com',
       // Add your Render API origin here if you host APIs separately
       // 'https://your-api.onrender.com'
@@ -425,6 +426,7 @@
 
       if (onBeatloopDomain) {
         candidates.add('https://api.beatloop.co')
+        candidates.add('https://beatloop-api-omr4.onrender.com')
         candidates.add('https://beatloop-api.onrender.com')
       }
 

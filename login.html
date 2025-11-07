@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>beatloop — Sign In</title>
   <meta name="description" content="Sign in to beatloop to access the creator network, comment on tracks and share your own." />
-  <meta name="beatloop-api-base" content="https://beatloop-api.onrender.com" />
+  <meta name="beatloop-api-base" content="https://beatloop-api-omr4.onrender.com" />
   <link rel="stylesheet" href="./styles/tailwind.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,6 +57,7 @@
     try { candidates.push(localStorage.getItem('beatloop_api')); } catch {}
     try { candidates.push(document.querySelector('meta[name="beatloop-api-base"]')?.content); } catch {}
     candidates.push('https://api.beatloop.co');
+    candidates.push('https://beatloop-api-omr4.onrender.com');
     candidates.push('https://beatloop-api.onrender.com');
     candidates.push('http://localhost:10000');
 
