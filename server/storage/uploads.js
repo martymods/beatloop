@@ -27,7 +27,8 @@ const {
   S3_REGION = '',
   S3_ENDPOINT = '',
   S3_FORCE_PATH_STYLE = '',
-  S3_PUBLIC_BASE_URL = ''
+  S3_PUBLIC_BASE_URL = '',
+  ALLOW_LOCAL_UPLOADS_IN_PRODUCTION = 'true'
 } = process.env;
 
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID || '';
@@ -107,10 +108,26 @@ if (s3Enabled) {
   }
 }
 
+const allowLocalUploadsInProduction = /^true$/i.test(ALLOW_LOCAL_UPLOADS_IN_PRODUCTION || '');
+const localUploadsFallbackEnabled = !runningInProduction || allowLocalUploadsInProduction;
 const durableStorageActive = Boolean(s3Enabled && s3Client && s3PublicUrlAvailable);
 
-if (runningInProduction && !durableStorageActive) {
+if (runningInProduction && !durableStorageActive && !localUploadsFallbackEnabled) {
   throw new Error(DURABLE_STORAGE_REQUIRED_MESSAGE);
+}
+
+if (!durableStorageActive) {
+  if (runningInProduction) {
+    if (localUploadsFallbackEnabled) {
+      console.warn(
+        '⚠️  Durable storage not configured; using local uploads directory in production. Uploaded files may be lost on redeploy.'
+      );
+    } else {
+      console.warn('⚠️  Durable storage not configured; uploads are disabled.');
+    }
+  } else {
+    console.warn('⚠️  Durable storage not configured; falling back to local uploads directory.');
+  }
 }
 
 function normalizedKey(rawKey) {
@@ -120,6 +137,14 @@ function normalizedKey(rawKey) {
 
 export function durableStorageEnabled() {
   return durableStorageActive;
+}
+
+export function uploadsStorageAvailable() {
+  return durableStorageActive || localUploadsFallbackEnabled;
+}
+
+export function uploadsUsingLocalFallback() {
+  return !durableStorageActive && localUploadsFallbackEnabled;
 }
 
 export function getUploadsRoot() {
@@ -153,7 +178,7 @@ export async function writeStreamToUploads({ key, stream, contentType }) {
   const normalized = normalizedKey(key);
   const { buffer, size } = await streamToBuffer(stream);
 
-  if (runningInProduction && !durableStorageActive) {
+  if (runningInProduction && !durableStorageActive && !localUploadsFallbackEnabled) {
     throw new Error(DURABLE_STORAGE_REQUIRED_MESSAGE);
   }
 
@@ -178,7 +203,7 @@ export async function writeBufferToUploads({ key, buffer, contentType }) {
     buffer = Buffer.from(buffer);
   }
 
-  if (runningInProduction && !durableStorageActive) {
+  if (runningInProduction && !durableStorageActive && !localUploadsFallbackEnabled) {
     throw new Error(DURABLE_STORAGE_REQUIRED_MESSAGE);
   }
 
